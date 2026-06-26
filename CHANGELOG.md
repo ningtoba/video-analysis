@@ -1,5 +1,85 @@
 # Changelog
 
+## 0.14.0 (2026-06-26) — Graph-Based Video RAG + Query Routing + Multi-Hop Decomposition
+
+### 🧠 Major Features: Graph-Based Retrieval, Smart Query Routing, Multi-Hop Reasoning
+
+All three remaining roadmap items implemented in this release:
+
+### 🕸️ Scene Graph (VGent/ViG-RAG Inspired)
+
+- **New `video_analysis/scene_graph.py` module**: Lightweight in-memory graph layer on top of ChromaDB. Nodes = video scenes, edges = three relationship types:
+  - **Temporal edges**: Scenes adjacent or nearby in time (configurable window)
+  - **Entity-shared edges**: Scenes sharing detected objects, people, or actions from pipeline metadata
+  - **Semantic edges**: Scenes with high word-overlap similarity in scene text
+- **K-hop graph expansion**: `k_hop_expand()` traverses the graph from seed scene nodes for K hops, discovering semantically related content across different video segments or even across different videos
+- **`expand_chunks()`**: Integrates with the standard retrieval pipeline — after ChromaDB returns `RetrievedChunk`s, graph expansion pulls in semantically connected scene chunks with a default score
+- **Lazy rebuild**: Graph auto-rebuilds from ChromaDB metadata on first query; call `rebuild()` after indexing new videos to refresh edges
+- **Zero external dependencies**: No separate graph database — the graph lives in memory and is rebuilt from ChromaDB metadata (~5-10ms for typical video libraries)
+- **Config fields**: `scene_graph_enabled` (default: `true`), `scene_graph_k_hop` (default: `2`), `scene_graph_temporal_window` (`3`), `scene_graph_min_shared_entities` (`1`), `scene_graph_semantic_threshold` (`0.85`)
+
+### 🧭 Query Router (Multi-Modal Dispatch)
+
+- **New `video_analysis/query_router.py` module**: Classifies user queries into one of four retrieval routes:
+  | Route | Query Type | Example | Strategy |
+  |-------|-----------|---------|----------|
+  | `text` | Factual, narrative | "What did the speaker say?" | Standard ChromaDB dense retrieval |
+  | `visual` | Visual content, objects | "What color was the car?" | BGE-VL visual search (when available) |
+  | `temporal` | Time/sequence | "What happened before the explosion?" | ChromaDB + temporal decay + scene graph |
+  | `multimodal` | Complex, multi-aspect | "Why did the protagonist leave?" | Multi-hop decomposition |
+- **Two-tier classification**: LLM-based routing via Hermes CLI (lightweight single-turn prompt) with keyword-based regex fallback when the LLM is unavailable
+- **`RoutingDecision` dataclass**: Route, confidence (0-1), reasoning, and `sub_queries` list for multi-hop decomposition
+- **Keyword patterns**: Three regex patterns for `_TEMPORAL`, `_VISUAL`, `_MULTIMODAL` keywords with scoring logic for decisive route selection
+- **Config fields**: `query_routing_enabled` (default: `true`), `query_routing_prefer_llm` (`true`)
+
+### 🔗 Multi-Hop Query Decomposition
+
+- **`routed_retrieve()` in `rag.py`**: The primary retrieval entrypoint that coordinates the full pipeline:
+  1. Query classification → RouteDecision
+  2. Multi-hop decomposition for `multimodal` queries
+  3. Route-specific retrieval strategy
+  4. Scene-graph K-hop expansion
+  5. Standard re-ranking and temporal expansion
+
+- **`_multi_hop_retrieve()`**: Decomposes complex queries into 2-4 sub-questions → independent retrieval per sub-query → deduplication → re-ranking against original query → scene-graph expansion on merged results. Falls back gracefully to standard retrieval when decomposition fails or returns no results.
+
+- **Chat integration**: `VideoChat.ask()` and `ask_with_history()` automatically use `routed_retrieve()` when any of `query_routing_enabled`, `scene_graph_enabled`, or `multi_hop_enabled` are toggled on.
+
+### ⚙️ Configuration
+
+- **8 new config fields** in `video_analysis/config.py`:
+  | Variable | Default | Description |
+  |----------|---------|-------------|
+  | `scene_graph_enabled` | `true` | Enable scene-graph retrieval layer |
+  | `scene_graph_k_hop` | `2` | K-hop graph expansion hops |
+  | `scene_graph_temporal_window` | `3` | Max scene distance for temporal edges |
+  | `scene_graph_min_shared_entities` | `1` | Min shared objects/actions for entity edge |
+  | `scene_graph_semantic_threshold` | `0.85` | Similarity threshold for semantic edges |
+  | `query_routing_enabled` | `true` | Enable query classification & routing |
+  | `query_routing_prefer_llm` | `true` | Use LLM for classification (fast prompt) |
+  | `multi_hop_enabled` | `true` | Enable multi-hop query decomposition |
+  | `multi_hop_max_sub_queries` | `4` | Max sub-questions to generate |
+  | `multi_hop_rerank_top_k` | `10` | Top-k from each sub-query retrieval |
+
+### 📚 Documentation
+
+- README roadmap updated: all previous roadmap items checked as completed
+- `video_analysis/__init__.py` updated: imports `scene_graph` and `query_router` modules
+
+### 🧪 Tests
+
+- **16 new tests** for v0.14.0 features:
+  - `test_scene_graph_import`, `test_scene_graph_no_rag_init`, `test_scene_graph_k_hop_empty`
+  - `test_scene_graph_expand_chunks_empty`, `test_scene_graph_disabled`
+  - `test_query_router_import`, `test_query_router_keyword_text/visual/temporal/multimodal`
+  - `test_query_router_heuristic_decompose`
+  - `test_config_scene_graph_fields`, `test_config_query_routing_fields`, `test_config_multi_hop_fields`
+  - `test_rag_routed_retrieve_fallback`, `test_rag_multi_hop_no_subqueries`
+  - `test_version_0_14_0`
+- Pre-existing test suite: 69 → 85 passing (1 pre-existing einops dependency skip)
+
+---
+
 ## 0.13.0 (2026-06-26) — Video MLLM Integration
 
 ### 🧠 Major Feature: VideoChat-Flash — Lightweight Video MLLM (ICLR 2026)

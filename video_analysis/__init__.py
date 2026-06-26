@@ -9,6 +9,14 @@ Modules:
 - config: Configuration management
 """
 
-from video_analysis import pipeline, rag, models, chat, config
+from video_analysis import (
+    pipeline,
+    rag,
+    models,
+    chat,
+    config,
+    scene_graph,
+    query_router,
+)
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"

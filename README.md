@@ -241,9 +241,9 @@ python tests/test_basic.py
 - [x] **Graceful SIGTERM/SIGINT shutdown** (clean partial saves on termination)
 - [x] **Production deployment** (DCGM GPU monitoring, Caddy reverse proxy)
 - [x] Video MLLM integration (VideoChat-Flash 2B — optional scene describer + long-video Q&A + video-native chat backend)
-- [ ] Graph-based video RAG (VGent/ViG-RAG inspired — scene-graph retrieval + K-hop expansion)
-- [ ] Query classification & routing (text/visual/temporal modality dispatch)
-- [ ] Multi-hop query decomposition (sub-question → retrieve → reason)
+- [x] Graph-based video RAG (VGent/ViG-RAG inspired — scene-graph retrieval + K-hop expansion)
+- [x] Query classification & routing (text/visual/temporal modality dispatch)
+- [x] Multi-hop query decomposition (sub-question → retrieve → reason)
 
 ## 📝 License
 

@@ -12,6 +12,9 @@ torchvision>=0.16.0
 numpy>=1.24.0
 langchain-text-splitters>=0.1.0
 
+# BGE-VL / BGE embedding models
+einops>=0.8.0
+
 # Scene understanding
 open-clip-torch>=2.24.0
 

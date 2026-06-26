@@ -20,6 +20,10 @@ from video_analysis.models import VideoIndex, ChatSource, format_timestamp
 
 logger = logging.getLogger(__name__)
 
+# Late imports for optional modules (scene graph, query router)
+_SCENE_GRAPH = None
+_QUERY_ROUTER = None
+
 
 @dataclass
 class RetrievedChunk:
@@ -897,6 +901,165 @@ class VideoRAG:
                 )
             )
         return sources
+
+    # ------------------------------------------------------------------
+    # Scene-Graph-Aware Retrieval (VGent/ViG-RAG inspired)
+    # ------------------------------------------------------------------
+
+    def _get_scene_graph(self):
+        """Lazy-init the scene graph."""
+        global _SCENE_GRAPH
+        if _SCENE_GRAPH is None and self.config.scene_graph_enabled:
+            from video_analysis.scene_graph import SceneGraph
+
+            _SCENE_GRAPH = SceneGraph(
+                rag=self,
+                config=self.config,
+                k_hop_expansion=self.config.scene_graph_k_hop,
+                temporal_edge_window=self.config.scene_graph_temporal_window,
+                min_shared_entities=self.config.scene_graph_min_shared_entities,
+                entity_similarity_threshold=self.config.scene_graph_semantic_threshold,
+            )
+        return _SCENE_GRAPH if self.config.scene_graph_enabled else None
+
+    def _get_query_router(self):
+        """Lazy-init the query router."""
+        global _QUERY_ROUTER
+        if _QUERY_ROUTER is None and self.config.query_routing_enabled:
+            from video_analysis.query_router import QueryRouter
+
+            _QUERY_ROUTER = QueryRouter(
+                config=self.config,
+                prefer_llm=self.config.query_routing_prefer_llm,
+            )
+        return _QUERY_ROUTER if self.config.query_routing_enabled else None
+
+    def routed_retrieve(
+        self,
+        query: str,
+        video_id: Optional[str] = None,
+        top_k: Optional[int] = None,
+        query_time: Optional[float] = None,
+    ) -> List[RetrievedChunk]:
+        """Retrieve with query routing, scene graph expansion, and multi-hop support.
+
+        This is the primary retrieval entrypoint that coordinates:
+        1. Query classification (text/visual/temporal/multimodal)
+        2. Multi-hop decomposition for complex queries
+        3. Route-specific retrieval strategy
+        4. Scene-graph K-hop expansion
+        5. Standard re-ranking and temporal expansion
+
+        Args:
+            query: Natural language question.
+            video_id: Optional filter to specific video.
+            top_k: Number of results from initial retrieval.
+            query_time: Optional timestamp for temporal weighting.
+
+        Returns:
+            Re-ranked, expanded list of RetrievedChunk.
+        """
+        top_k = top_k or self.config.top_k_retrieval
+
+        # Step 1: Query routing (classify the query type)
+        router = self._get_query_router()
+        route_decision = None
+        if router is not None:
+            route_decision = router.classify_and_decompose(query)
+            logger.info(
+                f"Query routed as [{route_decision.route}] "
+                f"(confidence={route_decision.confidence:.2f})"
+            )
+            logger.debug(f"Routing reasoning: {route_decision.reasoning}")
+
+        # Step 2: Multi-hop decomposition for multimodal/complex queries
+        if (
+            route_decision
+            and route_decision.route.value == "multimodal"
+            and route_decision.sub_queries
+            and self.config.multi_hop_enabled
+        ):
+            return self._multi_hop_retrieve(
+                query=query,
+                sub_queries=route_decision.sub_queries,
+                video_id=video_id,
+                top_k=self.config.multi_hop_rerank_top_k,
+                query_time=query_time,
+            )
+
+        # Step 3: Standard retrieval (may adapt strategy based on route)
+        chunks = self.retrieve(
+            query=query,
+            video_id=video_id,
+            top_k=top_k,
+            query_time=query_time,
+        )
+
+        # Step 4: Scene-graph K-hop expansion
+        scene_graph = self._get_scene_graph()
+        if scene_graph is not None and scene_graph.k_hop_expansion > 0:
+            chunks = scene_graph.expand_chunks(chunks)
+
+        return chunks
+
+    def _multi_hop_retrieve(
+        self,
+        query: str,
+        sub_queries: List[str],
+        video_id: Optional[str] = None,
+        top_k: int = 10,
+        query_time: Optional[float] = None,
+    ) -> List[RetrievedChunk]:
+        """Multi-hop retrieval: decompose -> retrieve per sub-query -> merge -> re-rank.
+
+        For each sub-query, performs independent retrieval, collects results,
+        deduplicates, and re-ranks against the ORIGINAL query for best precision.
+
+        This implements the **sub-question → retrieve → reason** pattern from
+        the project roadmap.
+        """
+        all_chunks: dict = {}
+        for i, sub_q in enumerate(sub_queries):
+            logger.info(f"Multi-hop [{i+1}/{len(sub_queries)}]: {sub_q[:80]}")
+            try:
+                sub_chunks = self.retrieve(
+                    query=sub_q,
+                    video_id=video_id,
+                    top_k=top_k,
+                    query_time=query_time,
+                )
+                for c in sub_chunks:
+                    key = c.chunk_id
+                    if key not in all_chunks or c.score > all_chunks[key].score:
+                        all_chunks[key] = c
+            except Exception as e:
+                logger.warning(f"Multi-hop sub-query [{i+1}] failed: {e}")
+
+        if not all_chunks:
+            logger.info(
+                "Multi-hop returned no results — falling back to standard retrieval"
+            )
+            return self.retrieve(query, video_id=video_id, top_k=top_k)
+
+        merged = list(all_chunks.values())
+
+        # Re-rank merged results against the ORIGINAL query
+        try:
+            merged = self._rerank(query, merged, top_k=top_k * 2)
+        except ImportError:
+            merged.sort(key=lambda c: c.score, reverse=True)
+            merged = merged[: top_k * 2]
+
+        # Scene-graph expansion on multi-hop results if enabled
+        scene_graph = self._get_scene_graph()
+        if scene_graph is not None and scene_graph.k_hop_expansion > 0:
+            merged = scene_graph.expand_chunks(merged)
+
+        logger.info(
+            f"Multi-hop retrieval: {len(sub_queries)} sub-queries -> "
+            f"{len(merged)} chunks (from {len(all_chunks)} unique)"
+        )
+        return merged[: top_k * 2]
 
     def list_videos(self) -> List[str]:
         """List all indexed video IDs."""

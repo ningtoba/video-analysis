@@ -126,6 +126,26 @@ class Config:
         False  # use MLLM as video-native Q&A backend instead of Hermes CLI
     )
 
+    # Scene Graph (VGent/ViG-RAG inspired — graph-based video retrieval)
+    scene_graph_enabled: bool = True  # enable scene-graph retrieval layer
+    scene_graph_k_hop: int = 2  # K-hop graph expansion (0 = disabled)
+    scene_graph_temporal_window: int = 3  # max scene distance for temporal edges
+    scene_graph_min_shared_entities: int = (
+        1  # min shared objects/actions for entity edge
+    )
+    scene_graph_semantic_threshold: float = 0.85  # sim threshold for semantic edges
+
+    # Query Routing (text/visual/temporal/multimodal dispatch)
+    query_routing_enabled: bool = True  # enable query classification & routing
+    query_routing_prefer_llm: bool = (
+        True  # use LLM for classification (fast, single-turn)
+    )
+
+    # Multi-Hop Query Decomposition
+    multi_hop_enabled: bool = True  # enable multi-hop query decomposition
+    multi_hop_max_sub_queries: int = 4  # max sub-questions to generate
+    multi_hop_rerank_top_k: int = 10  # top-k from each sub-query retrieval
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"

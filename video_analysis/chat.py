@@ -121,8 +121,15 @@ class VideoChat:
         return message
 
     def _ask_rag(self, query: str, video_id: Optional[str] = None) -> ChatMessage:
-        # Retrieve relevant context
-        chunks = self.rag.retrieve(query, video_id=video_id)
+        # Retrieve relevant context — use routed retrieval for smart dispatch
+        if (
+            self.config.query_routing_enabled
+            or self.config.scene_graph_enabled
+            or self.config.multi_hop_enabled
+        ):
+            chunks = self.rag.routed_retrieve(query, video_id=video_id)
+        else:
+            chunks = self.rag.retrieve(query, video_id=video_id)
 
         if not chunks:
             return ChatMessage(
@@ -177,7 +184,14 @@ class VideoChat:
                 logger.info("Video MLLM QA returned None — falling back to RAG path")
 
         # RAG-based retrieval + Hermes CLI (default path)
-        chunks = self.rag.retrieve(query, video_id=video_id)
+        if (
+            self.config.query_routing_enabled
+            or self.config.scene_graph_enabled
+            or self.config.multi_hop_enabled
+        ):
+            chunks = self.rag.routed_retrieve(query, video_id=video_id)
+        else:
+            chunks = self.rag.retrieve(query, video_id=video_id)
         if video_id and chunks:
             chunks = self.rag.expand_temporal_context(chunks, video_id)
 
