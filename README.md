@@ -20,7 +20,7 @@
 
 ## ✨ Features
 
-- **💡 Self-Contained LLM Provider** (v0.39.0) — no longer requires Hermes CLI for LLM calls; supports any OpenAI-compatible API (vLLM, Ollama, llama.cpp, TGI) via `LLM_PROVIDER=openai` env var, with structured JSON output extraction
+- **📡 Live Stream Analysis** (v0.40.0) — capture and analyze live RTMP/RTSP/HLS streams in real-time with auto-reconnect, sliding window context, and incremental indexing; connect OBS, IP cameras, and streaming platforms directly to the analysis pipeline
 |- **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
 |- **🤖 Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent with 7 specialized tools (analyze_frames, detect_objects, OCR, search_transcript, search_rag, temporal_grounding, summarize_video) that dynamically routes questions to the right tools
 |- **📖 Video Chaptering** (v0.37.0) — automatic topic segmentation of transcripts into chapters using NLTK TextTiling, with LLM-generated chapter titles and summaries; generates structured chapter reports and agent-chapter context
@@ -81,6 +81,18 @@ python -m video_analysis --url "https://www.youtube.com/watch?v=..."
 
 # Batch process from a list file
 python -m video_analysis --batch urls.txt
+
+# Stream a video in chunks (low-latency first results)
+python -m video_analysis --stream --video my_video.mp4 --chunk-duration 30
+
+# Analyze a live RTMP stream (e.g. OBS, Twitch)
+python -m video_analysis --live-stream rtmp://example.com/live/stream --chunk-duration 30
+
+# Analyze an RTSP camera feed (security camera, NVR)
+python -m video_analysis --live-stream rtsp://192.168.1.100:554/stream1 --source-type rtsp
+
+# Analyze an HLS stream with max chunk limit
+python -m video_analysis --live-stream https://cdn.example.com/live/stream.m3u8 --source-type hls --max-chunks 10
 ```
 
 ## 🏗️ Architecture
@@ -164,6 +176,7 @@ User Question
 | **Video Import** | yt-dlp | Downloads from YouTube, Vimeo, Twitch, and 1000+ sites |
 | **LLM** | DeepSeek-V4-Flash (via Hermes CLI) or any OpenAI-compatible API (vLLM, Ollama, llama.cpp, TGI) via `LLM_PROVIDER=openai`
 | **GPU** | RTX 4070 (CUDA 13.3) | All models run with GPU acceleration |
+| **Live Stream** | FFmpeg `-re` capture | RTMP/RTSP/HLS with auto-reconnect and sliding window (v0.40.0) |
 
 ## 🔧 Configuration
 
@@ -232,8 +245,16 @@ Set via environment variables or edit `video_analysis/config.py`:
 ||| `MMR_TOP_K` | `15` | Number of chunks to re-rank with MMR |
 |||| `OCR_MODEL_VERSION` | `PP-OCRv6` | OCR model version (PP-OCRv6 or PP-OCRv5) |
 |||| `OCR_MODEL_TIER` | `medium` | OCR model tier (tiny/small/medium) |
-|||| `AGENT_ENABLED` | `false` | Enable Agentic Video Understanding Agent (v0.36.0) |
-|||| `AGENT_MAX_TOOLS` | `5` | Max tool invocations per agent query |
+||| `AGENT_ENABLED` | `false` | Enable Agentic Video Understanding Agent (v0.36.0) |
+||| `AGENT_MAX_TOOLS` | `5` | Max tool invocations per agent query |
+||| `LIVE_STREAM_ENABLED` | `false` | Enable live stream analysis (v0.40.0 — RTMP/RTSP/HLS) |
+||| `LIVE_STREAM_URL` | (empty) | RTMP/RTSP/HLS stream URL |
+||| `LIVE_STREAM_SOURCE` | `rtmp` | Stream type: rtmp, rtsp, hls |
+||| `LIVE_STREAM_CHUNK_DURATION` | `30.0` | Chunk duration in seconds |
+||| `LIVE_STREAM_SLIDING_WINDOW` | `300` | Sliding context window in seconds |
+||| `LIVE_STREAM_AUTO_RECONNECT` | `true` | Auto-reconnect on stream loss |
+||| `LIVE_STREAM_MAX_RETRIES` | `3` | Max reconnection attempts |
+||| `LIVE_STREAM_RETRY_DELAY` | `5.0` | Delay between retries (seconds) |
 
 ## 🧪 Running Tests
 
@@ -347,6 +368,7 @@ python tests/test_basic.py
 ||- [x] **MMR diversity re-ranking (30-50% context redundancy reduction)**
 ||- [x] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, 256K context)
 ||- [x] **Video Content Chaptering** — NLTK TextTiling-based topic segmentation with LLM/fallback title generation, chapter report generation, agent chapter context integration |
+|- [x] **Live Stream Analysis (RTMP/RTSP/HLS)** — real-time capture via FFmpeg `-re` with auto-reconnect, sliding window, and URL-based auto-detection (v0.40.0)
 |
 |
 MIT

@@ -259,6 +259,26 @@ class Config:
         0  # overridden by STREAMING_MAX_CHUNKS env var (0 = unlimited)
     )
 
+    # Live Stream Analysis (v0.40.0 — RTMP/RTSP/HLS support)
+    live_stream_enabled: bool = False  # overridden by LIVE_STREAM_ENABLED env var
+    live_stream_url: str = ""  # overridden by LIVE_STREAM_URL env var
+    live_stream_source: str = (
+        "rtmp"  # overridden by LIVE_STREAM_SOURCE env var: rtmp, rtsp, hls
+    )
+    live_stream_chunk_duration: float = (
+        30.0  # overridden by LIVE_STREAM_CHUNK_DURATION env var
+    )
+    live_stream_sliding_window: int = (
+        300  # overridden by LIVE_STREAM_SLIDING_WINDOW env var (seconds)
+    )
+    live_stream_auto_reconnect: bool = (
+        True  # overridden by LIVE_STREAM_AUTO_RECONNECT env var
+    )
+    live_stream_max_retries: int = 3  # overridden by LIVE_STREAM_MAX_RETRIES env var
+    live_stream_retry_delay: float = (
+        5.0  # overridden by LIVE_STREAM_RETRY_DELAY env var
+    )
+
     # Federated Video Search (v0.33.0 — MCP-based cross-instance query)
     federation_enabled: bool = False  # overridden by FEDERATION_ENABLED env var
     federation_peers: str = ""  # comma-separated URLs, overridden by FEDERATION_PEERS
@@ -415,6 +435,51 @@ class Config:
         agent_env = os.environ.get("AGENT_ENABLED", "").lower()
         if agent_env in ("true", "1", "yes"):
             self.agent_enabled = True
+        # Override live stream config from env vars (v0.40.0)
+        ls_env = os.environ.get("LIVE_STREAM_ENABLED", "").lower()
+        if ls_env in ("true", "1", "yes"):
+            self.live_stream_enabled = True
+        ls_url = os.environ.get("LIVE_STREAM_URL", "")
+        if ls_url:
+            self.live_stream_url = ls_url
+        ls_src = os.environ.get("LIVE_STREAM_SOURCE", "").lower()
+        if ls_src in ("rtmp", "rtsp", "hls"):
+            self.live_stream_source = ls_src
+        ls_chunk = os.environ.get("LIVE_STREAM_CHUNK_DURATION", "")
+        if ls_chunk:
+            try:
+                val = float(ls_chunk)
+                if val > 0:
+                    self.live_stream_chunk_duration = val
+            except ValueError:
+                pass
+        ls_win = os.environ.get("LIVE_STREAM_SLIDING_WINDOW", "")
+        if ls_win:
+            try:
+                val = int(ls_win)
+                if val > 0:
+                    self.live_stream_sliding_window = val
+            except ValueError:
+                pass
+        ls_rec = os.environ.get("LIVE_STREAM_AUTO_RECONNECT", "").lower()
+        if ls_rec in ("false", "0", "no"):
+            self.live_stream_auto_reconnect = False
+        ls_retries = os.environ.get("LIVE_STREAM_MAX_RETRIES", "")
+        if ls_retries:
+            try:
+                val = int(ls_retries)
+                if val >= 0:
+                    self.live_stream_max_retries = val
+            except ValueError:
+                pass
+        ls_retry_delay = os.environ.get("LIVE_STREAM_RETRY_DELAY", "")
+        if ls_retry_delay:
+            try:
+                val = float(ls_retry_delay)
+                if val > 0:
+                    self.live_stream_retry_delay = val
+            except ValueError:
+                pass
         # Override OCR model version from env var
         ocr_ver_env = os.environ.get("OCR_MODEL_VERSION", "").lower()
         if ocr_ver_env in ("pp-ocrv6", "pp-ocrv5"):

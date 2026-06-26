@@ -1,5 +1,86 @@
 # Changelog
 
+## 0.40.0 (2026-06-27) — Live Stream Analysis
+
+### 📡 Live RTMP/RTSP/HLS Stream Analysis
+
+The streaming pipeline now supports real-time capture and analysis of live
+video streams, not just local files. This enables surveillance camera
+monitoring, live event analysis, and streaming platform content understanding.
+
+**New `process_live_stream()` method** on `StreamingPipeline`:
+
+- **RTMP support** — streams from OBS, Twitch, YouTube Live, and any RTMP source
+- **RTSP support** — IP cameras, NVRs, security systems (TCP transport for reliability)
+- **HLS support** — HTTP Live Streaming via m3u8 playlists
+- **Auto-reconnect** — configurable retry logic with exponential backoff on stream loss
+- **Sliding window** — bounded memory via configurable context window (default 300s)
+- **Auto-detection** — stream type auto-detected from URL (`rtmp://`, `rtsp://`, `.m3u8`)
+
+### 🔧 New Types & Config
+
+- **`StreamSource` enum** — `RTMP`, `RTSP`, `HLS`, `FILE_WATCH` with string-based values
+- **`_detect_stream_type()`** — URL-based auto-detection of stream source type
+- **`_ffmpeg_capture_segment()`** — FFmpeg `-re` real-time capture with source-specific flags
+- **`_prune_sliding_window()`** — memory-bounded context window for long-running streams
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LIVE_STREAM_ENABLED` | `false` | Enable live stream analysis |
+| `LIVE_STREAM_URL` | `` | RTMP/RTSP/HLS URL |
+| `LIVE_STREAM_SOURCE` | `rtmp` | Stream source type |
+| `LIVE_STREAM_CHUNK_DURATION` | `30.0` | Chunk duration in seconds |
+| `LIVE_STREAM_SLIDING_WINDOW` | `300` | Sliding context window in seconds |
+| `LIVE_STREAM_AUTO_RECONNECT` | `true` | Auto-reconnect on stream loss |
+| `LIVE_STREAM_MAX_RETRIES` | `3` | Max reconnection attempts |
+| `LIVE_STREAM_RETRY_DELAY` | `5.0` | Delay between retries (seconds) |
+
+### 🖥️ CLI Usage
+
+```bash
+# Analyze an RTMP stream (e.g. OBS, Twitch)
+python -m video_analysis --live-stream rtmp://example.com/live/stream --chunk-duration 30
+
+# Analyze an RTSP camera feed (TCP transport)
+python -m video_analysis --live-stream rtsp://192.168.1.100:554/stream1 --source-type rtsp
+
+# Analyze an HLS stream
+python -m video_analysis --live-stream https://cdn.example.com/live/stream.m3u8 --source-type hls
+
+# Limit to N chunks
+python -m video_analysis --live-stream rtmp://... --max-chunks 10
+```
+
+### 🧪 Tests
+
+- **53 streaming tests** — all pass in <0.4s
+- 21 new tests for live stream functionality in v0.40.0:
+  - StreamSource enum values and string compatibility
+  - URL-based stream type detection (RTMP, RTSP, HLS, local files)
+  - FFmpeg capture segment with correct flags per source type
+  - stream copy mode (`-c copy`, `-re`, source-specific flags)
+  - Failure handling (FFmpeg error, empty output)
+  - process_live_stream end-to-end (basic, reconnect, max retries exceeded)
+  - Sliding window pruning (no prune, prunes old, enforces minimum)
+  - Config defaults and env var overrides
+  - Module exports
+
+### 📦 Files Changed
+
+- **Modified**: `video_analysis/streaming.py` — `StreamSource` enum, `_detect_stream_type()`,
+  `_ffmpeg_capture_segment()`, `process_live_stream()`, `_prune_sliding_window()`
+- **Modified**: `video_analysis/config.py` — 8 new live stream config fields + env var overrides
+- **Modified**: `video_analysis/__main__.py` — `--live-stream`, `--source-type`, `--max-chunks` CLI flags
+- **Modified**: `video_analysis/__init__.py` — v0.40.0
+- **Modified**: `pyproject.toml` — v0.40.0
+- **Modified**: `tests/test_streaming.py` — 21 new live stream tests (53 total)
+- **Modified**: `tests/test_basic.py` — version checks updated
+- **Modified**: `tests/test_metrics.py` — version check updated
+- **Modified**: `tests/test_federation.py` — version check updated
+- **Modified**: `tests/test_qwen3_vl.py` — version check updated
+
+---
+
 ## 0.39.0 (2026-06-27) — Self-Contained LLM Provider
 
 ### 🧠 Self-Contained LLM Provider (LLMProvider Abstraction)

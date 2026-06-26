@@ -11,6 +11,15 @@ Modes:
   - file_watch     : Watch a file being written (e.g. OBS live recording)
                      and process chunks as they become available.
   - segment_based  : Use FFmpeg segment mode for fine-grained boundaries.
+  - live_stream    : Capture and analyze live RTMP/RTSP/HLS streams in
+                     real-time with auto-reconnect and sliding window.
+
+Live stream analysis (v0.40.0)::
+
+    pipeline = StreamingPipeline()
+    for result in pipeline.process_live_stream("rtmp://example.com/live/stream"):
+        print(f"Chunk {result.chunk_index}: {len(result.scenes)} scenes, "
+              f"{len(result.transcript_segments)} transcript segs")
 
 Usage::
 
@@ -24,6 +33,7 @@ Usage::
 
 from __future__ import annotations
 
+import enum
 import json
 import logging
 import os
@@ -46,6 +56,22 @@ from video_analysis.models import (
 # from video_analysis.rag import VideoRAG  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+
+class StreamSource(str, enum.Enum):
+    """Type of live stream source.
+
+    Attributes:
+        RTMP: Real-Time Messaging Protocol (OBS, Twitch, YouTube Live).
+        RTSP: Real-Time Streaming Protocol (IP cameras, NVRs).
+        HLS: HTTP Live Streaming (m3u8 playlists).
+        FILE_WATCH: Local file being written (e.g. OBS recording).
+    """
+
+    RTMP = "rtmp"
+    RTSP = "rtsp"
+    HLS = "hls"
+    FILE_WATCH = "file_watch"
 
 
 @dataclass
@@ -112,6 +138,111 @@ def _ffprobe_duration(video_path: Path) -> Optional[float]:
     except (subprocess.TimeoutExpired, json.JSONDecodeError, ValueError) as e:
         logger.warning(f"FFprobe error for {video_path}: {e}")
         return None
+
+
+def _detect_stream_type(url_or_path: str) -> StreamSource:
+    """Detect the stream source type from a URL or path.
+
+    Args:
+        url_or_path: The URL or file path to detect.
+
+    Returns:
+        The detected StreamSource type.
+    """
+    lower = url_or_path.lower().strip()
+    if lower.startswith("rtmp://"):
+        return StreamSource.RTMP
+    if lower.startswith("rtsp://"):
+        return StreamSource.RTSP
+    if lower.endswith(".m3u8") or "m3u8" in lower:
+        return StreamSource.HLS
+    # Assume file_watch for local paths
+    return StreamSource.FILE_WATCH
+
+
+def _ffmpeg_capture_segment(
+    stream_url: str,
+    output_path: Path,
+    duration: float,
+    stream_source: StreamSource,
+) -> bool:
+    """Capture a segment from a live stream using FFmpeg.
+
+    Uses FFmpeg's real-time capture mode (``-re``) to grab a fixed-duration
+    segment from a live RTMP/RTSP/HLS stream without re-encoding.
+
+    Args:
+        stream_url: The live stream URL.
+        output_path: Path for the captured segment file.
+        duration: Duration in seconds to capture.
+        stream_source: The type of stream source.
+
+    Returns:
+        True if the segment was successfully captured, False otherwise.
+    """
+    try:
+        # Build FFmpeg command for live stream capture
+        # -re = real-time input rate
+        # -t = capture duration
+        # -c copy = stream copy (no re-encoding for speed)
+        # -rtsp_transport tcp = TCP transport for RTSP reliability
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-re",
+        ]
+
+        # Add source-specific flags
+        if stream_source == StreamSource.RTSP:
+            cmd.extend(["-rtsp_transport", "tcp"])
+        elif stream_source == StreamSource.HLS:
+            cmd.extend(["-max_reload", "3"])
+
+        cmd.extend(
+            [
+                "-i",
+                stream_url,
+                "-t",
+                str(duration),
+                "-c",
+                "copy",
+                "-avoid_negative_ts",
+                "make_zero",
+                "-f",
+                "mp4",
+                str(output_path),
+            ]
+        )
+
+        logger.debug(
+            f"Capturing {stream_source.value} segment: {duration}s from {stream_url[:80]}..."
+        )
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=duration + 60,  # generous timeout: capture duration + 60s overhead
+        )
+
+        if result.returncode != 0:
+            logger.warning(
+                f"FFmpeg segment capture failed (rc={result.returncode}): "
+                f"{result.stderr.strip()[-200:]}"
+            )
+            return False
+
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            logger.warning(f"Captured segment is empty: {output_path}")
+            return False
+
+        return True
+
+    except subprocess.TimeoutExpired:
+        logger.warning(f"FFmpeg segment capture timed out for {stream_url[:80]}...")
+        return False
+    except Exception as e:
+        logger.warning(f"FFmpeg segment capture error: {e}")
+        return False
 
 
 class StreamingPipeline:
@@ -320,6 +451,265 @@ class StreamingPipeline:
                 chunk_idx += 1
 
             last_size = current_size
+
+    def process_live_stream(
+        self,
+        stream_url: str,
+        source_type: Optional[str] = None,
+        chunk_duration: Optional[float] = None,
+        incremental_index: bool = True,
+        auto_reconnect: Optional[bool] = None,
+        max_retries: Optional[int] = None,
+        retry_delay: Optional[float] = None,
+        sliding_window: Optional[int] = None,
+    ) -> Generator[StreamingChunkResult, None, None]:
+        """Process a live RTMP/RTSP/HLS stream in real-time chunks.
+
+        Connects to a live stream using FFmpeg, captures fixed-duration
+        segments, processes each through the video analysis pipeline, and
+        yields incremental results.
+
+        This is an infinite generator — callers should ``break`` when done,
+        or use ``max_chunks`` / ``shutdown_event`` for controlled termination.
+
+        Args:
+            stream_url: The live stream URL (rtmp://, rtsp://, or HLS m3u8 URL).
+            source_type: Explicit stream source type (``rtmp``, ``rtsp``,
+                ``hls``). If None, auto-detected from URL.
+            chunk_duration: Seconds per capture chunk. Uses config
+                ``live_stream_chunk_duration`` if None (default 30).
+            incremental_index: If True, index each chunk incrementally (default True).
+            auto_reconnect: If True, automatically reconnect on stream loss.
+                Uses config ``live_stream_auto_reconnect`` if None (default True).
+            max_retries: Maximum reconnection attempts. Uses config
+                ``live_stream_max_retries`` if None (default 3).
+            retry_delay: Delay in seconds between reconnection attempts.
+                Uses config ``live_stream_retry_delay`` if None (default 5).
+            sliding_window: Sliding context window in seconds for Q&A.
+                Uses config ``live_stream_sliding_window`` if None (default 300).
+
+        Yields:
+            StreamingChunkResult for each processed chunk.
+        """
+        # Resolve settings from config or params
+        chunk_duration = chunk_duration or self.config.live_stream_chunk_duration
+        auto_reconnect = (
+            self.config.live_stream_auto_reconnect
+            if auto_reconnect is None
+            else auto_reconnect
+        )
+        max_retries = (
+            max_retries
+            if max_retries is not None
+            else self.config.live_stream_max_retries
+        )
+        retry_delay = (
+            retry_delay
+            if retry_delay is not None
+            else self.config.live_stream_retry_delay
+        )
+        sliding_window = (
+            sliding_window
+            if sliding_window is not None
+            else self.config.live_stream_sliding_window
+        )
+
+        # Detect stream source type
+        if source_type:
+            stream_source = StreamSource(source_type.lower())
+        else:
+            stream_source = _detect_stream_type(stream_url)
+
+        # Validate
+        if stream_source == StreamSource.FILE_WATCH:
+            # Fall back to process_live for file watching
+            logger.info("Detected local file path — delegating to process_live()")
+            yield from self.process_live(
+                stream_url,
+                chunk_duration=chunk_duration,
+                incremental_index=incremental_index,
+            )
+            return
+
+        logger.info(
+            f"Starting live stream analysis: {stream_source.value.upper()} source, "
+            f"chunk_duration={chunk_duration}s, "
+            f"auto_reconnect={auto_reconnect}, "
+            f"max_retries={max_retries}"
+        )
+
+        # Create a stream-specific video ID
+        stream_id = f"live_{stream_source.value}_{uuid.uuid4().hex[:8]}"
+        self._video_id = stream_id
+
+        chunk_idx = 0
+        retry_count = 0
+        accumulated_duration: float = 0.0
+
+        while True:
+            # Capture a segment from the live stream
+            segment_filename = (
+                f"{stream_id}_live_{chunk_idx:04d}_{chunk_duration:.0f}s.mp4"
+            )
+            segment_path = self._temp_dir / segment_filename
+
+            logger.info(
+                f"Capturing live chunk {chunk_idx}: {chunk_duration}s "
+                f"from {stream_url[:60]}..."
+            )
+
+            success = _ffmpeg_capture_segment(
+                stream_url=stream_url,
+                output_path=segment_path,
+                duration=chunk_duration,
+                stream_source=stream_source,
+            )
+
+            if not success:
+                if auto_reconnect and retry_count < max_retries:
+                    retry_count += 1
+                    logger.warning(
+                        f"Stream capture failed (attempt {retry_count}/{max_retries}). "
+                        f"Reconnecting in {retry_delay}s..."
+                    )
+                    time.sleep(retry_delay)
+                    continue
+                elif auto_reconnect and retry_count >= max_retries:
+                    logger.error(
+                        f"Stream capture failed after {max_retries} retries. "
+                        "Giving up."
+                    )
+                    break
+                else:
+                    logger.warning(
+                        f"Stream capture failed (retries disabled). "
+                        "Stopping live stream analysis."
+                    )
+                    break
+
+            # Reset retry count on successful capture
+            retry_count = 0
+
+            # Process the captured segment through the existing pipeline
+            try:
+                pipeline = self._get_pipeline()
+                segment_index = pipeline.process(str(segment_path))
+
+                # Extract objects found in this chunk
+                objects_found: set = set()
+                for scene in segment_index.scenes:
+                    for frame in scene.key_frames:
+                        if frame.objects:
+                            for obj in frame.objects:
+                                label = obj.get("label", "")
+                                if label:
+                                    objects_found.add(label)
+
+                chunk_start = accumulated_duration
+                chunk_end = accumulated_duration + chunk_duration
+
+                result = StreamingChunkResult(
+                    chunk_index=chunk_idx,
+                    start_time=chunk_start,
+                    end_time=chunk_end,
+                    duration=chunk_duration,
+                    scenes=segment_index.scenes,
+                    transcript_segments=segment_index.transcript,
+                    full_transcript=segment_index.full_transcript,
+                    objects_found=sorted(objects_found),
+                    has_video=True,
+                    metadata={
+                        "segment_file": str(segment_path),
+                        "video_id": stream_id,
+                        "stream_url": stream_url,
+                        "stream_source": stream_source.value,
+                        "accumulated_duration": accumulated_duration,
+                        "sliding_window": sliding_window,
+                    },
+                )
+
+                # Accumulate
+                self._chunk_results.append(result)
+                self._all_scenes.extend(result.scenes)
+                self._all_transcript_segments.extend(result.transcript_segments)
+                self._all_transcript_text.append(result.full_transcript)
+                self._all_objects.update(result.objects_found)
+                self._processed_chunks += 1
+                accumulated_duration += chunk_duration
+
+                # Optionally index incrementally
+                if incremental_index:
+                    self._index_chunk(result)
+
+                # Prune accumulated data beyond sliding window
+                if sliding_window > 0 and accumulated_duration > sliding_window:
+                    self._prune_sliding_window(sliding_window)
+
+                yield result
+
+                chunk_idx += 1
+
+            except Exception as e:
+                logger.error(
+                    f"Pipeline processing failed for live chunk {chunk_idx}: {e}"
+                )
+                # Try to clean up regardless
+                try:
+                    pipeline = self._get_pipeline()
+                    pipeline.cleanup()
+                except Exception:
+                    pass
+                # Don't break on processing errors — keep capturing
+            finally:
+                # Remove the temp segment file
+                try:
+                    if segment_path.exists():
+                        segment_path.unlink()
+                except OSError as e:
+                    logger.warning(f"Failed to remove temp segment {segment_path}: {e}")
+
+    def _prune_sliding_window(self, window_seconds: int) -> None:
+        """Prune accumulated data older than the sliding window.
+
+        Removes scene and transcript data from chunks that fall outside
+        the sliding context window, keeping memory bounded.
+
+        Walks from the most recent chunks backward, keeping enough to
+        fill the window, and discarding everything older.
+
+        Args:
+            window_seconds: Maximum accumulated duration to retain.
+        """
+        window_seconds = max(window_seconds, 60)  # minimum 60s window
+
+        # Walk from the most recent backwards, collecting chunks until
+        # we have window_seconds worth of content
+        keep_results: List[StreamingChunkResult] = []
+        keep_scenes: List[SceneInfo] = []
+        keep_transcripts: List[TranscriptSegment] = []
+        keep_text: List[str] = []
+        kept_duration = 0.0
+
+        for result in reversed(self._chunk_results):
+            if kept_duration >= window_seconds:
+                break
+            keep_results.insert(0, result)
+            keep_scenes.extend(result.scenes)
+            keep_transcripts.extend(result.transcript_segments)
+            keep_text.append(result.full_transcript)
+            kept_duration += result.duration
+
+        pruned = len(self._chunk_results) - len(keep_results)
+        self._chunk_results = keep_results
+        self._all_scenes = keep_scenes
+        self._all_transcript_segments = keep_transcripts
+        self._all_transcript_text = keep_text
+
+        if pruned > 0:
+            logger.debug(
+                f"Pruned {pruned} chunks ({kept_duration:.0f}s kept, "
+                f"window={window_seconds}s)"
+            )
 
     # ------------------------------------------------------------------
     # Segment computation

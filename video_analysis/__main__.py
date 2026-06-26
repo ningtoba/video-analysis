@@ -200,7 +200,36 @@ def stream_mode(args):
     config = Config()
     pipeline = StreamingPipeline(config)
 
-    if args.live:
+    if args.live_source:
+        # Live stream analysis mode (v0.40.0 — RTMP/RTSP/HLS)
+        source_desc = args.live_source[:60] + (
+            "..." if len(args.live_source) > 60 else ""
+        )
+        print(
+            f"📡 Live stream mode: {source_desc} "
+            f"(source_type={args.source_type or 'auto'}, "
+            f"chunk_duration={args.chunk_duration}s)"
+        )
+        if args.max_chunks:
+            print(f"  Max chunks: {args.max_chunks}")
+        chunk_count = 0
+        for result in pipeline.process_live_stream(
+            args.live_source,
+            source_type=args.source_type,
+            chunk_duration=args.chunk_duration,
+            incremental_index=args.incremental,
+        ):
+            chunk_count += 1
+            print(
+                f"  Chunk {result.chunk_index}: "
+                f"[{result.start_time:.1f}s - {result.end_time:.1f}s] "
+                f"{len(result.scenes)} scenes, {len(result.transcript_segments)} transcript segs, "
+                f"{len(result.objects_found)} objects"
+            )
+            if args.max_chunks and chunk_count >= args.max_chunks:
+                print(f"  Reached max_chunks={args.max_chunks}, stopping.")
+                break
+    elif args.live:
         print(
             f"🌐 Live mode: watching {args.video} (chunk_duration={args.chunk_duration}s)"
         )
@@ -271,6 +300,26 @@ def main():
         help="Watch a recording file being written and process it live",
     )
     parser.add_argument(
+        "--live-stream",
+        dest="live_source",
+        type=str,
+        default=None,
+        help="RTMP/RTSP/HLS live stream URL to capture and analyze (v0.40.0)",
+    )
+    parser.add_argument(
+        "--source-type",
+        type=str,
+        default=None,
+        choices=["rtmp", "rtsp", "hls"],
+        help="Stream source type for --live-stream (default: auto-detect from URL)",
+    )
+    parser.add_argument(
+        "--max-chunks",
+        type=int,
+        default=0,
+        help="Maximum number of chunks to process (0 = unlimited)",
+    )
+    parser.add_argument(
         "--chunk-duration",
         type=float,
         default=30.0,
@@ -299,9 +348,11 @@ def main():
 
     setup_logging(args.verbose)
 
-    if args.stream or args.live:
-        if not args.video:
-            parser.error("--video is required in streaming mode")
+    if args.stream or args.live or args.live_source:
+        if not args.video and not args.live_source:
+            parser.error(
+                "--video is required in streaming mode, or use --live-stream <URL>"
+            )
         stream_mode(args)
     elif args.batch:
         batch_mode(args)
