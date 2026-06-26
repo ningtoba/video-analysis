@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.18.0 (2026-06-26) — Research Phase: Next-Gen Integration
+
+### 🔬 New Research: Qwen3-VL-30B-A3B — The New Optimal MLLM Backend
+
+- **Qwen3-VL-30B-A3B** (Alibaba, Apache 2.0, 30B total / 3B active params via MoE) identified as the
+  superior alternative to VideoChat-Flash 2B for the 12 GB RTX 4070 target. When quantized to FP8,
+  estimated ~3-6 GB VRAM with vastly superior capabilities.
+- **Key specs**: 256K native context (expandable to 1M), frame-by-frame video description, visual
+  agent abilities (tool use, UI interaction), multilingual OCR in 32 languages, Thinking variant
+  for complex reasoning tasks.
+- **Integration plan**: New `"qwen3_vl"` backend option in `video_mllm_backend`, FP8 testing as
+  Phase A, promotion to default `"auto"` backed in Phase B.
+
+### 🧠 Lightweight Video Classifier: Qwen3.5-0.8B
+
+- **Qwen3.5-0.8B** (Apache 2.0, 800M params) is a sub-1B multimodal model supporting text, images,
+  and video. Ideal for the PipelineOrchestrator component (video type classification in <200ms,
+  ~1.6 GB VRAM). Supports 200+ languages, 262K context.
+
+### 📝 PaddleOCR v5 Upgrade Research
+
+- **PP-OCRv5** confirmed available: 34.5M params, +5.1% recognition accuracy over v4_server,
+  +13% end-to-end accuracy. 109 language support (vs ~50 in v4). PP-StructureV3 for hierarchical
+  document parsing. Published as PaddleOCR 3.0 (arXiv:2507.05595).
+
+### ⚡ Dependency Modernization Research
+
+- **Critical finding**: Environment has torch 2.12.1 (pinned `>=2.1.0`), transformers 5.12.1
+  (pinned `>=4.45.2`), sentence-transformers 5.6.0 (pinned `>=2.5.0`). All minimum bounds are
+  3-4 major versions behind reality, risking silent breaking changes.
+- **Recommended updates**: `torch>=2.5.0`, `transformers>=4.50.0`, `sentence-transformers>=2.7.0`,
+  add `yt-dlp>=2024.12.0` to pyproject.toml deps.
+- **Gemma 3 12B / Gemma-3n-E2B-IT** (Google, Apache 2.0) identified as additional candidates for
+  lightweight multimodal processing with video+audio+image input.
+
+### 🔧 Strategic Shifts
+
+- VideoChat-Flash 2B demoted to legacy fallback — Qwen3-VL-30B-A3B is the new primary recommendation
+- All transformers-dependent code needs v5 API audit (breaking changes in transformers>=5.0)
+- PipelineOrchestrator targets Qwen3.5-0.8B instead of SmolVLM2 500M (lighter, more capable)
+- ChromaDB confirmed as "stay" — LanceDB only if >5M vectors
+- PaddleOCR v5 upgrade should be part of next implementation wave
+- Full research: `docs/research/v0.18.0-research-next-gen.md`
+
+---
+
 ## 0.17.0 (2026-06-26) — Research Phase: Beyond the Roadmap
 
 ### 🔬 New Research: Next-Gen Capabilities (v0.17.0+)

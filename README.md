@@ -255,13 +255,25 @@ python tests/test_basic.py
 - [x] **Agentic RAG** (iterative retrieval loop with confidence-based early stopping, 3-round strategy)
 - [x] **CI/CD + pre-commit hooks** (GitHub Actions matrix build, ruff, mypy, benchmark infrastructure)
 - [x] [RESEARCH] Entity tracking — ByteTrack/BoxMOT confirmed for persistent person/object IDs across scenes (~500 MB, integrates with YOLO)
-- [x] [RESEARCH] Cross-video scene graph edges — scene_graph.py adjacency structure already supports cross-video keys; add entity-based + BGE-VL cross-video edges
-- [x] [RESEARCH] Gradio 6 Workflow subgraphs — Gradio 6.19+ exposes composable subgraph API endpoints; FastAPI hybrid approach complements it
-- [x] [RESEARCH] Sparse-frame optical flow — FFmpeg motion vectors (zero-cost) recommended over deep flow models for 12GB VRAM pipeline
-- [ ] Entity-level tracking across scenes (ByteTrack/BoxMOT + persistent person/object IDs)
-- [ ] Cross-video scene graph edges (multi-video semantic retrieval via entity + BGE-VL)
-- [ ] Gradio 6 Workflow integration (expose pipeline stages as composable API subgraphs)
-- [ ] Sparse-frame optical flow for motion-based adaptive frame sampling
+|- [x] [RESEARCH] Cross-video scene graph edges — scene_graph.py adjacency structure already supports cross-video keys; add entity-based + BGE-VL cross-video edges
+|- [x] [RESEARCH] Gradio 6 Workflow subgraphs — Gradio 6.19+ exposes composable subgraph API endpoints; FastAPI hybrid approach complements it
+|- [x] [RESEARCH] Sparse-frame optical flow — FFmpeg motion vectors (zero-cost) recommended over deep flow models for 12GB VRAM pipeline
+|- [x] [RESEARCH v0.18] Qwen3-VL-30B-A3B (Apache 2.0, 3B active, MoE, FP8) — new optimal MLLM backend displacing VideoChat-Flash 2B
+|- [x] [RESEARCH v0.18] PaddleOCR v5 upgrade — +13% accuracy, 109 languages, PP-StructureV3
+|- [x] [RESEARCH v0.18] Dependency modernization — torch 2.12.1, transformers 5.12.1, sentence-transformers 5.6.0
+|- [x] [RESEARCH v0.18] Qwen3.5-0.8B (Apache 2.0, 800M multimodal) — lightweight video classifier for PipelineOrchestrator
+|- [x] [RESEARCH v0.18] ChromaDB confirmed (stay) — LanceDB only if >5M vectors
+|- [ ] Entity-level tracking across scenes (ByteTrack via Ultralytics — MIT, not BoxMOT AGPL)
+|- [ ] Qwen3-VL-30B-A3B FP8 backend integration (replace VideoChat-Flash as primary MLLM)
+|- [ ] Dependency modernization — update pyproject.toml bounds for torch>=2.5.0, transformers>=4.50.0
+|- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR
+|- [ ] Cross-video scene graph edges (multi-video semantic retrieval via entity + BGE-VL)
+|- [ ] Pipeline caching + incremental re-indexing (70-90% faster re-runs)
+|- [ ] Qwen3.5-0.8B PipelineOrchestrator — dynamic video type classification
+|- [ ] Gradio 6 Workflow integration (expose pipeline stages as composable API subgraphs)
+|- [ ] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows)
+|- [ ] Sparse-frame optical flow for motion-based adaptive frame sampling
+|- [ ] InsightFace face recognition (person identity across scenes)
 
 ## 📝 License
 

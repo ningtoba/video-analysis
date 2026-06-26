@@ -19,4 +19,4 @@ from video_analysis import (
     query_router,
 )
 
-__version__ = "0.16.0"
+__version__ = "0.18.0"
