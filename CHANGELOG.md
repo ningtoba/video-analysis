@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.39.0 (2026-06-27) — Self-Contained LLM Provider
+
+### 🧠 Self-Contained LLM Provider (LLMProvider Abstraction)
+
+The platform no longer has a hard dependency on Hermes CLI (`hermes chat -q`) for
+all LLM calls. A new `LLMProvider` abstraction layer (`video_analysis/llm_provider.py`)
+provides a unified interface for LLM backends:
+
+- **`HermesProvider`** (default) — existing `hermes chat -q` subprocess, fully
+  backward-compatible
+- **`OpenAIProvider`** — any OpenAI-compatible API endpoint (vLLM, Ollama,
+  llama.cpp, TGI, OpenAI API, Azure OpenAI)
+- **`auto` mode** — tries OpenAI-compatible API first, falls back to Hermes CLI
+
+Replaces all 5 direct `hermes chat -q` subprocess calls across the codebase with
+`llm.chat()` / `llm.structured_chat()` via LLMProvider.
+
+### 🔧 Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | `hermes` | LLM backend (`hermes`, `openai`, `auto`) |
+| `OPENAI_API_BASE` | `http://localhost:11434/v1` | OpenAI-compatible API URL |
+| `OPENAI_API_KEY` | (empty) | API key (can be empty for local servers) |
+| `OPENAI_MODEL` | `qwen2.5` | Model name for the API |
+| `OPENAI_MAX_TOKENS` | `2048` | Max tokens for API calls |
+| `LLM_TIMEOUT` | `120` | Timeout in seconds |
+| `LLM_TEMPERATURE` | `0.3` | LLM temperature |
+
+### 💡 Structured Output
+
+Both providers support `structured_chat()` which returns parsed JSON:
+handles direct JSON, markdown code blocks, and embedded JSON extraction.
+
+### 🧪 Tests
+
+- **38 new tests** (`tests/test_llm_provider.py`) — all pass in <0.3s
+- Covers: Config, HermesProvider chat/success/failure/timeout, structured output
+  with JSON parsing, OpenAIProvider chat/success/failure/system/available,
+  Provider factory caching/fallback/force/unknown, URL formatting
+- All tests mock subprocess/requests — no real LLM endpoints needed
+
+### 📦 Files Changed
+
+- **New**: `video_analysis/llm_provider.py` — LLMProvider ABC + HermesProvider + OpenAIProvider
+- **Modified**: `video_analysis/chat.py` — RAG path uses `llm.chat()` instead of `hermes chat -q`
+- **Modified**: `video_analysis/self_check.py` — uses `llm.structured_chat()` + `llm.chat()`
+- **Modified**: `video_analysis/query_router.py` — uses `llm.structured_chat()`
+- **Modified**: `video_analysis/chapters.py` — uses `llm.structured_chat()`
+- **Modified**: `video_analysis/__init__.py` — exports `llm_provider`, v0.39.0
+- **Modified**: `pyproject.toml` — v0.39.0
+- **New**: `tests/test_llm_provider.py` — 38 tests
+
+---
+
 ## 0.38.0 (2026-06-27) — Research: Self-Contained LLM & Live Stream Analysis
 
 ### 📖 Research Phase

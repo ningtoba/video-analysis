@@ -1,15 +1,23 @@
 """
 Chat module — LLM-powered question answering over video contexts.
 
-Uses a configured LLM provider (via Hermes CLI or direct API) to answer
-questions about video content with source citations.
+Supports three chat backends (tried in priority order):
+  1. **Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent
+  2. **Video MLLM** — video-native Q&A with frame images
+  3. **RAG + LLM Provider** (default) — text-only retrieval with configurable LLM
+
+The LLM backend is now abstracted via :class:`LLMProvider`, supporting
+Hermes CLI (default) or any OpenAI-compatible API (vLLM, Ollama, llama.cpp).
 """
+
+from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG, RetrievedChunk
@@ -28,7 +36,7 @@ class VideoChat:
        extract_text, search_transcript, temporal_grounding, summarize_video)
        based on the question type.
     2. **Video MLLM** (optional) — Video MLLM video-native Q&A that sees frame images directly
-    3. **Hermes CLI** (default) — text-only RAG with retrieved chunks + Hermes/DeepSeek LLM
+    3. **RAG + LLM** (default) — text-only RAG with retrieved chunks + configurable LLM
 
     The agent backend (when ``agent_enabled`` is set) takes precedence over
     the other backends because it can combine visual, textual, and object-level
@@ -36,11 +44,13 @@ class VideoChat:
     the agent is unavailable.
     """
 
-    def __init__(self, rag: VideoRAG, config: Optional[Config] = None):
+    def __init__(self, rag: VideoRAG, config: Optional[Config] = None, llm=None):
         self.rag = rag
         self.config = config or Config()
         self.history: List[ChatMessage] = []
         self._mllm = None  # lazy-loaded Video MLLM
+        # LLMProvider — lazily loaded
+        self._llm = llm
         # Conversation memory (optional, ChromaDB-backed)
         self.memory: Optional[ConversationMemory] = None
         if self.config.conversation_memory_enabled:
@@ -52,6 +62,45 @@ class VideoChat:
                     "Failed to initialise conversation memory: %s — proceeding without it",
                     exc,
                 )
+
+    def _get_llm(self):
+        """Lazy-load the LLM provider."""
+        if self._llm is None:
+            from video_analysis.llm_provider import get_llm_provider
+
+            # Build LLMProviderConfig from our Config
+            from video_analysis.llm_provider import LLMProviderConfig
+
+            cfg = LLMProviderConfig(
+                provider=(
+                    self.config.llm_provider
+                    if hasattr(self.config, "llm_provider")
+                    else "hermes"
+                ),
+                api_base=(
+                    self.config.openai_api_base
+                    if hasattr(self.config, "openai_api_base")
+                    else os.environ.get("OPENAI_API_BASE", "http://localhost:11434/v1")
+                ),
+                api_key=(
+                    self.config.openai_api_key
+                    if hasattr(self.config, "openai_api_key")
+                    else os.environ.get("OPENAI_API_KEY", "")
+                ),
+                model=(
+                    self.config.openai_model
+                    if hasattr(self.config, "openai_model")
+                    else os.environ.get("OPENAI_MODEL", "qwen2.5")
+                ),
+                max_tokens=self.config.llm_max_tokens,
+                temperature=self.config.llm_temperature,
+                timeout=120,
+                hermes_model=self.config.llm_model,
+                hermes_max_tokens=self.config.llm_max_tokens,
+            )
+            self._llm = get_llm_provider(cfg)
+            logger.info("Using LLM provider: %s", self._llm.name)
+        return self._llm
 
     def _get_mllm(self):
         """Lazy-load Video MLLM for video-native Q&A."""
@@ -73,8 +122,8 @@ class VideoChat:
            frame analysis).
         2. **Video MLLM** (``video_mllm_as_chat_backend``) — video-native
            visual Q&A using frame images directly.
-        3. **RAG + Hermes CLI** (default) — text-only retrieval with
-           Hermes/DeepSeek LLM.
+        3. **RAG + LLM** (default) — text-only retrieval with
+           configurable LLM.
 
         Args:
             query: Natural language question
@@ -101,7 +150,7 @@ class VideoChat:
                     return result
                 logger.info("Video MLLM QA returned None — falling back to RAG path")
 
-        # RAG-based retrieval + Hermes CLI (default path)
+        # RAG-based retrieval + LLM (default path)
         return self._ask_rag(query, video_id)
 
     def _get_agent_video_path(self, video_id: Optional[str]) -> Optional[str]:
@@ -325,8 +374,17 @@ class VideoChat:
         else:
             prompt = self._build_prompt(query, context)
 
-        # Ask LLM
-        answer = self._call_llm(prompt)
+        # Ask LLM (via LLMProvider abstraction)
+        llm = self._get_llm()
+        answer = llm.chat(
+            prompt=prompt,
+            temperature=0.3,
+            max_tokens=self.config.llm_max_tokens,
+        )
+        if not answer:
+            answer = (
+                "I encountered an error processing your question. Please try again."
+            )
 
         # Extract source citations
         sources = self.rag.get_source_citations(chunks)
@@ -367,7 +425,7 @@ class VideoChat:
                     return result
                 logger.info("Video MLLM QA returned None — falling back to RAG path")
 
-        # RAG-based retrieval + Hermes CLI (default path)
+        # RAG-based retrieval + LLM (default path)
         if self.config.agentic_retrieval_enabled:
             chunks = self.rag.agentic_retrieve(query, video_id=video_id)
         elif (
@@ -405,7 +463,17 @@ class VideoChat:
             query, context, history_text, memory_context
         )
 
-        answer = self._call_llm(prompt)
+        # Ask LLM (via LLMProvider abstraction)
+        llm = self._get_llm()
+        answer = llm.chat(
+            prompt=prompt,
+            temperature=0.3,
+            max_tokens=self.config.llm_max_tokens,
+        )
+        if not answer:
+            answer = (
+                "I encountered an error processing your question. Please try again."
+            )
 
         message = ChatMessage(
             role="assistant",
@@ -563,43 +631,3 @@ Current context:
 Question: {query}
 
 Answer with timestamp citations where relevant:"""
-
-    def _call_llm(self, prompt: str) -> str:
-        """Call the LLM with the prompt."""
-        try:
-            result = subprocess.run(
-                [
-                    "hermes",
-                    "chat",
-                    "-q",
-                    "-m",
-                    self.config.llm_model,
-                    "-t",
-                    "0.3",
-                    "--max-tokens",
-                    str(self.config.llm_max_tokens),
-                ],
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-            else:
-                logger.error(f"LLM call failed: {result.stderr[:500]}")
-                return (
-                    "I encountered an error processing your question. Please try again."
-                )
-        except FileNotFoundError:
-            # Fallback: return a meaningful response from retrieved context
-            return (
-                "Based on the video content I found, I can see the relevant "
-                "scenes and context. However, the LLM backend (hermes CLI) is "
-                "not available. Please ensure Hermes is installed and configured."
-            )
-        except subprocess.TimeoutExpired:
-            return "The analysis took too long. Please try a more specific question."
-        except Exception as e:
-            logger.error(f"LLM error: {e}")
-            return f"I encountered an error: {str(e)[:200]}"

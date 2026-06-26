@@ -113,8 +113,9 @@ class ChapterGenerator:
     a pure-Python fallback, then generates chapter titles via LLM.
     """
 
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(self, config: Optional[Config] = None, llm=None):
         self.config = config or Config()
+        self._llm = llm  # optional LLMProvider instance
         self._texttiler = None  # lazy-loaded
 
     def _init_texttiler(self) -> bool:
@@ -273,10 +274,30 @@ class ChapterGenerator:
 
         return groups
 
+    def _get_llm(self):
+        """Lazy-load the LLM provider."""
+        if self._llm is None:
+            from video_analysis.llm_provider import get_llm_provider, LLMProviderConfig
+
+            cfg = LLMProviderConfig(
+                provider=os.environ.get("LLM_PROVIDER", "hermes"),
+                api_base=os.environ.get("OPENAI_API_BASE", "http://localhost:11434/v1"),
+                api_key=os.environ.get("OPENAI_API_KEY", ""),
+                model=os.environ.get("OPENAI_MODEL", "qwen2.5"),
+                max_tokens=512,
+                temperature=0.3,
+                timeout=30,
+                hermes_model=self.config.llm_model,
+                hermes_max_tokens=512,
+            )
+            self._llm = get_llm_provider(cfg)
+            logger.info("ChapterGenerator using LLM provider: %s", self._llm.name)
+        return self._llm
+
     def _generate_title_via_llm(
         self, chapter_text: str, chapter_index: int, total_chapters: int
     ) -> Tuple[str, str]:
-        """Generate a chapter title using the LLM (Hermes CLI).
+        """Generate a chapter title using the LLM provider.
 
         Falls back to a descriptive title using simple heuristics.
 
@@ -303,39 +324,21 @@ class ChapterGenerator:
             f"Return only valid JSON, nothing else."
         )
 
-        try:
-            result = subprocess.run(
-                [
-                    "hermes",
-                    "chat",
-                    "-q",
-                    prompt,
-                    "--max-turns",
-                    "1",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            output = result.stdout.strip()
-
-            # Try to parse JSON from output
-            json_match = re.search(r"\{[^}]+\}", output)
-            if json_match:
-                data = json.loads(json_match.group())
-                title = data.get("title", "").strip()
-                summary = data.get("summary", "").strip()
-                if title:
-                    # Strip surrounding quotes if present
-                    title = title.strip("\"' ")
-                    summary = summary.strip("\"' ")
-                    if len(title) <= 120:  # sanity check
-                        return title, summary
-
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
-            logger.warning(f"LLM chapter title generation failed: {exc}")
-        except (json.JSONDecodeError, Exception) as exc:
-            logger.warning(f"Could not parse LLM output for chapter title: {exc}")
+        llm = self._get_llm()
+        parsed = llm.structured_chat(
+            prompt=prompt,
+            temperature=0.3,
+            max_tokens=512,
+            timeout=30,
+        )
+        if parsed:
+            title = parsed.get("title", "").strip()
+            summary = parsed.get("summary", "").strip()
+            if title:
+                title = title.strip("\"' ")
+                summary = summary.strip("\"' ")
+                if len(title) <= 120:  # sanity check
+                    return title, summary
 
         # Fallback: generate a heuristic title
         return self._generate_heuristic_title(chapter_text, chapter_index)

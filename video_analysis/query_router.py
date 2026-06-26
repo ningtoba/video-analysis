@@ -12,18 +12,25 @@ retrieval strategies based on query type:
 | ``temporal`` | Time/sequence | "What happened before the explosion?" | ChromaDB + temporal decay weighting + scene graph |
 | ``multimodal`` | Complex, multi-aspect | "Why did the protagonist leave?" | Multi-hop decomposition + combined retrieval |
 
-The router uses the LLM itself (via Hermes CLI) for classification when
-available, with keyword-based fallback for offline/resource-constrained
-environments.  The LLM call is a single lightweight prompt (no model load).
+The router uses the LLM for classification when available,
+with keyword-based fallback for offline/resource-constrained
+environments. The LLM call is a single lightweight prompt (no model load).
+
+**LLM Provider Integration:** Instead of directly calling the Hermes CLI,
+this module uses the :class:`LLMProvider` abstraction, supporting both
+Hermes CLI and OpenAI-compatible backends.
 """
+
+from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from video_analysis.config import Config
 
@@ -105,15 +112,42 @@ class QueryRouter:
        (fast, single-turn prompt).
     2. **Keyword-based fallback** — regex patterns for lightweight, offline routing.
 
+    Uses the :class:`LLMProvider` abstraction instead of directly calling
+    the Hermes CLI, enabling OpenAI-compatible backends (vLLM, Ollama, etc.).
+
     Args:
         config: Platform config (for LLM endpoint).
         prefer_llm: If True (default), tries LLM first; falls back to keywords.
                    If False, uses keywords only (faster, no external call).
+        llm: Optional pre-configured LLMProvider instance.
     """
 
-    def __init__(self, config: Optional[Config] = None, prefer_llm: bool = True):
+    def __init__(
+        self, config: Optional[Config] = None, prefer_llm: bool = True, llm=None
+    ):
         self.config = config or Config()
         self.prefer_llm = prefer_llm
+        self._llm = llm  # optional LLMProvider instance
+
+    def _get_llm(self):
+        """Lazy-load the LLM provider."""
+        if self._llm is None:
+            from video_analysis.llm_provider import get_llm_provider, LLMProviderConfig
+
+            cfg = LLMProviderConfig(
+                provider=os.environ.get("LLM_PROVIDER", "hermes"),
+                api_base=os.environ.get("OPENAI_API_BASE", "http://localhost:11434/v1"),
+                api_key=os.environ.get("OPENAI_API_KEY", ""),
+                model=os.environ.get("OPENAI_MODEL", "qwen2.5"),
+                max_tokens=256,
+                temperature=0.1,
+                timeout=30,
+                hermes_model=self.config.llm_model,
+                hermes_max_tokens=256,
+            )
+            self._llm = get_llm_provider(cfg)
+            logger.info("QueryRouter using LLM provider: %s", self._llm.name)
+        return self._llm
 
     def classify(self, query: str) -> RoutingDecision:
         """Classify a user query into the optimal retrieval route.
@@ -135,7 +169,7 @@ class QueryRouter:
         return self._classify_keyword(query)
 
     def _classify_llm(self, query: str) -> Optional[RoutingDecision]:
-        """Classify using the configured LLM via Hermes CLI.
+        """Classify using the configured LLM via LLMProvider.
 
         Uses a lightweight single-turn prompt with no model load.
         """
@@ -145,185 +179,54 @@ Question: {query}
 
 JSON response:"""
 
-        try:
-            result = subprocess.run(
-                [
-                    "hermes",
-                    "chat",
-                    "-q",
-                    "-m",
-                    self.config.llm_model,
-                    "-t",
-                    "0.1",  # low temperature for deterministic output
-                    "--max-tokens",
-                    "256",
-                ],
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                output = result.stdout.strip()
-                # Extract JSON from the output
-                try:
-                    parsed = json.loads(output)
-                except json.JSONDecodeError:
-                    # Try to extract JSON from markdown code blocks
-                    match = re.search(r"\{[^}]+\}", output)
-                    if match:
-                        parsed = json.loads(match.group())
-                    else:
-                        raise
-
-                route_str = parsed.get("route", "text").lower()
-                route = (
-                    QueryRoute(route_str)
-                    if route_str in [r.value for r in QueryRoute]
-                    else QueryRoute.TEXT
-                )
-                confidence = min(float(parsed.get("confidence", 1.0)), 1.0)
-                reasoning = parsed.get("reasoning", "")
-
-                return RoutingDecision(
-                    route=route,
-                    confidence=confidence,
-                    reasoning=reasoning,
-                )
-        except FileNotFoundError:
-            logger.debug("Hermes CLI not available for routing")
-        except subprocess.TimeoutExpired:
-            logger.debug("LLM routing timed out")
-        except Exception as e:
-            logger.debug(f"LLM routing error: {e}")
-
-        return None
-
-    def _classify_keyword(self, query: str) -> RoutingDecision:
-        """Classify using keyword/pattern matching — lightweight fallback."""
-        q = query.strip()
-
-        # Count keyword matches for each category
-        temporal_score = len(_TEMPORAL_KEYWORDS.findall(q))
-        visual_score = len(_VISUAL_KEYWORDS.findall(q))
-        multimodal_score = len(_MULTIMODAL_KEYWORDS.findall(q))
-
-        # Find the best match
-        scores = {
-            QueryRoute.TEMPORAL: temporal_score,
-            QueryRoute.VISUAL: visual_score,
-            QueryRoute.MULTIMODAL: multimodal_score,
-        }
-
-        best_route = QueryRoute.TEXT
-        best_score = 0
-        for route, score in scores.items():
-            if score > best_score:
-                best_score = score
-                best_route = route
-
-        # Compute confidence based on how decisive the match is
-        total = sum(scores.values()) or 1
-        confidence = min(best_score / total, 1.0) if best_score > 0 else 0.5
-
-        return RoutingDecision(
-            route=best_route,
-            confidence=confidence,
-            reasoning=f"keyword match: {dict((k.value, v) for k, v in scores.items())}",
+        llm = self._get_llm()
+        parsed = llm.structured_chat(
+            prompt=prompt,
+            temperature=0.1,
+            max_tokens=256,
+            timeout=30,
         )
 
-    def classify_and_decompose(self, query: str) -> RoutingDecision:
-        """Classify a query and decompose multimodal/complex queries into sub-questions.
+        if parsed is None:
+            return None
 
-        For ``multimodal`` routes, generates sub-questions that can be used
-        for multi-hop retrieval.  For other routes, returns the query as-is.
+        route_str = parsed.get("route", "text").lower()
+        route = (
+            QueryRoute(route_str)
+            if route_str in [r.value for r in QueryRoute]
+            else QueryRoute.TEXT
+        )
+        confidence = min(float(parsed.get("confidence", 1.0)), 1.0)
+        reasoning = parsed.get("reasoning", "")
 
-        Uses the LLM for decomposition when available; falls back to heuristics.
-        """
-        decision = self.classify(query)
+        return RoutingDecision(
+            route=route,
+            confidence=confidence,
+            reasoning=reasoning,
+        )
 
-        if decision.route == QueryRoute.MULTIMODAL:
-            sub_queries = self._decompose_multimodal(query)
-            if sub_queries:
-                decision.sub_queries = sub_queries
-
-        return decision
-
-    def _decompose_multimodal(self, query: str) -> List[str]:
-        """Decompose a complex multimodal query into simpler sub-questions.
-
-        Uses the LLM to break down complex queries into focused sub-questions
-        that can be answered independently via text-only, visual-only, or
-        temporal-only retrieval.
-        """
-        decompose_prompt = f"""Break this complex question about a video into 2-4 focused sub-questions.
-Each sub-question should target ONE type of information (text/visual/temporal).
-Make each sub-question standalone and answerable from video context.
-
-Original question: {query}
-
-Return as a JSON array of strings ONLY:
-["sub-question 1", "sub-question 2", ...]"""
-
-        try:
-            result = subprocess.run(
-                [
-                    "hermes",
-                    "chat",
-                    "-q",
-                    "-m",
-                    self.config.llm_model,
-                    "-t",
-                    "0.1",
-                    "--max-tokens",
-                    "512",
-                ],
-                input=decompose_prompt,
-                capture_output=True,
-                text=True,
-                timeout=30,
+    def _classify_keyword(self, query: str) -> RoutingDecision:
+        """Fast keyword-based routing fallback."""
+        if _TEMPORAL_KEYWORDS.search(query):
+            return RoutingDecision(
+                route=QueryRoute.TEMPORAL,
+                confidence=0.6,
+                reasoning="Matched temporal keywords",
             )
-            if result.returncode == 0:
-                output = result.stdout.strip()
-                try:
-                    sub_queries = json.loads(output)
-                except json.JSONDecodeError:
-                    # Try extracting array from markdown
-                    match = re.search(r'\["[^\]]+"\]', output)
-                    if match:
-                        sub_queries = json.loads(match.group())
-                    else:
-                        return []
-                if isinstance(sub_queries, list) and len(sub_queries) >= 2:
-                    logger.info(
-                        f"Decomposed query into {len(sub_queries)} sub-questions: {sub_queries}"
-                    )
-                    return sub_queries
-        except Exception as e:
-            logger.debug(f"Query decomposition failed: {e}")
-
-        # Fallback: naive heuristic decomposition
-        return self._heuristic_decompose(query)
-
-    def _heuristic_decompose(self, query: str) -> List[str]:
-        """Fallback decomposition using heuristics when LLM is unavailable.
-
-        Extracts entity-related questions and temporal context as separate
-        sub-questions.
-        """
-        sub_queries = [query]
-
-        # If query asks "why", split into "what happened" + "what was the context"
-        if query.lower().startswith("why"):
-            sub_queries = [
-                f"What happened in the video related to: {query}",
-                f"What was the context around: {query}",
-            ]
-
-        # If query has multiple entities with "and", split
-        if " and " in query.lower() and len(query) > 50:
-            parts = re.split(r"\band\b", query)
-            if len(parts) >= 2:
-                sub_queries = [p.strip().strip("?") + "?" for p in parts[:3]]
-
-        return sub_queries
+        if _VISUAL_KEYWORDS.search(query):
+            return RoutingDecision(
+                route=QueryRoute.VISUAL,
+                confidence=0.6,
+                reasoning="Matched visual keywords",
+            )
+        if _MULTIMODAL_KEYWORDS.search(query):
+            return RoutingDecision(
+                route=QueryRoute.MULTIMODAL,
+                confidence=0.6,
+                reasoning="Matched multimodal keywords",
+            )
+        return RoutingDecision(
+            route=QueryRoute.TEXT,
+            confidence=0.8,
+            reasoning="Default text route (no specific keywords matched)",
+        )

@@ -25,12 +25,15 @@ Usage:
         # re-retrieval was attempted
 """
 
+from __future__ import annotations
+
 import json
 import logging
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
-from typing import List, Optional, Set, Tuple
+from typing import Any, List, Optional, Set, Tuple
 
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG, RetrievedChunk
@@ -68,16 +71,42 @@ class SelfCheckRAG:
     The self-check is designed as a **drop-in enhancement** to the existing
     agentic_retrieve pipeline — specifically as Round 4 (LLM verification)
     after Rounds 1-3 (embedding search, multi-hop, scene-graph expansion).
+
+    **LLM Provider Integration:** Instead of directly calling the Hermes CLI,
+    this module uses the :class:`LLMProvider` abstraction, supporting both
+    Hermes CLI and OpenAI-compatible backends.
     """
 
     def __init__(
         self,
         config: Optional[Config] = None,
         rag: Optional[VideoRAG] = None,
+        llm=None,
     ):
         self.config = config or Config()
         self.rag = rag  # optional — set later if not provided at init
+        self._llm = llm  # optional LLMProvider instance
         self._cached_verdicts: dict = {}  # query hash -> verdict cache
+
+    def _get_llm(self):
+        """Lazy-load the LLM provider."""
+        if self._llm is None:
+            from video_analysis.llm_provider import get_llm_provider, LLMProviderConfig
+
+            cfg = LLMProviderConfig(
+                provider=os.environ.get("LLM_PROVIDER", "hermes"),
+                api_base=os.environ.get("OPENAI_API_BASE", "http://localhost:11434/v1"),
+                api_key=os.environ.get("OPENAI_API_KEY", ""),
+                model=os.environ.get("OPENAI_MODEL", "qwen2.5"),
+                max_tokens=1024,
+                temperature=0.1,
+                timeout=60,
+                hermes_model=self.config.llm_model,
+                hermes_max_tokens=1024,
+            )
+            self._llm = get_llm_provider(cfg)
+            logger.info("SelfCheckRAG using LLM provider: %s", self._llm.name)
+        return self._llm
 
     def verify(
         self,
@@ -230,72 +259,31 @@ Respond in this exact JSON format:
     "gaps": ["gap1", "gap2"]
 }}"""
 
-        try:
-            result = subprocess.run(
-                [
-                    "hermes",
-                    "chat",
-                    "-q",
-                    "-m",
-                    self.config.llm_model,
-                    "-t",
-                    "0.1",
-                    "--max-tokens",
-                    "1024",
-                ],
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode != 0:
-                logger.warning(f"LLM self-check call failed: {result.stderr[:200]}")
-                return SelfCheckResult(
-                    query=query,
-                    draft_answer="",
-                    verdict="unsupported",
-                    confidence_score=0.0,
-                    gaps=["LLM verification call failed"],
-                )
+        llm = self._get_llm()
+        parsed = llm.structured_chat(
+            prompt=prompt,
+            temperature=0.1,
+            max_tokens=1024,
+            timeout=60,
+        )
 
-            raw = result.stdout.strip()
-            parsed = self._parse_json_response(raw)
-            confidence = max(0.0, min(1.0, parsed.get("confidence", 0.0)))
+        if parsed is None:
             return SelfCheckResult(
                 query=query,
-                draft_answer=parsed.get("draft_answer", ""),
-                verdict=parsed.get("verdict", "unsupported"),
-                confidence_score=confidence,
-                gaps=parsed.get("gaps", []),
+                draft_answer="",
+                verdict="unsupported",
+                confidence_score=0.0,
+                gaps=["LLM verification call failed"],
             )
 
-        except subprocess.TimeoutExpired:
-            logger.warning("Self-check LLM call timed out")
-            return SelfCheckResult(
-                query=query,
-                draft_answer="",
-                verdict="unsupported",
-                confidence_score=0.0,
-                gaps=["LLM verification timed out"],
-            )
-        except FileNotFoundError:
-            logger.warning("Hermes CLI not available for self-check")
-            return SelfCheckResult(
-                query=query,
-                draft_answer="",
-                verdict="unsupported",
-                confidence_score=0.0,
-                gaps=["Hermes CLI not available"],
-            )
-        except Exception as e:
-            logger.error(f"Self-check error: {e}")
-            return SelfCheckResult(
-                query=query,
-                draft_answer="",
-                verdict="unsupported",
-                confidence_score=0.0,
-                gaps=[f"Self-check error: {str(e)[:100]}"],
-            )
+        confidence = max(0.0, min(1.0, parsed.get("confidence", 0.0)))
+        return SelfCheckResult(
+            query=query,
+            draft_answer=parsed.get("draft_answer", ""),
+            verdict=parsed.get("verdict", "unsupported"),
+            confidence_score=confidence,
+            gaps=parsed.get("gaps", []),
+        )
 
     def _reformulate_query(
         self, original_query: str, gaps: List[str], draft_answer: str
@@ -319,32 +307,16 @@ IDENTIFIED GAPS:
 Reformulate the original query to address these gaps. Focus on what's MISSING from the evidence.
 Keep it concise (1-2 sentences). Output ONLY the reformulated query, no explanation."""
 
-        try:
-            result = subprocess.run(
-                [
-                    "hermes",
-                    "chat",
-                    "-q",
-                    "-m",
-                    self.config.llm_model,
-                    "-t",
-                    "0.1",
-                    "--max-tokens",
-                    "256",
-                ],
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                reformulated = result.stdout.strip().strip('"').strip("'")
-                if reformulated and len(reformulated) > 10:
-                    return reformulated
-        except Exception as e:
-            logger.debug(f"Query reformulation failed: {e}")
+        llm = self._get_llm()
+        reformulated = llm.chat(
+            prompt=prompt,
+            temperature=0.1,
+            max_tokens=256,
+            timeout=30,
+        )
+        if reformulated and len(reformulated) > 10:
+            return reformulated.strip().strip('"').strip("'")
 
-        # Fallback: return original query
         return original_query
 
     def _re_retrieve(
@@ -397,46 +369,20 @@ Keep it concise (1-2 sentences). Output ONLY the reformulated query, no explanat
         in the verification pass.
         """
         merged: dict = {}
-        for c in existing:
-            merged[c.chunk_id] = c
-
+        # Add new chunks first (with slight score bump)
         for c in new_chunks:
-            key = c.chunk_id
-            if key in merged:
-                # Boost score slightly for fresh re-retrieved chunks
-                if c.score > merged[key].score:
-                    merged[key] = c
-            else:
-                # Boost new chunks slightly
-                c.score = min(1.0, c.score * 1.05)
-                merged[key] = c
-
-        result = sorted(merged.values(), key=lambda x: x.score, reverse=True)
-        return result[:15]  # cap at 15 for LLM context window
-
-    def _parse_json_response(self, raw: str) -> dict:
-        """Parse JSON from LLM response, handling markdown code fences."""
-        # Strip markdown code fences
-        raw = raw.strip()
-        # Remove ```json ... ``` wrappers
-        match = re.search(r"```(?:json)?\s*\n?({.*?})\n?\s*```", raw, re.DOTALL)
-        if match:
-            raw = match.group(1)
-        # Try direct JSON parse
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-        # Try finding { ... } in the response
-        try:
-            brace_start = raw.index("{")
-            brace_end = raw.rindex("}") + 1
-            return json.loads(raw[brace_start:brace_end])
-        except (ValueError, json.JSONDecodeError):
-            logger.warning(f"Could not parse LLM JSON response: {raw[:200]}...")
-            return {
-                "draft_answer": "",
-                "verdict": "unsupported",
-                "confidence": 0.0,
-                "gaps": ["Failed to parse LLM verification response"],
-            }
+            merged[c.chunk_id] = RetrievedChunk(
+                text=c.text,
+                score=c.score + 0.05,
+                timestamp=c.timestamp,
+                video_id=c.video_id,
+                scene_id=c.scene_id,
+                chunk_type=c.chunk_type,
+                chunk_id=c.chunk_id,
+                metadata=c.metadata,
+            )
+        # Add existing (will not overwrite new, preserving the score bump)
+        for c in existing:
+            if c.chunk_id not in merged:
+                merged[c.chunk_id] = c
+        return list(merged.values())

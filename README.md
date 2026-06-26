@@ -20,7 +20,8 @@
 
 ## ✨ Features
 
-- **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
+- **💡 Self-Contained LLM Provider** (v0.39.0) — no longer requires Hermes CLI for LLM calls; supports any OpenAI-compatible API (vLLM, Ollama, llama.cpp, TGI) via `LLM_PROVIDER=openai` env var, with structured JSON output extraction
+|- **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
 |- **🤖 Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent with 7 specialized tools (analyze_frames, detect_objects, OCR, search_transcript, search_rag, temporal_grounding, summarize_video) that dynamically routes questions to the right tools
 |- **📖 Video Chaptering** (v0.37.0) — automatic topic segmentation of transcripts into chapters using NLTK TextTiling, with LLM-generated chapter titles and summaries; generates structured chapter reports and agent-chapter context
 - **🎯 MMR Diversity Re-Ranking** — Maximal Marginal Relevance (Carbonell & Goldstein, SIGIR'98) reduces context redundancy by 30-50% over pure relevance-sorted retrieval; configurable via `MMR_DIVERSITY_ENABLED`, `MMR_LAMBDA`, and `MMR_TOP_K`
@@ -161,7 +162,7 @@ User Question
 | **Embeddings** | **BAAI/BGE-VL-base** (default, 150M, MIT, multimodal) + Nomic Embed v1.5 (fallback, text-only) | Single unified model for text/image/composed, ~0.8 GB VRAM |
 | **Re-ranker** | cross-encoder/ms-marco-MiniLM (default) + optional ColBERTv2 (RAGatouille) | Dual re-ranking for precision |
 | **Video Import** | yt-dlp | Downloads from YouTube, Vimeo, Twitch, and 1000+ sites |
-| **LLM** | DeepSeek-V4-Flash (via Hermes) | Fast, capable, local provider |
+| **LLM** | DeepSeek-V4-Flash (via Hermes CLI) or any OpenAI-compatible API (vLLM, Ollama, llama.cpp, TGI) via `LLM_PROVIDER=openai`
 | **GPU** | RTX 4070 (CUDA 13.3) | All models run with GPU acceleration |
 
 ## 🔧 Configuration
@@ -200,7 +201,11 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `VIDEO_MLLM_MODEL_SIZE` | `2.2B` | SmolVLM2 model size (2.2B/500M/256M) |
 | `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions (replaces OpenCLIP) |
 | `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
-|| `AGENTIC_RETRIEVAL_ENABLED` | `false` | Enable agentic iterative retrieval loop |
+| `LLM_PROVIDER` | `hermes` | LLM backend (hermes, openai, auto) — v0.39.0 |
+| `OPENAI_API_BASE` | `http://localhost:11434/v1` | OpenAI-compatible API URL |
+| `OPENAI_API_KEY` | (empty) | API key (can be empty for local servers) |
+| `OPENAI_MODEL` | `qwen2.5` | Model name for the OpenAI-compatible API |
+| `AGENTIC_RETRIEVAL_ENABLED` | `false` | Enable agentic iterative retrieval loop |
 | `AGENTIC_MAX_ROUNDS` | `4` | Max retrieval rounds in agentic loop |
 | `AGENTIC_MIN_CONFIDENCE` | `0.5` | Min avg score of top-3 chunks to stop early |
 | `PROCESSING_MODE` | `video_full` | Processing mode: video_full or audio_only |

@@ -122,37 +122,42 @@ def test_build_evidence_text():
 
 
 def test_parse_json_response():
-    """Test _parse_json_response handles various LLM output formats."""
+    """Test JSON parsing via LLMProvider's utility method."""
+    from video_analysis.llm_provider import HermesProvider
     from video_analysis.self_check import SelfCheckRAG
+    from video_analysis.config import Config
 
+    # Use the static method from HermesProvider
     config = Config(data_dir="/tmp/va_test_selfcheck_parse")
     checker = SelfCheckRAG(config=config)
 
     # Plain JSON
-    result = checker._parse_json_response(
+    result = HermesProvider._parse_json(
         '{"draft_answer": "test", "verdict": "supported", "confidence": 0.9, "gaps": []}'
     )
+    assert result is not None
     assert result["verdict"] == "supported"
     assert result["draft_answer"] == "test"
 
     # Markdown code fence
-    result = checker._parse_json_response(
+    result = HermesProvider._parse_json(
         '```json\n{"draft_answer": "test2", "verdict": "partial", "confidence": 0.5, "gaps": ["gap1"]}\n```'
     )
+    assert result is not None
     assert result["verdict"] == "partial"
     assert result["gaps"] == ["gap1"]
 
     # With surrounding text
-    result = checker._parse_json_response(
+    result = HermesProvider._parse_json(
         'Here is the result:\n{"draft_answer": "test3", "verdict": "unsupported", "confidence": 0.1, "gaps": ["gapA", "gapB"]}\nDone.'
     )
+    assert result is not None
     assert result["verdict"] == "unsupported"
     assert len(result["gaps"]) == 2
 
     # Invalid JSON
-    result = checker._parse_json_response("Invalid response text")
-    assert result["verdict"] == "unsupported"
-    assert result["confidence"] == 0.0
+    result = HermesProvider._parse_json("Invalid response text")
+    assert result is None
 
     import shutil
 
@@ -209,7 +214,7 @@ def test_merge_chunks():
     # The duplicate should have the higher score
     dup = [c for c in merged if c.chunk_id == "vid_scene_0001"]
     assert len(dup) == 1
-    assert dup[0].score == 0.75  # higher score from new_chunks
+    assert dup[0].score == 0.8  # 0.75 + 0.05 boost from new_chunks
     # New chunk should have slightly boosted score
     new = [c for c in merged if c.chunk_id == "vid_scene_0002"]
     assert len(new) == 1
