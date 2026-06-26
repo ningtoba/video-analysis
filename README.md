@@ -210,9 +210,12 @@ python tests/test_basic.py
 - [x] Docker production hardening (CUDA 12.8, torch 2.6)
 - [x] Frame preview on timeline hover (CSS sprite sheet overlay)
 - [x] ColBERTv2 late-interaction re-ranking
-- [ ] Action recognition (VideoMAE/TimeSformer)
+- [x] Action recognition research — InternVideo2.5 identified as successor to VideoMAE/TimeSformer
+- [ ] Action recognition (InternVideo2.5)
 - [ ] Gradio auth via env vars
-- [ ] Semantic video search (not just Q&A)
+- [ ] Semantic video search (BGE-VL multimodal embeddings)
+- [ ] Motion-based adaptive frame sampling
+- [ ] CLIP-similarity frame deduplication
 
 ## 📝 License
 

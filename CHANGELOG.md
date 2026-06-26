@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.8.0 (2026-06-26)
+
+### 🔬 Comprehensive Research Sweep (Iteration 1)
+
+Conducted deep research across 5 domains for the next evolution of the platform:
+
+**1. Scene Detection & Frame Extraction** — PySceneDetect 0.7 (May 2026) confirmed as best
+OSS option for shot boundary detection. No competitive alternative emerged. Key improvement:
+motion-based adaptive frame sampling (sample more densely near scene boundaries, less in
+static regions). Also propose CLIP-similarity-based keyframe deduplication.
+
+**2. Video Understanding AI Models** — Identified InternVideo2.5 (OpenGVLab, 2025, Apache 2.0)
+as the direct successor to VideoMAE/TimeSformer for action recognition — replaces the
+original roadmap's reference to VideoMAE. VideoChat-Flash (ICLR 2026) is the top video
+MLLM for long-context understanding. TimeSformer (Meta) was archived Jan 2025. OpenCLIP
+remains best zero-shot frame descriptor for 12GB VRAM.
+
+**3. RAG Architectures** — Current stack (ChromaDB + Nomic Embed v1.5 + ColBERTv2) is
+already state-of-the-art. Key discovery: BGE-VL (BAAI, March 2025, MIT license) enables
+multimodal embedding — video frames can be searched directly as images, not just through
+text descriptions. MegaPairs dataset released alongside.
+
+**4. Web UI Frameworks** — Gradio 6 (v6.19.0) confirmed as the best fit over Streamlit,
+NiceGUI, and Dash. Native Video + Chatbot + gr.mount_gradio_app() for FastAPI is the
+correct architecture. Roadmap item for Gradio auth via env vars identified as top priority.
+
+**5. Production Deployment** — Docker/CUDA 12.8 stack is current. Missing: Gradio auth,
+torch.cuda.empty_cache() between pipeline stages, graceful SIGTERM handling.
+
+Full research document written to `RESEARCH.md`.
+
+### 🏗️ Infrastructure
+
+- Written `RESEARCH.md` — comprehensive research document covering all 5 domains
+
+## 0.7.0 (2026-06-26)
+
+### 🔬 Action Recognition Research
+
+- Researched VideoMAE/TimeSformer vs InternVideo2 for action recognition
+- Gradio auth implementation planning
+- Semantic search architecture planning
+
 ## 0.6.0 (2026-06-26)
 
 ### 🧠 New Feature: Optional ColBERTv2 Late-Interaction Re-Ranker
