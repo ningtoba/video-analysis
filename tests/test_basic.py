@@ -1568,10 +1568,10 @@ def test_rag_multi_hop_no_subqueries():
 
 
 def test_version_0_15_0():
-    """Test version is now 0.42.0."""
+    """Test version is now 0.44.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.43.0"
+    assert __version__ == "0.44.0"
 
 
 # ====================================================================
@@ -1993,10 +1993,10 @@ def test_scene_graph_track_id_entity_matching():
 
 
 def test_version_0_20_0():
-    """Test version is now 0.42.0."""
+    """Test version is now 0.44.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.43.0"
+    assert __version__ == "0.44.0"
 
 
 # ---------------------------------------------------------------------------
@@ -2371,10 +2371,93 @@ def test_rag_mmr_fallback_no_sentence_transformers():
 
 
 def test_version_0_34_0():
-    """Test that version is 0.34.0."""
+    """Test that version is 0.44.0."""
     import video_analysis
 
-    assert video_analysis.__version__ == "0.43.0"
+    assert video_analysis.__version__ == "0.44.0"
+
+
+def test_evaluation_module():
+    """Test that the evaluation module and its components import correctly."""
+    from video_analysis.evaluation import (
+        EvaluationTask,
+        EvaluationRunner,
+        EvalReport,
+        EvalTaskResult,
+        EvalMetric,
+        run_evaluation,
+    )
+
+    # Verify base class is abstract
+    import inspect
+
+    assert inspect.isabstract(EvaluationTask)
+
+    # Verify runner can be instantiated
+    cfg = Config(data_dir="/tmp/va_test_eval")
+    runner = EvaluationRunner(cfg)
+    assert runner.get_available_tasks() is not None
+
+    # Verify report format
+    report = EvalReport()
+    assert report.run_id is not None
+    assert report.passed  # empty report passes
+
+
+def test_eval_task_discovery():
+    """Test that evaluation tasks can be discovered."""
+    from video_analysis.evaluation import EvaluationRunner
+    from video_analysis.config import Config
+
+    cfg = Config(data_dir="/tmp/va_test_eval_disc")
+    runner = EvaluationRunner(cfg)
+    tasks = runner.get_available_tasks()
+
+    # Should find at least the two built-in tasks
+    assert "retrieval_precision" in tasks
+    assert "scene_boundary_accuracy" in tasks
+
+
+def test_eval_metric_threshold():
+    """Test EvalMetric threshold logic."""
+    from video_analysis.evaluation import EvalMetric
+
+    m1 = EvalMetric(name="test", value=0.8, threshold_pass=0.5)
+    assert m1.passed is True
+
+    m2 = EvalMetric(name="test", value=0.3, threshold_pass=0.5)
+    assert m2.passed is False
+
+    m3 = EvalMetric(name="test", value=0.8)
+    assert m3.passed is None  # no threshold = no pass/fail
+
+
+def test_eval_runner_basic():
+    """Test EvaluationRunner basic execution."""
+    from video_analysis.evaluation import EvaluationRunner
+    from video_analysis.config import Config
+
+    cfg = Config(data_dir="/tmp/va_test_runner")
+    runner = EvaluationRunner(cfg)
+    report = runner.run_all()
+
+    assert len(report.results) > 0
+    assert report.passed
+    assert report.total_duration_ms > 0
+
+
+def test_eval_runner_filter():
+    """Test running specific evaluation tasks by name."""
+    from video_analysis.evaluation import EvaluationRunner
+    from video_analysis.config import Config
+
+    cfg = Config(data_dir="/tmp/va_test_filter")
+    runner = EvaluationRunner(cfg)
+    report = runner.run_all(task_names=["retrieval_precision"])
+
+    names = [r.task_name for r in report.results]
+    assert "retrieval_precision" in names
+    assert "scene_boundary_accuracy" not in names
 
 
 if __name__ == "__main__":

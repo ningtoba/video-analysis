@@ -159,6 +159,7 @@ User Question
 | `backends` | `video_analysis/backends/` | MLLM backend implementations (Qwen3-VL-30B-A3B with vLLM + FP8) |
 | `agent` | `video_analysis/agent.py` | Agentic Video Understanding Agent — multi-tool video analysis agent |
 | `chapters` | `video_analysis/chapters.py` | Video content chaptering — topic segmentation & LLM chapter title generation |
+| `evaluation` | `video_analysis/evaluation.py` | Pipeline evaluation harness — benchmark-driven quality regression detection (v0.44.0) |
 | `job_queue` | `video_analysis/job_queue.py` | In-process async job queue — background video processing with status polling |
 
 ## 💻 Tech Stack
@@ -261,6 +262,7 @@ Set via environment variables or edit `video_analysis/config.py`:
 ||| `LIVE_STREAM_MAX_RETRIES` | `3` | Max reconnection attempts |
 |||| `LIVE_STREAM_RETRY_DELAY` | `5.0` | Delay between retries (seconds) |
 || `JOB_QUEUE_MAX_CONCURRENT` | `1` | Max concurrent background processing jobs (v0.43.0) |
+|| `EVAL_ENABLED` | `false` | Enable evaluation harness CLI tasks (v0.44.0) |
 
 ## 🧪 Running Tests
 
@@ -269,6 +271,55 @@ python -m pytest tests/ -v
 # or
 python tests/test_basic.py
 ```
+
+## 📊 Pipeline Evaluation
+
+The platform includes a benchmark-driven evaluation harness (v0.44.0+) for
+quality regression detection. It generates **synthetic test fixtures** (no real
+videos needed) and measures per-stage accuracy:
+
+```bash
+# Run all evaluation tasks
+python -m video_analysis --eval
+
+# List available tasks
+python -m video_analysis --eval-list
+
+# Run specific tasks
+python -m video_analysis --eval-tasks retrieval,scene
+```
+
+Available tasks:
+
+| Task | Description |
+|------|-------------|
+| `retrieval_precision` | Top-k retrieval precision on curated synthetic QA pairs |
+| `scene_boundary_accuracy` | Scene detection precision/recall/F1 against ground truth |
+
+Each run produces a timestamped JSON report with pass/fail thresholds.
+Evaluation scores are also exported as Prometheus gauges (`va_evaluation_score`)
+for integration with the Grafana dashboard.
+
+## 📈 Production Monitoring
+
+The platform exports 20+ Prometheus metrics (v0.28.0+) covering pipeline runs,
+retrieval latency, GPU memory, ChromaDB size, and Q&A performance.
+
+A **production-ready Grafana dashboard** is provided at
+`deploy/grafana-dashboard.json` — import it into your Grafana instance (11+)
+for instant operational visibility:
+
+```
+Grafana → Dashboards → Import → Upload `deploy/grafana-dashboard.json`
+```
+
+Dashboard panels:
+
+- Pipeline throughput (runs/s, duration P50/P95/P99, success rate)
+- Retrieval latency by stage (embedding, search, rerank, temporal expansion)
+- GPU resource usage (VRAM, utilization, temperature)
+- System health (disk, errors, job queue)
+- Q&A quality (response latency, tokens/s, requests/s, evaluation scores)
 
 ## 📊 Performance (RTX 4070)
 

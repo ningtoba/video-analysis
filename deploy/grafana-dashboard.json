@@ -1,0 +1,349 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "2.0.0" }
+  ],
+  "title": "Video Analysis Platform",
+  "version": 1,
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "Pipeline Throughput",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 1,
+      "title": "Pipeline Runs / sec",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "rate(va_pipeline_runs_total[5m])",
+          "legendFormat": "runs/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null },
+            { "color": "yellow", "value": 0.01 },
+            { "color": "green", "value": 0.05 }
+          ]}
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Pipeline Duration (P50 / P95 / P99)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 12, "x": 6, "y": 1 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(va_pipeline_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(va_pipeline_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(va_pipeline_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 3,
+      "title": "Pipeline Success Rate",
+      "type": "gauge",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(rate(va_pipeline_runs_total{status=\"success\"}[5m])) / sum(rate(va_pipeline_runs_total[5m])) * 100",
+          "legendFormat": "success %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null },
+            { "color": "yellow", "value": 90 },
+            { "color": "green", "value": 99 }
+          ]}
+        }
+      }
+    },
+    {
+      "title": "Retrieval Performance",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
+    {
+      "id": 4,
+      "title": "Retrieval Latency by Stage",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        { "expr": "rate(va_retrieval_latency_seconds_sum{stage=\"embedding\"}[5m]) / rate(va_retrieval_latency_seconds_count{stage=\"embedding\"}[5m])", "legendFormat": "embedding" },
+        { "expr": "rate(va_retrieval_latency_seconds_sum{stage=\"search\"}[5m]) / rate(va_retrieval_latency_seconds_count{stage=\"search\"}[5m])", "legendFormat": "search" },
+        { "expr": "rate(va_retrieval_latency_seconds_sum{stage=\"rerank\"}[5m]) / rate(va_retrieval_latency_seconds_count{stage=\"rerank\"}[5m])", "legendFormat": "rerank" },
+        { "expr": "rate(va_retrieval_latency_seconds_sum{stage=\"expand\"}[5m]) / rate(va_retrieval_latency_seconds_count{stage=\"expand\"}[5m])", "legendFormat": "temporal_expand" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 5,
+      "title": "Chunks Retrieved per Query",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 6 },
+      "targets": [
+        {
+          "expr": "avg(va_retrieval_chunks_count)",
+          "legendFormat": "avg chunks"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    {
+      "id": 6,
+      "title": "ChromaDB Collection Size",
+      "type": "gauge",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 6 },
+      "targets": [
+        {
+          "expr": "va_chromadb_collection_size_bytes",
+          "legendFormat": "size"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1073741824 },
+            { "color": "red", "value": 5368709120 }
+          ]}
+        }
+      }
+    },
+    {
+      "title": "GPU Resources",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }
+    },
+    {
+      "id": 7,
+      "title": "GPU VRAM Usage",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 10 },
+      "targets": [
+        {
+          "expr": "va_gpu_memory_bytes",
+          "legendFormat": "VRAM"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "max": 12884901888
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "GPU Utilization",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 10 },
+      "targets": [
+        {
+          "expr": "va_gpu_utilization",
+          "legendFormat": "GPU %"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100 } }
+    },
+    {
+      "id": 9,
+      "title": "GPU Temperature",
+      "type": "gauge",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 10 },
+      "targets": [
+        {
+          "expr": "va_gpu_temperature_celsius",
+          "legendFormat": "temp"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 30,
+          "max": 90,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 75 },
+            { "color": "red", "value": 85 }
+          ]}
+        }
+      }
+    },
+    {
+      "title": "System Health",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 }
+    },
+    {
+      "id": 10,
+      "title": "Disk Usage",
+      "type": "gauge",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 17 },
+      "targets": [
+        { "expr": "va_disk_usage_bytes", "legendFormat": "used" },
+        { "expr": "va_disk_total_bytes", "legendFormat": "total" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 50000000000 },
+            { "color": "red", "value": 100000000000 }
+          ]}
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Error Rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 8, "x": 6, "y": 17 },
+      "targets": [
+        {
+          "expr": "rate(va_errors_total[5m])",
+          "legendFormat": "errors/s"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "eps" } }
+    },
+    {
+      "id": 12,
+      "title": "Job Queue Depth",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 14, "y": 17 },
+      "targets": [
+        { "expr": "va_job_queue_depth", "legendFormat": "depth" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    {
+      "id": 13,
+      "title": "Job Duration",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 17 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(va_job_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(va_job_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "P95"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Q&A Quality",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 }
+    },
+    {
+      "id": 14,
+      "title": "Q&A Response Latency",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 22 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(va_qa_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(va_qa_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 15,
+      "title": "Tokens Generated / sec",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 22 },
+      "targets": [
+        {
+          "expr": "rate(va_qa_tokens_total[5m])",
+          "legendFormat": "tok/s"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    },
+    {
+      "id": 16,
+      "title": "Q&A Requests / sec",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 22 },
+      "targets": [
+        {
+          "expr": "rate(va_qa_requests_total[5m])",
+          "legendFormat": "req/s"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "qps" } }
+    },
+    {
+      "id": 17,
+      "title": "Evaluation Scores (Latest)",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 22 },
+      "targets": [
+        {
+          "expr": "va_evaluation_score",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": {}, "indexByName": {}, "renameByName": { "metric": "Metric", "Value": "#5db" } } }
+      ],
+      "fieldConfig": { "defaults": { "displayName": "Score" } }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "tags": ["video-analysis", "self-hosted", "monitoring"],
+  "links": [],
+  "panelsState": {}
+}

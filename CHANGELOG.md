@@ -1,6 +1,75 @@
 # Changelog
 
-## 0.43.0 (2026-06-27) — Async Job Queue for REST API
+## 0.44.0 (2026-06-27) — Pipeline Evaluation Harness & Grafana Dashboard
+
+### 🧪 Pipeline Evaluation Harness (`video_analysis/evaluation.py`)
+
+A brand-new benchmark-driven evaluation framework for quality regression
+detection — **zero external dependencies** (synthetic fixtures, no real videos
+needed).
+
+- **`EvaluationTask` ABC** — base class for evaluation tasks; subclasses
+  implement `_run()` and declare `name`/`description`
+- **`EvaluationRunner`** — orchestrates task discovery and execution;
+  auto-discovers tasks in `evals/tasks/` via `pkgutil`
+- **`EvalReport`** / `EvalTaskResult` / `EvalMetric` — full data model for
+  evaluation results with configurable pass/fail thresholds
+- **`evals/__init__.py`** — synthetic fixture generation (render_text_image,
+  render_scene_transition_image, generate_scene_test_video, sine-wave WAV)
+- **`evals/tasks/retrieval_precision.py`** — top-k retrieval precision on
+  curated synthetic QA pairs (mock mode when no ChromaDB index present)
+- **`evals/tasks/scene_boundary_accuracy.py`** — scene detection precision,
+  recall, and F1 against synthetically generated ground-truth video with
+  FFmpeg scene detection
+
+### 📊 Grafana Dashboard Template (`deploy/grafana-dashboard.json`)
+
+A production-ready Grafana 11+ dashboard JSON that teleports users from zero
+to operational awareness in one import.
+
+- **Row 1: Pipeline Throughput** — runs/s, duration P50/P95/P99, success rate
+- **Row 2: Retrieval Performance** — latency by stage (embedding/search/rerank/
+  temporal_expand), chunks per query, ChromaDB size
+- **Row 3: GPU Resources** — VRAM usage, GPU utilization, temperature
+- **Row 4: System Health** — disk usage, error rate, job queue depth, job duration
+- **Row 5: Q&A Quality** — response latency P50/P95, tokens/s, requests/s,
+  evaluation scores table
+- All panels use existing `va_` Prometheus metric namespace with pre-configured
+  PromQL queries and visual thresholds
+
+### 🔬 Research: v0.44.0 Research Document
+
+- `docs/research/v0.44.0-research-evaluation-harness-and-grafana-dashboard.md`
+  covers: InternVideo3-8B (SOTA open video model with MCR + M²LA, Apache 2.0),
+  MiniMax-M3 (1M context, open-weight multimodal), Video-MME v2 benchmark,
+  Gradio 6.19 subgraph API, NVIDIA AI Blueprint for video search, and detailed
+  gap analysis
+
+### 🐛 Housekeeping
+
+- **Docker LABEL version synced** — `Dockerfile` version label now reads
+  `0.44.0` (was stale at `0.41.0`)
+- **Version bump** — `video_analysis/__init__.py`, `pyproject.toml` → 0.44.0
+- **Test coverage** — 5 new tests for evaluation module, 613 total passing
+  (+5 from v0.43.0)
+
+### 📦 Files Changed
+
+- **New**: `video_analysis/evaluation.py` — evaluation framework (~280 lines)
+- **New**: `evals/__init__.py` — synthetic fixture generation
+- **New**: `evals/tasks/__init__.py` — task package marker
+- **New**: `evals/tasks/retrieval_precision.py` — retrieval precision task
+- **New**: `evals/tasks/scene_boundary_accuracy.py` — scene boundary accuracy task
+- **New**: `deploy/grafana-dashboard.json` — production Grafana dashboard
+- **New**: `docs/research/v0.44.0-research-evaluation-harness-and-grafana-dashboard.md`
+- **Modified**: `Dockerfile` — version label 0.41.0 → 0.44.0
+- **Modified**: `video_analysis/__init__.py` — v0.44.0
+- **Modified**: `pyproject.toml` — v0.44.0
+- **Modified**: `tests/test_basic.py` — +5 evaluation tests, version bump
+- **Modified**: `tests/test_streaming.py` — version bump
+- **Modified**: `tests/test_metrics.py` — version bump
+- **Modified**: `tests/test_federation.py` — version bump
+- **Modified**: `tests/test_qwen3_vl.py` — version bump
 
 ### ⏳ Async Job Queue (`video_analysis/job_queue.py`)
 
