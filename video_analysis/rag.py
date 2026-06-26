@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from chromadb.errors import NotFoundError as ChromaNotFoundError
+
 from video_analysis.config import Config
 from video_analysis.models import VideoIndex, ChatSource, format_timestamp
 
@@ -31,6 +33,18 @@ class RetrievedChunk:
     score: float
     frame_path: Optional[str] = None
     metadata: dict = None
+
+
+@dataclass
+class VideoLibraryInfo:
+    """Summary info about an indexed video in the library."""
+
+    video_id: str
+    filename: str
+    num_scenes: int = 0
+    num_chunks: int = 0
+    duration: float = 0.0
+    has_sprite: bool = False
 
 
 class VideoRAG:
@@ -68,7 +82,7 @@ class VideoRAG:
                 self.config.chroma_collection,
             )
             logger.info(f"Loaded existing collection: {self.config.chroma_collection}")
-        except ValueError:
+        except (ValueError, ChromaNotFoundError):
             self._collection = self._chroma_client.create_collection(
                 self.config.chroma_collection,
                 metadata={"hnsw:space": "cosine"},
@@ -87,6 +101,7 @@ class VideoRAG:
             self._embedding_model = SentenceTransformer(
                 self.config.embedding_model,
                 device="cuda",
+                trust_remote_code=True,
             )
 
         emb = self._embedding_model.encode(text, normalize_embeddings=True)
@@ -413,6 +428,51 @@ class VideoRAG:
         for meta in all_meta["metadatas"]:
             video_ids.add(meta.get("video_id"))
         return sorted(v for v in video_ids if v)
+
+    def search_videos(self, query: str) -> List[str]:
+        """Search indexed videos by filename (case-insensitive substring match)."""
+        all_meta = self.collection.get(include=["metadatas"])
+        q = query.lower().strip()
+        if not q:
+            return self.list_videos()
+        matched = set()
+        for meta in all_meta["metadatas"]:
+            vid = meta.get("video_id", "")
+            fname = meta.get("filename", "")
+            if q in vid.lower() or q in fname.lower():
+                matched.add(vid)
+        return sorted(m for m in matched if m)
+
+    def get_library_info(self, video_id: str) -> Optional[VideoLibraryInfo]:
+        """Get summary info for a single video."""
+        try:
+            result = self.collection.get(
+                where={"video_id": video_id},
+                include=["metadatas"],
+            )
+            if not result["ids"]:
+                return None
+            metas = result["metadatas"]
+            scene_ids = set()
+            for m in metas:
+                sid = m.get("scene_id", -1)
+                if sid >= 0:
+                    scene_ids.add(sid)
+            # Get duration from the first scene's end_time
+            max_end = max(m.get("end_time", 0) for m in metas if "end_time" in m)
+            has_sprite = any(
+                m.get("sprite_sheet") is not None for m in metas if "sprite_sheet" in m
+            )
+            return VideoLibraryInfo(
+                video_id=video_id,
+                filename=metas[0].get("filename", video_id),
+                num_scenes=len(scene_ids),
+                num_chunks=len(result["ids"]),
+                duration=max_end if max_end > 0 else 0.0,
+                has_sprite=has_sprite,
+            )
+        except Exception:
+            return None
 
     def delete_video(self, video_id: str):
         """Remove all chunks for a video."""
