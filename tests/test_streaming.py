@@ -207,7 +207,7 @@ def test_segment_video_basic(mock_duration, streaming_pipeline):
     segments = streaming_pipeline._segment_video(
         Path("test.mp4"), chunk_duration=30.0, overlap=2.0
     )
-    # 90s in 30s chunks with 2s overlap = 3 chunks
+    # 90s at 30s grid with 2s overlap = 3 segments
     assert len(segments) == 3
     assert segments[0] == (0.0, 30.0)
     assert segments[1] == (28.0, 60.0)
@@ -379,7 +379,7 @@ def test_build_final_index(streaming_pipeline):
 # ---------------------------------------------------------------------------
 
 
-@patch("video_analysis.streaming.VideoRAG")
+@patch("video_analysis.rag.VideoRAG")
 def test_index_chunk_called(mock_rag, streaming_pipeline):
     """Verify _index_chunk creates a VideoRAG and calls index_video."""
     result = StreamingChunkResult(
@@ -394,7 +394,7 @@ def test_index_chunk_called(mock_rag, streaming_pipeline):
     mock_rag_instance.index_video.assert_called_once()
 
 
-@patch("video_analysis.streaming.VideoRAG")
+@patch("video_analysis.rag.VideoRAG")
 def test_index_chunk_no_video_id(mock_rag, streaming_pipeline):
     """Verify _index_chunk works without metadata video_id."""
     result = StreamingChunkResult(
@@ -406,7 +406,7 @@ def test_index_chunk_no_video_id(mock_rag, streaming_pipeline):
     assert mock_rag_instance.index_video.call_count >= 1
 
 
-@patch("video_analysis.streaming.VideoRAG")
+@patch("video_analysis.rag.VideoRAG")
 def test_index_final_called(mock_rag, streaming_pipeline):
     """Verify _index_final creates a VideoRAG and calls index_video."""
     scenes = [SceneInfo(scene_id=0, start_time=0.0, end_time=10.0)]

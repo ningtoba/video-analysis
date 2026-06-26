@@ -41,9 +41,9 @@ from video_analysis.models import (
     VideoIndex,
 )
 
-# Deferred import to avoid circular import at module load time
-# (rag.py imports from config/models, which don't import streaming)
-from video_analysis.rag import VideoRAG  # noqa: E402
+# Deferred import — VideoRAG is imported inside method bodies to avoid
+# triggering GPU model loading at module import time
+# from video_analysis.rag import VideoRAG  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -512,6 +512,8 @@ class StreamingPipeline:
             result: The chunk result to index.
         """
         try:
+            from video_analysis.rag import VideoRAG
+
             rag = VideoRAG(self.config)
             video_id = result.metadata.get("video_id", f"stream_{uuid.uuid4().hex[:8]}")
 
@@ -540,6 +542,8 @@ class StreamingPipeline:
             index: The final merged VideoIndex.
         """
         try:
+            from video_analysis.rag import VideoRAG
+
             rag = VideoRAG(self.config)
             rag.index_video(index)
             logger.info(
