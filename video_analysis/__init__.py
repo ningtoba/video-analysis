@@ -22,10 +22,17 @@ from video_analysis import (
     quality,
     memory,
     frame_compression,
+    streaming,
 )
 
 # face module is optional (requires insightface) — import on demand only
 
 # Workflow module (requires Gradio 6.17+ for gr.Workflow)
 
-__version__ = "0.31.0"
+__version__ = "0.32.0"
+
+# Re-export streaming module public API at package level
+from video_analysis.streaming import (
+    StreamingPipeline,
+    StreamingChunkResult,
+)  # noqa: E402, F401

@@ -1,5 +1,119 @@
 # Changelog
 
+## 0.32.0 (2026-06-26) — Real-time Streaming Video Analysis
+
+### 🧠 New Module: Streaming Pipeline (`video_analysis/streaming.py`)
+
+- **New module**: `video_analysis/streaming.py` — real-time streaming/chunked video
+  processing pipeline inspired by **StreamingVLM** (ICLR 2026, arXiv:2510.09608) and
+  **ThinkStream** (ECCV 2026 — Watch-Think-Speak streaming reasoning).
+- **Three streaming modes**:
+  - `chunked_file` — Process an existing video in configurable time-window chunks
+    (default 30s), yielding incremental results with reduced latency to first output.
+    Each chunk is extracted via FFmpeg stream copy (zero re-encoding), processed
+    through the existing `VideoPipeline`, then cleaned up from GPU memory.
+  - `file_watch` — Watch a file being written (e.g. OBS live recording, RTSP stream)
+    and process chunks as they become available. Polls file size, detects new content,
+    and processes only the new segment every `poll_interval` seconds.
+  - `segment_based` — Chunk boundary computation with configurable overlap (default 2s)
+    for context continuity between adjacent segments.
+- **Incremental ChromaDB indexing**: Each chunk is independently indexed into ChromaDB
+  as it's processed, making content searchable before the full video completes.
+  Alternatively, batch-index the entire merged result at the end.
+- **Generator-based API**: `process_streaming()` yields `StreamingChunkResult` after
+  each chunk, then returns the final merged `VideoIndex`. Compatible with `for` loops
+  and async iteration patterns.
+- **Live mode**: `process_live()` is an infinite generator for continuous recording
+  sources. Callers break when done — the pipeline handles cleanup automatically.
+- **Zero GPU idle between chunks**: Pipeline GPU models are cleaned up via
+  `pipeline.cleanup()` between segments to stay within 12GB VRAM budget.
+- **Temp file management**: Segment files are created in `data/tmp/` and cleaned up
+  immediately after processing (FFmpeg `-c copy` is fast — no re-encoding).
+- **Graceful degradation**: Falls back to the existing `VideoPipeline.process()` for
+  full-video mode when streaming is not needed.
+
+### 📋 Roadmap Progress
+
+- [x] Real-time streaming video analysis (chunked processing, watch/stream modes)
+- [ ] Qwen3-VL-30B-A3B FP8 backend (needs H100+ for FP8 hardware support)
+- [ ] Federated video search (MCP-based cross-instance query)
+
+### 🧩 Streaming Chunk Data Model
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `chunk_index` | `int` | Zero-based chunk sequence number |
+| `start_time` | `float` | Start time (seconds) in original video |
+| `end_time` | `float` | End time (seconds) in original video |
+| `duration` | `float` | Actual chunk duration (seconds) |
+| `scenes` | `List[SceneInfo]` | Scenes detected within this chunk |
+| `transcript_segments` | `List[TranscriptSegment]` | Transcript within this chunk |
+| `full_transcript` | `str` | Concatenated transcript text |
+| `objects_found` | `List[str]` | Unique object labels in this chunk |
+| `has_video` | `bool` | False for audio-only chunks |
+| `metadata` | `dict` | Extensible metadata (segment file, video_id) |
+
+### 📦 New Modules
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `streaming` | `video_analysis/streaming.py` | ~610 | Real-time streaming/chunked video pipeline |
+
+### 🔧 Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STREAMING_ENABLED` | `false` | Enable streaming pipeline mode |
+| `STREAMING_CHUNK_DURATION` | `30.0` | Seconds per processing chunk |
+| `STREAMING_OVERLAP` | `2.0` | Seconds of overlap between adjacent chunks |
+| `STREAMING_INCREMENTAL_INDEX` | `true` | Index each chunk to ChromaDB incrementally |
+| `STREAMING_MAX_CHUNKS` | `0` | Max chunks to process (0 = unlimited) |
+
+### 🖥️ CLI Usage
+
+```bash
+# Process video in streaming chunks (30s default)
+python -m video_analysis --stream my_video.mp4
+
+# Custom chunk duration
+python -m video_analysis --stream my_video.mp4 --chunk-duration 15
+
+# Watch a live recording file
+python -m video_analysis --stream recording.mkv --live --chunk-duration 10
+
+# Disable incremental indexing (index at end)
+python -m video_analysis --stream my_video.mp4 --no-incremental
+```
+
+### 🔌 MCP Integration
+
+- **Two new MCP tools**: `stream_video` (process chunks incrementally) and
+  `watch_video` (watch a live recording source).
+- Both return structured JSON with per-chunk results and aggregate stats.
+- Available via `python -m video_analysis.mcp_server --stdio`.
+
+### 🧪 Tests
+
+- **30 new tests** (`tests/test_streaming.py`) — all pass in <5s
+- Tests cover: dataclass fields, module imports, config defaults/env overrides,
+  segment boundary logic, error handling (missing files, zero durations),
+  mock-indexing integration, pipeline stats, final index assembly
+
+### 📝 Research Deep-Dive
+
+See `v0.32.0-streaming-video-analysis.md` for the full research document covering:
+- StreamingVLM (ICLR 2026) — KV cache reuse, attention sinks, Inf-Streams-Eval
+- ThinkStream (ECCV 2026) — Watch-Think-Speak, compressed streaming memory
+- Streamo, MMDuet2, StreamingClaw, LION-FS (all 2025-2026)
+- Comparison of chunked vs full-video processing tradeoffs
+- Hardware requirements for RTX 4070 (12GB VRAM)
+
+### 📝 Dependencies
+
+- No new dependencies — uses `ffmpeg` (already required) + `logging` + `dataclasses` (stdlib)
+
+---
+
 ## 0.31.0 (2026-06-26) — ColBERT-Att Attention-Weighted Re-Ranking
 
 ### 🧠 New Module: ColBERT-Att Re-Ranker (`video_analysis/colbert_att_reranker.py`)

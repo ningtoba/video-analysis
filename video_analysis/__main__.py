@@ -22,6 +22,9 @@ from video_analysis.pipeline import VideoPipeline
 from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
 
+# Streaming pipeline (v0.32.0)
+from video_analysis.streaming import StreamingPipeline
+
 # Global shutdown event for graceful termination
 _shutdown_event = threading.Event()
 
@@ -192,6 +195,49 @@ def batch_mode(args):
     print(f"\n✅ Batch complete: {success}/{len(urls_or_paths)} succeeded")
 
 
+def stream_mode(args):
+    """Streaming mode: process video in chunks with incremental results."""
+    config = Config()
+    pipeline = StreamingPipeline(config)
+
+    if args.live:
+        print(
+            f"🌐 Live mode: watching {args.video} (chunk_duration={args.chunk_duration}s)"
+        )
+        for result in pipeline.process_live(
+            args.video,
+            chunk_duration=args.chunk_duration,
+            incremental_index=args.incremental,
+        ):
+            print(
+                f"  Chunk {result.chunk_index}: "
+                f"[{result.start_time:.1f}s - {result.end_time:.1f}s] "
+                f"{len(result.scenes)} scenes, {len(result.transcript_segments)} transcript segs"
+            )
+    else:
+        print(
+            f"📹 Streaming file: {args.video} (chunk_duration={args.chunk_duration}s)"
+        )
+        for result in pipeline.process_streaming(
+            args.video,
+            chunk_duration=args.chunk_duration,
+            incremental_index=args.incremental,
+        ):
+            print(
+                f"  Chunk {result.chunk_index}: "
+                f"[{result.start_time:.1f}s - {result.end_time:.1f}s] "
+                f"{len(result.scenes)} scenes, {len(result.transcript_segments)} transcript segs, "
+                f"{len(result.objects_found)} objects"
+            )
+
+    stats = pipeline.stats
+    print(f"\n✅ Streaming complete:")
+    print(f"  Chunks processed: {stats['chunks_processed']}")
+    print(f"  Total scenes: {stats['total_scenes']}")
+    print(f"  Total transcript segments: {stats['total_transcript_segments']}")
+    print(f"  Unique objects: {stats['unique_objects']}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Video Analysis Platform — analyze videos and chat about their content",
@@ -214,6 +260,28 @@ def main():
         action="store_true",
         help="Disable health API and run Gradio standalone",
     )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Process video in streaming/chunked mode",
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Watch a recording file being written and process it live",
+    )
+    parser.add_argument(
+        "--chunk-duration",
+        type=float,
+        default=30.0,
+        help="Seconds per streaming chunk (default: 30)",
+    )
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        default=True,
+        help="Index each chunk incrementally to ChromaDB (default: True)",
+    )
 
     args = parser.parse_args()
 
@@ -231,7 +299,11 @@ def main():
 
     setup_logging(args.verbose)
 
-    if args.batch:
+    if args.stream or args.live:
+        if not args.video:
+            parser.error("--video is required in streaming mode")
+        stream_mode(args)
+    elif args.batch:
         batch_mode(args)
     elif args.url:
         url_mode(args)

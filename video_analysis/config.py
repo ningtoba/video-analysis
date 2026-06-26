@@ -235,6 +235,19 @@ class Config:
     prometheus_enabled: bool = True  # overridden by PROMETHEUS_ENABLED env var
     prometheus_metrics_prefix: str = "va_"  # prefix for all metric names
 
+    # Streaming Pipeline (v0.32.0)
+    streaming_enabled: bool = False  # overridden by STREAMING_ENABLED env var
+    streaming_chunk_duration: float = (
+        30.0  # overridden by STREAMING_CHUNK_DURATION env var
+    )
+    streaming_overlap: float = 2.0  # overridden by STREAMING_OVERLAP env var
+    streaming_incremental_index: bool = (
+        True  # overridden by STREAMING_INCREMENTAL_INDEX env var
+    )
+    streaming_max_chunks: int = (
+        0  # overridden by STREAMING_MAX_CHUNKS env var (0 = unlimited)
+    )
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -324,6 +337,37 @@ class Config:
         prom_env = os.environ.get("PROMETHEUS_ENABLED", "").lower()
         if prom_env in ("false", "0", "no"):
             self.prometheus_enabled = False
+        # Override streaming config from env vars
+        stream_env = os.environ.get("STREAMING_ENABLED", "").lower()
+        if stream_env in ("true", "1", "yes"):
+            self.streaming_enabled = True
+        stream_dur = os.environ.get("STREAMING_CHUNK_DURATION", "")
+        if stream_dur:
+            try:
+                val = float(stream_dur)
+                if val > 0:
+                    self.streaming_chunk_duration = val
+            except ValueError:
+                pass
+        stream_overlap = os.environ.get("STREAMING_OVERLAP", "")
+        if stream_overlap:
+            try:
+                val = float(stream_overlap)
+                if val >= 0:
+                    self.streaming_overlap = val
+            except ValueError:
+                pass
+        stream_index = os.environ.get("STREAMING_INCREMENTAL_INDEX", "").lower()
+        if stream_index in ("false", "0", "no"):
+            self.streaming_incremental_index = False
+        stream_max = os.environ.get("STREAMING_MAX_CHUNKS", "")
+        if stream_max:
+            try:
+                val = int(stream_max)
+                if val >= 0:
+                    self.streaming_max_chunks = val
+            except ValueError:
+                pass
         for d in [
             self.data_dir,
             self.video_dir,

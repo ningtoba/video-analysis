@@ -134,6 +134,7 @@ User Question
 | `ui/app` | `ui/app.py` | Gradio web interface with dark theme, tabs, library, clip export, batch queue, URL import |
 | `ui/utils` | `ui/utils.py` | Shared UI utility functions (importable without gradio) |
 | `ui/workflow` | `ui/workflow.py` | Gradio 6 Workflow visual pipeline builder (gr.Workflow canvas) |
+| `streaming` | `video_analysis/streaming.py` | Real-time streaming/chunked video analysis (StreamingVLM-inspired) |
 
 ## 💻 Tech Stack
 
@@ -316,8 +317,8 @@ python tests/test_basic.py
 |- [x] **Gradio 6 Workflow integration** — `ui/workflow.py` with `gr.Workflow` visual pipeline builder canvas (Gradio 6.17+ API: `bind`, `edges`, `graph`)
 |||- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 ||- [x] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
-||- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)
-||- [ ] Federated video search (MCP-based cross-instance query)
+||- [x] Real-time streaming video analysis (chunked processing, watch/stream modes)
+|||- [ ] Federated video search (MCP-based cross-instance query)
 |
 |
 

@@ -38,6 +38,7 @@ from mcp.server.fastmcp import FastMCP
 
 from video_analysis.config import Config
 from video_analysis.pipeline import VideoPipeline
+from video_analysis.streaming import StreamingPipeline, StreamingChunkResult
 from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
 
@@ -303,6 +304,133 @@ async def delete_video(video_id: str) -> str:
         f"✅ Deleted {deleted} entries for video_id: {video_id}"
         if deleted > 0
         else f"⚠️ No entries found for video_id: {video_id}"
+    )
+
+
+@mcp.tool(
+    description="Process a video in streaming chunks (reduced latency to first result). "
+    "Yields incremental results as each chunk is processed, rather than waiting for the full video."
+)
+async def stream_video(
+    video: str,
+    chunk_duration: float = 30.0,
+    incremental_index: bool = True,
+) -> str:
+    """Process a video file in streaming chunks.
+
+    Args:
+        video: Path to a local video file.
+        chunk_duration: Seconds per chunk (default: 30.0).
+        incremental_index: If True, index each chunk to ChromaDB as it's processed.
+    """
+    path = Path(video)
+    if not path.exists():
+        return f"❌ File not found: {video}"
+
+    pipeline = StreamingPipeline()
+
+    results = []
+    # Consume the generator and collect results
+    try:
+        for result in pipeline.process_streaming(
+            video,
+            chunk_duration=chunk_duration,
+            incremental_index=incremental_index,
+        ):
+            results.append(
+                {
+                    "chunk_index": result.chunk_index,
+                    "start_time": round(result.start_time, 1),
+                    "end_time": round(result.end_time, 1),
+                    "duration": round(result.duration, 1),
+                    "scenes": len(result.scenes),
+                    "transcript_segments": len(result.transcript_segments),
+                    "objects_found": result.objects_found,
+                }
+            )
+    except Exception as e:
+        return f"❌ Streaming failed: {e}"
+
+    stats = pipeline.stats
+    return json.dumps(
+        {
+            "status": "completed",
+            "chunks": results,
+            "stats": {
+                "chunks_processed": stats["chunks_processed"],
+                "total_scenes": stats["total_scenes"],
+                "total_transcript_segments": stats["total_transcript_segments"],
+                "unique_objects": stats["unique_objects"],
+            },
+        },
+        indent=2,
+    )
+
+
+@mcp.tool(
+    description="Watch a recording file being written and process it live in streaming chunks. "
+    "Useful for monitoring OBS recordings or other live video sources."
+)
+async def watch_video(
+    source: str,
+    chunk_duration: float = 10.0,
+    incremental_index: bool = True,
+    max_chunks: int = 5,
+) -> str:
+    """Watch a live recording source and process chunks incrementally.
+
+    Args:
+        source: Path to a file being written (e.g. OBS recording).
+        chunk_duration: Seconds per processing chunk (default: 10.0).
+        incremental_index: If True, index incrementally.
+        max_chunks: Maximum chunks to process before stopping (default: 5).
+    """
+    path = Path(source)
+    if not path.exists():
+        return f"❌ Source not found: {source}"
+
+    pipeline = StreamingPipeline()
+
+    results = []
+    chunk_count = 0
+    try:
+        for result in pipeline.process_live(
+            source,
+            chunk_duration=chunk_duration,
+            incremental_index=incremental_index,
+            poll_interval=1.0,
+        ):
+            results.append(
+                {
+                    "chunk_index": result.chunk_index,
+                    "start_time": round(result.start_time, 1),
+                    "end_time": round(result.end_time, 1),
+                    "duration": round(result.duration, 1),
+                    "scenes": len(result.scenes),
+                    "transcript_segments": len(result.transcript_segments),
+                    "objects_found": result.objects_found,
+                }
+            )
+            chunk_count += 1
+            if chunk_count >= max_chunks:
+                break
+    except Exception as e:
+        return f"❌ Watch failed: {e}"
+
+    stats = pipeline.stats
+    return json.dumps(
+        {
+            "status": "completed",
+            "chunks_watched": chunk_count,
+            "chunks": results,
+            "stats": {
+                "chunks_processed": stats["chunks_processed"],
+                "total_scenes": stats["total_scenes"],
+                "total_transcript_segments": stats["total_transcript_segments"],
+                "unique_objects": stats["unique_objects"],
+            },
+        },
+        indent=2,
     )
 
 
