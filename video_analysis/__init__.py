@@ -21,10 +21,11 @@ from video_analysis import (
     storage,
     quality,
     memory,
+    frame_compression,
 )
 
 # face module is optional (requires insightface) — import on demand only
 
 # Workflow module (requires Gradio 6.17+ for gr.Workflow)
 
-__version__ = "0.29.0"
+__version__ = "0.30.0"

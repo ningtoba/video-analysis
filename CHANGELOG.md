@@ -1,6 +1,45 @@
 # Changelog
 
-## 0.29.0 (2026-06-26) — Dependency Modernization & Gradio 6 Workflow Integration
+## 0.30.0 (2026-06-26) — DINOv2 Perceptual Frame Compression & PP-OCRv6 Update
+
+### 🧠 New Module: DINOv2 Perceptual Frame Compression
+
+- **New module**: `video_analysis/frame_compression.py` — LongVU-style (ICML 2025)
+  spatiotemporal adaptive frame compression using DINOv2 perceptual similarity.
+- **How it works**: After frame extraction (but before analysis stages), each frame
+  is encoded through DINOv2-small (21M params, ~85 MB VRAM) to compute a [CLS]
+  perceptual fingerprint. Frames with cosine similarity above threshold (default 0.88)
+  to the last-kept frame are dropped — a greedy redundancy removal.
+- **Config toggle**: `DINO_FRAME_COMPRESSION` (default: `false`), configurable threshold
+  and model variant (`facebook/dinov2-small` or `facebook/dinov2-base`).
+- **Expected impact**: 60-80% frame reduction for static scenes (lectures, presentations),
+  30-50% for mixed scenes (talking heads), minimal reduction for high-motion content.
+  Directly speeds up YOLO, CLIP, OCR, and action recognition stages.
+- **LongVU lineage**: Inspired by LongVU (Shen et al., ICML 2025) which uses DINOv2-based
+  temporal redundancy removal within 8-frame windows as the first stage of a 4-stage
+  spatiotemporal adaptive compression pipeline.
+
+### 📦 PaddleOCR 3.7.0 / PP-OCRv6 Update
+
+- PaddleOCR has advanced from PP-OCRv5 to **PP-OCRv6** (PaddleOCR 3.7.0, June 11, 2026):
+  - **+4.6% detection** and **+5.1% recognition accuracy** over PP-OCRv5
+  - **50 languages unified** in a single model (Chinese + English + Japanese + 46 Latin-script)
+  - **Three tiers**: tiny (1.5M), small (7.7M), medium (34.5M) parameters
+  - **5.2× CPU speedup** via OpenVINO, 6.1× on Apple M4
+- Backward-compatible API — no code change needed, just the dependency bump.
+
+### 📋 Roadmap Progress
+
+- [x] DINOv2 perceptual frame compression (LongVU-style)
+- [x] PaddleOCR 3.7.0 / PP-OCRv6 dependency update
+
+### 📦 New Modules
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `frame_compression` | `video_analysis/frame_compression.py` | ~220 | DINOv2-based perceptual frame compression |
+
+---
 
 ### 📦 Dependency Modernization — Updated All Lower Bounds to Latest Stable
 

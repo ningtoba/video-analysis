@@ -21,7 +21,7 @@
 ## ✨ Features
 
 - **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
-- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**
+- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
 - **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) for video-native scene description, summarization, and Q&A
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
 - **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
@@ -203,6 +203,9 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `STRUCTURED_LOGGING_FORMAT` | `auto` | Output format: auto, console, json |
 | `STRUCTURED_LOGGING_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `FACE_RECOGNITION_ENABLED` | `false` | Enable InsightFace face detection & recognition (requires insightface + onnxruntime-gpu) |
+| `DINO_FRAME_COMPRESSION` | `false` | Enable DINOv2 perceptual frame compression (LongVU-style, ~85 MB VRAM) |
+| `DINO_FRAME_COMPRESSION_THRESHOLD` | `0.88` | Cosine sim threshold [0,1]; lower = more aggressive compression |
+| `DINO_FRAME_COMPRESSION_MODEL` | `facebook/dinov2-small` | DINOv2 variant (small=21M, base=86M) |
 | `FACE_DETECTION_MODEL` | `buffalo_l` | InsightFace model pack for detection/recognition |
 || `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold for face identity matching |
 || `PROMETHEUS_ENABLED` | `true` | Enable Prometheus /metrics endpoint with pipeline/retrieval/GPU metrics |
@@ -302,8 +305,9 @@ python tests/test_basic.py
 ||- [x] PipelineOrchestrator heuristic — `video_analysis/orchestrator.py`, file-type + ffprobe + heuristic classification into 7 video types with stage overrides
 |- [x] Pipeline benchmarking infra — pynvml per-stage VRAM tracking, pytest-benchmark suite
 |- [x] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows) — 7 tools, stdio + SSE
-|- [x] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU, video_analysis/flow.py)
-||- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy (backward compatible, no code change needed)
+||- [x] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU, video_analysis/flow.py)
+||- [x] DINOv2 perceptual frame compression (LongVU-style, ICML 2025, 21M params, ~85 MB VRAM)
+|||- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy (backward compatible, no code change needed)
 |- [x] InsightFace face recognition (SCRFD-10G + ArcFace, cross-video person identity)
 |- [x] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
 |- [x] **Prometheus metrics endpoint + Grafana dashboards** — 20+ counters/histograms/gauges for pipeline runs, retrieval, GPU memory, ChromaDB size, and question answering; graceful fallback when prometheus_client absent; config toggle via `PROMETHEUS_ENABLED`

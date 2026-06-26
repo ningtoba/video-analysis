@@ -82,6 +82,9 @@ STAGE_CONFIG_KEYS: Dict[str, List[str]] = {
         "adaptive_frame_sampling_sensitivity",
         "clip_frame_dedup",
         "clip_frame_dedup_threshold",
+        "dino_frame_compression",
+        "dino_frame_compression_threshold",
+        "dino_frame_compression_model",
     ],
     STAGE_QUALITY_SCREENING: [
         "quality_screening_enabled",

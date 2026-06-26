@@ -698,6 +698,108 @@ def test_config_colbert_reranker():
     shutil.rmtree("/tmp/va_test_colbert_cfg", ignore_errors=True)
 
 
+def test_dino_frame_compressor_import():
+    """Test DINOv2FrameCompressor module can be imported and reports availability."""
+    from video_analysis.frame_compression import DINOv2FrameCompressor
+
+    compressor = DINOv2FrameCompressor()
+    assert compressor.model_name == "facebook/dinov2-small"
+    assert compressor.threshold == 0.88
+    assert compressor.batch_size == 8
+    # Should not crash — reports available only if transformers is installed
+    assert isinstance(compressor.available, bool)
+
+
+def test_dino_frame_compressor_compress_no_frames():
+    """Test compress with empty/single frame list returns identity."""
+    from video_analysis.frame_compression import DINOv2FrameCompressor
+
+    compressor = DINOv2FrameCompressor()
+
+    # Empty list
+    assert compressor.compress([]) == []
+
+    # Single frame
+    assert compressor.compress(["/tmp/nonexistent.jpg"]) == [0]
+
+
+def test_dino_frame_compressor_unload_idempotent():
+    """Test that unload() is safe when model was never loaded."""
+    from video_analysis.frame_compression import DINOv2FrameCompressor
+
+    compressor = DINOv2FrameCompressor()
+    # Should not crash
+    compressor.unload()
+    # Second call also safe
+    compressor.unload()
+
+
+def test_config_dino_frame_compression_fields():
+    """Test DINO frame compression config fields."""
+    from video_analysis.config import Config
+
+    cfg = Config(data_dir="/tmp/va_test_dino_cfg")
+    assert hasattr(cfg, "dino_frame_compression")
+    assert cfg.dino_frame_compression is False
+    assert cfg.dino_frame_compression_threshold == 0.88
+    assert cfg.dino_frame_compression_model == "facebook/dinov2-small"
+
+    cfg2 = Config(
+        data_dir="/tmp/va_test_dino_cfg2",
+        dino_frame_compression=True,
+        dino_frame_compression_threshold=0.75,
+    )
+    assert cfg2.dino_frame_compression is True
+    assert cfg2.dino_frame_compression_threshold == 0.75
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_dino_cfg", ignore_errors=True)
+    shutil.rmtree("/tmp/va_test_dino_cfg2", ignore_errors=True)
+
+
+def test_dino_compression_pipeline_integration():
+    """Test pipeline._apply_dino_compression graceful fallback without DINOv2 model."""
+    from video_analysis.pipeline import VideoPipeline
+    from video_analysis.models import FrameInfo
+
+    cfg = Config(
+        data_dir="/tmp/va_test_dino_pipe",
+        dino_frame_compression=True,
+        dino_frame_compression_threshold=0.9,
+    )
+    pipeline = VideoPipeline(cfg)
+
+    frames = [
+        FrameInfo(timestamp=0.0, filepath="/tmp/nonexist_0.jpg", scene_id=0),
+        FrameInfo(timestamp=2.0, filepath="/tmp/nonexist_2.jpg", scene_id=0),
+        FrameInfo(timestamp=4.0, filepath="/tmp/nonexist_4.jpg", scene_id=0),
+    ]
+
+    # Should not crash — gracefully falls back (no actual images to process)
+    result = pipeline._apply_dino_compression(frames)
+    assert len(result) == 3  # fallback returns all frames
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_dino_pipe", ignore_errors=True)
+
+
+def test_dino_normalise():
+    """Test L2 normalisation utility."""
+    from video_analysis.frame_compression import DINOv2FrameCompressor
+    import numpy as np
+
+    vec = np.array([3.0, 4.0])
+    normalised = DINOv2FrameCompressor._normalise(vec)
+    assert abs(np.linalg.norm(normalised) - 1.0) < 1e-6
+
+    # Zero vector should not crash
+    zero = np.zeros(5)
+    normalised_zero = DINOv2FrameCompressor._normalise(zero)
+    assert np.all(normalised_zero == 0.0)
+
+
 def test_config_action_recognition():
     """Test action recognition config fields."""
     from video_analysis.config import Config
@@ -1466,7 +1568,7 @@ def test_version_0_15_0():
     """Test version is now 0.29.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.29")
+    assert __version__.startswith("0.30")
 
 
 # ====================================================================
@@ -1891,7 +1993,7 @@ def test_version_0_20_0():
     """Test version is now 0.29.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.29")
+    assert __version__.startswith("0.30")
 
 
 if __name__ == "__main__":

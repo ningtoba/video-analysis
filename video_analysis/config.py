@@ -133,6 +133,17 @@ class Config:
         0.92  # frames above this similarity are deduplicated
     )
 
+    # DINOv2 Perceptual Frame Compression (v0.30.0 — LongVU-style)
+    # Uses facebook/dinov2-small (21M params, ~85 MB VRAM) to measure
+    # perceptual similarity between frames and drop redundant ones.
+    dino_frame_compression: bool = False  # enable DINOv2 adaptive frame compression
+    dino_frame_compression_threshold: float = (
+        0.88  # cosine sim threshold [0,1]; lower = more aggressive compression
+    )
+    dino_frame_compression_model: str = (
+        "facebook/dinov2-small"  # or "facebook/dinov2-base"
+    )
+
     # YouTube / URL import
     yt_dlp_enabled: bool = True
     yt_dlp_format: str = "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
@@ -287,6 +298,21 @@ class Config:
         face_env = os.environ.get("FACE_RECOGNITION_ENABLED", "").lower()
         if face_env in ("true", "1", "yes"):
             self.face_recognition_enabled = True
+        # Override dino_frame_compression from env var
+        dino_env = os.environ.get("DINO_FRAME_COMPRESSION", "").lower()
+        if dino_env in ("true", "1", "yes"):
+            self.dino_frame_compression = True
+        dino_threshold_env = os.environ.get("DINO_FRAME_COMPRESSION_THRESHOLD", "")
+        if dino_threshold_env:
+            try:
+                val = float(dino_threshold_env)
+                if 0.0 <= val <= 1.0:
+                    self.dino_frame_compression_threshold = val
+            except ValueError:
+                pass
+        dino_model_env = os.environ.get("DINO_FRAME_COMPRESSION_MODEL", "")
+        if dino_model_env:
+            self.dino_frame_compression_model = dino_model_env
         # Override workflow_enabled from env var
         workflow_env = os.environ.get("WORKFLOW_ENABLED", "").lower()
         if workflow_env in ("false", "0", "no"):

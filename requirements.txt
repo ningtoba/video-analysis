@@ -42,7 +42,7 @@ scenedetect>=0.7.0
 # Optional — for higher accuracy:
 # ultralytics>=8.4.0  # YOLO object detection
 # paddlepaddle-gpu>=3.0.0  # PaddleOCR (v3.7.0+)
-# paddleocr>=3.7.0         # OCR text extraction (v3.7.0 — PP-OCRv5 equivalent)
+# paddleocr>=3.7.0         # OCR text extraction (v3.7.0 — PP-OCRv6, +4.6% det, +5.1% rec over v5)
 # pyannote.audio>=4.0.0    # Speaker diarization
 
 # Optional — benchmark / test infrastructure:

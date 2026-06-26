@@ -694,6 +694,10 @@ class VideoPipeline:
         if self.config.clip_frame_dedup and len(frames) > 1:
             frames = self._dedup_frames_clip(frames, video_id)
 
+        # Optional: DINOv2 perceptual frame compression (LongVU-style)
+        if self.config.dino_frame_compression and len(frames) > 3:
+            frames = self._apply_dino_compression(frames)
+
         return frames
 
     def _adaptive_frame_samples(self, scene: SceneInfo, duration: float) -> set:
@@ -1855,3 +1859,53 @@ class VideoPipeline:
 
         logger.info(f"Clip exported: {output_path}")
         return str(output_path)
+
+    def _apply_dino_compression(self, frames: List[FrameInfo]) -> List[FrameInfo]:
+        """Apply DINOv2 perceptual frame compression — drop near-duplicate
+        frames using cosine similarity of DINOv2 [CLS] features.
+
+        Only called when ``config.dino_frame_compression`` is enabled
+        and there are more than 3 frames.  Graceful fallback on failure.
+
+        Args:
+            frames: List of FrameInfo to compress.
+
+        Returns:
+            Reduced list with redundant frames removed.
+        """
+        frame_paths = []
+        for f in frames:
+            p = f.metadata.get("analysis_path") if f.metadata else None
+            if not p or not Path(p).exists():
+                p = f.filepath
+            frame_paths.append(p)
+
+        try:
+            from video_analysis.frame_compression import DINOv2FrameCompressor
+
+            compressor = DINOv2FrameCompressor(
+                model_name=self.config.dino_frame_compression_model,
+                device="cuda",
+                threshold=self.config.dino_frame_compression_threshold,
+            )
+
+            if not compressor.available:
+                logger.info(
+                    "DINOv2 frame compression unavailable (transformers not found)"
+                )
+                return frames
+
+            kept_indices = compressor.compress(frame_paths)
+            compressor.unload()
+
+            kept_frames = [frames[i] for i in kept_indices]
+            logger.info(
+                "DINOv2 compression: %d → %d frames (%.0f%% reduction)",
+                len(frames),
+                len(kept_frames),
+                (1 - len(kept_frames) / len(frames)) * 100,
+            )
+            return kept_frames
+        except Exception as e:
+            logger.warning("DINOv2 frame compression failed: %s — skipping", e)
+            return frames
