@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.so
+
+# Virtual env
+.venv/
+venv/
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Video artifacts
+data/videos/
+data/frames/
+data/audio/
+data/thumbnails/
+data/chroma/
+
+# Large video files (uploaded)
+*.mp4
+*.webm
+*.avi
+*.mov
+*.mkv
+*.flv
+
+# Logs
+*.log
+
+# Research notes (working docs, not part of platform)
+*research*.md
+
+# Data directory
+/data/
