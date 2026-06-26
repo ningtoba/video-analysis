@@ -728,3 +728,69 @@ class VideoPipeline:
         import gc
 
         gc.collect()
+
+    def export_clip(
+        self,
+        video_path: str,
+        start_time: float,
+        end_time: float,
+        output_name: Optional[str] = None,
+    ) -> str:
+        """
+        Export a clip from the video.
+
+        Args:
+            video_path: Path to the source video
+            start_time: Start time in seconds
+            end_time: End time in seconds
+            output_name: Optional output filename (without extension)
+
+        Returns:
+            Path to the exported clip
+        """
+        video_path = Path(video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video not found: {video_path}")
+
+        video_id = video_path.stem
+        output_name = output_name or f"{video_id}_clip_{start_time:.0f}_{end_time:.0f}"
+        output_path = self.config.clip_export_dir / f"{output_name}.mp4"
+
+        if output_path.exists():
+            return str(output_path)
+
+        duration = end_time - start_time
+        logger.info(
+            f"Exporting clip: {start_time:.1f}s → {end_time:.1f}s "
+            f"(duration: {duration:.1f}s)"
+        )
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-ss",
+                str(start_time),
+                "-i",
+                str(video_path),
+                "-t",
+                str(duration),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-crf",
+                "22",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-y",
+                str(output_path),
+            ],
+            capture_output=True,
+            timeout=300,
+            check=True,
+        )
+
+        logger.info(f"Clip exported: {output_path}")
+        return str(output_path)
