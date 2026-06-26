@@ -19,7 +19,7 @@
 
 ## ✨ Features
 
-- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), object detection (YOLO), semantic scene description (OpenCLIP)
+- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR), object detection (YOLO), semantic scene description (OpenCLIP)
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
 - **🔍 RAG-Powered** — ChromaDB vector store + BGE embeddings + cross-encoder re-ranking for accurate retrieval
 - **✂️ Clip Export** — Export precise video clips at any timestamp range from the UI
@@ -75,9 +75,11 @@ python -m video_analysis --cli --video my_video.mp4 --query "What objects are vi
 Video File
 ├── FFmpeg ──→ Extract Audio (16kHz WAV)
 │              └── faster-whisper (large-v3) ──→ Timestamped Transcript
+│              └── PyAnnote Audio ──→ Speaker Diarization (SPEAKER_00/01)
 ├── FFmpeg ──→ Scene Detection (scene filter)
 │              └── Per Scene: keyframe extraction
 │                            ├── YOLO object detection
+│                            ├── PaddleOCR text extraction
 │                            ├── OpenCLIP zero-shot scene classification
 │                            └── Frame metadata
 ├── FFmpeg ──→ Sprite sheet (100 thumbnails for timeline)
@@ -101,7 +103,7 @@ User Question
 
 | Module | Path | Purpose |
 |--------|------|---------|
-| `pipeline` | `video_analysis/pipeline.py` | Video processing — scene detection, frame extraction, transcription, YOLO, CLIP, sprite sheets |
+| `pipeline` | `video_analysis/pipeline.py` | Video processing — scene detection, frame extraction, transcription, diarization, YOLO, OCR, CLIP, sprite sheets |
 | `rag` | `video_analysis/rag.py` | ChromaDB indexing, hybrid retrieval, re-ranking, temporal expansion |
 | `chat` | `video_analysis/chat.py` | LLM Q&A with conversation history and source citations |
 | `models` | `video_analysis/models.py` | Data models — VideoIndex, SceneInfo, FrameInfo, ChatMessage |
@@ -115,6 +117,8 @@ User Question
 | **Backend** | Python 3.14 + FastAPI | Async, fast, built-in |
 | **UI Framework** | Gradio 6 Blocks | Best video + chat components, custom CSS/JS |
 | **Transcription** | faster-whisper (large-v3) | ~12× realtime on RTX 4070, int8 quantized |
+| **Speaker Diarization** | PyAnnote Audio 3.1 | Gold-standard speaker labeling, optional fallback |
+| **OCR** | PaddleOCR | Best accuracy for natural scenes, CPU mode |
 | **Scene Detection** | FFmpeg scene filter | Always available, no extra deps |
 | **Object Detection** | YOLO (ultralytics) | State-of-the-art speed/accuracy |
 | **Scene Description** | OpenCLIP (ViT-B-32) | Zero-shot classification, rich semantic understanding |
@@ -135,6 +139,8 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `WHISPER_MODEL` | `large-v3` | Whisper model size |
 | `WHISPER_DEVICE` | `cuda` | Device for transcription |
 | `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model for RAG |
+| `OCR_ENABLED` | `true` | Enable PaddleOCR text extraction |
+| `DIARIZE_ENABLED` | `true` | Enable PyAnnote speaker diarization |
 | `UI_HOST` | `0.0.0.0` | Web UI bind address |
 | `UI_PORT` | `7860` | Web UI port |
 
@@ -171,11 +177,14 @@ python tests/test_basic.py
 - [x] Clip export (jump to precise moments)
 - [x] Multi-video library management
 - [x] GPU pipeline management (sequential model loading for 12GB VRAM)
-- [ ] Voice activity detection for speaker diarization (WhisperX)
-- [ ] PaddleOCR for on-screen text extraction
+- [x] Speaker diarization (PyAnnote)
+- [x] OCR text extraction (PaddleOCR)
+- [x] Docker deployment
 - [ ] Frame preview on timeline hover (CSS sprite sheet overlay)
 - [ ] Batch video processing
 - [ ] YouTube URL import
+- [ ] PySceneDetect for improved scene boundaries
+- [ ] OpenCLIP ViT-L-14 upgrade (richer scene descriptions)
 
 ## 📝 License
 

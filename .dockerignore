@@ -1,0 +1,14 @@
+# Docker ignore file for video-analysis platform
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+.DS_Store
+.env
+data/
+tests/
+*.md
+!.dockerignore

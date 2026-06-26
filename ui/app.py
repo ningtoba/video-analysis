@@ -140,12 +140,12 @@ def _video_summary(index: VideoIndex) -> str:
 
 
 def _library_html(video_ids: List[str], rag: VideoRAG) -> str:
-    """Render library cards as HTML."""
+    """Render library cards as HTML with click-to-select."""
     if not video_ids:
         return '<p style="color:var(--text-muted);padding:1rem;">No videos analyzed yet. Upload one above.</p>'
     html = ""
     for vid in video_ids:
-        html += f'<div class="library-card" onclick="console.log(\'select:{vid}\')">'
+        html += f'<div class="library-card" onclick="window.__selectVideo(\'{vid}\')">'
         html += f'<div class="title">{vid}</div>'
         html += f'<div class="meta">ID: {vid}</div>'
         html += "</div>"
@@ -513,6 +513,58 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
         )
         refresh_lib_btn.click(refresh_library, outputs=[library_list])
 
+        # --- Library video selection ---
+        def do_select_video(video_id: str):
+            """Load a selected library video's info into the library tab."""
+            if not video_id:
+                return gr.update(visible=False), gr.update(visible=False), ""
+            try:
+                # Find the video file
+                video_path = config.video_dir / f"{video_id}.mp4"
+                if not video_path.exists():
+                    return gr.update(visible=False), gr.update(visible=False), ""
+                # Get video info from RAG
+                info = {"video_id": video_id, "filepath": str(video_path)}
+                duration = pipeline._get_duration(video_path)
+                if duration > 0:
+                    info["duration_seconds"] = duration
+                return (
+                    gr.update(visible=True, value=str(video_path)),
+                    gr.update(visible=True, value=info),
+                    video_id,
+                )
+            except Exception as e:
+                logger.error(f"Library select error: {e}")
+                return gr.update(visible=False), gr.update(visible=False), ""
+
+        # JS bridge: when library card is clicked, it calls __selectVideo(videoId)
+        # which sets a hidden input to trigger the Gradio event
+        lib_select_js = gr.HTML(
+            """<script>
+(function() {
+  window.__selectVideo = function(videoId) {
+    const el = document.querySelector('#lib-select-input input, #lib-select-input textarea');
+    if (el) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      ).set;
+      nativeInputValueSetter.call(el, videoId);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  };
+})();
+</script>""",
+            visible=True,
+        )
+        lib_select_input = gr.Textbox(
+            value="", visible=False, elem_id="lib-select-input"
+        )
+        lib_select_input.change(
+            do_select_video,
+            inputs=[lib_select_input],
+            outputs=[lib_video_player, lib_info, lib_video_id],
+        )
+
         # ==================== TIMELINE HOVER JAVASCRIPT ====================
         # Injects JS that observes the video element and shows a popup preview
         # on timeline hover, using the sprite sheet as CSS background offset.
@@ -639,49 +691,58 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     setTimeout(loadSpriteData, 500);
 
     // ── Timeline hover detection ──
-    // The native controls have a range input for the timeline
-    function findTimeline() {
-      return video.closest('.gradio-video')?.querySelector('input[type="range"]') || null;
+    // Gradio 6 uses a custom <gradio-video> web component.
+    // Instead of looking for input[type=range], we listen for
+    // mousemove on the video container and use the video duration
+    // to compute the time position.
+    function findVideoRect() {
+      const vid = video;
+      if (!vid) return null;
+      const controls = vid.closest('gradio-video') || vid.parentElement;
+      if (!controls) return vid.getBoundingClientRect();
+      return controls.getBoundingClientRect();
     }
 
     function onTimelineHover(e) {
-      const range = findTimeline();
-      if (!range || !spriteMeta) { if (previewEl) previewEl.style.display = 'none'; return; }
+      if (!spriteMeta) { if (previewEl) previewEl.style.display = 'none'; return; }
 
-      // Calculate position relative to the input
-      const rect = range.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const fraction = Math.max(0, Math.min(1, x / rect.width));
-      const timestamp = fraction * spriteMeta.duration;
+      const rect = video.getBoundingClientRect();
+      const timelineArea = {
+        left: rect.left + rect.width * 0.05,
+        right: rect.right - rect.width * 0.05,
+        top: rect.bottom - 30,
+        bottom: rect.bottom
+      };
 
-      // Position the preview above the timeline
-      createPreview();
-      previewEl.style.left = `${e.clientX}px`;
-      previewEl.style.top = `${rect.top - 12}px`;
-      previewEl.style.transform = 'translate(-50%, -100%)';
-      updatePreview(timestamp);
+      if (e.clientY >= timelineArea.top && e.clientY <= timelineArea.bottom &&
+          e.clientX >= timelineArea.left && e.clientX <= timelineArea.right) {
+        const fraction = Math.max(0, Math.min(1,
+          (e.clientX - timelineArea.left) / (timelineArea.right - timelineArea.left)
+        ));
+        const timestamp = fraction * (spriteMeta.duration || video.duration || 0);
+
+        createPreview();
+        previewEl.style.left = `${e.clientX}px`;
+        previewEl.style.top = `${timelineArea.top - 12}px`;
+        previewEl.style.transform = 'translate(-50%, -100%)';
+        updatePreview(timestamp);
+      } else {
+        if (previewEl) previewEl.style.display = 'none';
+      }
     }
 
     function onTimelineLeave() {
       if (previewEl) previewEl.style.display = 'none';
     }
 
-    // Use a timer to find and attach to the timeline range input
-    let retries = 0;
-    const attachTimer = setInterval(() => {
-      const range = findTimeline();
-      if (range) {
-        range.addEventListener('mousemove', onTimelineHover);
-        range.addEventListener('mouseleave', onTimelineLeave);
-        cleanupFns.push(() => {
-          range.removeEventListener('mousemove', onTimelineHover);
-          range.removeEventListener('mouseleave', onTimelineLeave);
-        });
-        clearInterval(attachTimer);
-      }
-      if (++retries > 20) clearInterval(attachTimer); // stop after ~10s
-    }, 500);
-    cleanupFns.push(() => clearInterval(attachTimer));
+    // Attach to video container directly
+    const videoContainer = video.closest('gradio-video') || video.parentElement || video;
+    videoContainer.addEventListener('mousemove', onTimelineHover, { passive: true });
+    videoContainer.addEventListener('mouseleave', onTimelineLeave);
+    cleanupFns.push(() => {
+      videoContainer.removeEventListener('mousemove', onTimelineHover);
+      videoContainer.removeEventListener('mouseleave', onTimelineLeave);
+    });
   }
 
   // ── Observe for video elements ──

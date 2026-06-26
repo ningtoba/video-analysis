@@ -124,6 +124,17 @@ def test_config_export_dir():
     shutil.rmtree("/tmp/va_test_export", ignore_errors=True)
 
 
+def test_config_ocr_diarize_flags():
+    """Test that OCR and diarization config flags exist with correct defaults."""
+    cfg = Config(data_dir="/tmp/va_test_flags")
+    assert cfg.ocr_enabled is True
+    assert cfg.diarize_enabled is True
+    assert cfg.ocr_confidence == 0.3
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_flags", ignore_errors=True)
+
+
 def test_pipeline_imports():
     """Test that pipeline can be imported cleanly."""
     from video_analysis.pipeline import VideoPipeline
@@ -133,6 +144,50 @@ def test_pipeline_imports():
     import shutil
 
     shutil.rmtree("/tmp/va_test_pipeline", ignore_errors=True)
+
+
+def test_ocr_fallback_no_paddleocr():
+    """Test that _extract_ocr handles missing paddleocr gracefully."""
+    from video_analysis.pipeline import VideoPipeline
+    from video_analysis.models import SceneInfo, FrameInfo
+
+    config = Config(data_dir="/tmp/va_test_ocr_fallback")
+    pipeline = VideoPipeline(config)
+    scenes = [
+        SceneInfo(
+            scene_id=0,
+            start_time=0,
+            end_time=10,
+            key_frames=[
+                FrameInfo(timestamp=5, filepath="/nonexistent.jpg", scene_id=0)
+            ],
+        )
+    ]
+    # Should not raise — just log a warning and return
+    pipeline._extract_ocr(scenes)
+    assert scenes[0].key_frames[0].ocr_text is None
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_ocr_fallback", ignore_errors=True)
+
+
+def test_diarize_fallback_no_pyannote():
+    """Test that _diarize handles missing pyannote gracefully."""
+    from video_analysis.pipeline import VideoPipeline
+    from video_analysis.models import TranscriptSegment
+
+    config = Config(data_dir="/tmp/va_test_diarize_fallback")
+    pipeline = VideoPipeline(config)
+    segments = [TranscriptSegment(start=0, end=5, text="Hello world")]
+    # Should not raise — just log a warning and return
+    result = pipeline._diarize(Path("/nonexistent.wav"), segments, "test")
+    assert len(result) == 1
+    assert result[0].speaker is None
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_diarize_fallback", ignore_errors=True)
 
 
 def test_generate_sprite_sheet():

@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.3.0 (2026-06-26)
+
+### 🎬 New Features
+
+- **🗣️ Speaker Diarization**: Automatic speaker labeling via PyAnnote Audio (`pyannote/speaker-diarization-3.1`). Each transcript segment now gets a `SPEAKER_00`, `SPEAKER_01`, etc. label, enabling speaker-aware Q&A. Configurable via `diarize_enabled`. Graceful fallback if PyAnnote is not installed.
+- **🔤 OCR Text Extraction**: On-screen text detection via PaddleOCR (CPU mode). Extracts text from key frames and stores in `FrameInfo.ocr_text`. Visible in RAG context and Q&A responses. Configurable via `ocr_enabled` and `ocr_confidence`.
+- **🐳 Docker Deployment**: Complete Dockerfile (multi-stage, CUDA 12.4 runtime) and docker-compose.yml with GPU passthrough, health checks, persistent volumes, and Nvidia container toolkit support.
+- **📚 Library Tab Video Player**: Library cards are now clickable — clicking a video in the library loads it in a video player with metadata display. JS bridge (`window.__selectVideo`) connects Gradio UI to the library backend.
+
+### 🔧 Improvements
+
+- **Timeline Hover Preview Fix**: Rewrote the JavaScript timeline hover detection to work with Gradio 6's `<gradio-video>` web component. Now detects hover on the video container's bottom area rather than relying on the non-existent `<input type="range">` element.
+- **Config Flags**: New `ocr_enabled`, `diarize_enabled`, `ocr_confidence` config fields for fine-grained pipeline control.
+- **Pipeline Step Count**: 12 pipeline steps (up from 9) — added OCR extraction and speaker diarization.
+
+### 📦 Dependencies
+
+- **New optional**: `paddleocr>=2.8.0` — OCR text extraction
+- **New optional**: `pyannote.audio>=3.1.0` — Speaker diarization
+- Both are optional with graceful fallbacks if not installed.
+
+### 🏗️ Architecture
+
+```
+video-analysis/
+├── video_analysis/
+│   ├── __init__.py        # v0.3.0
+│   ├── config.py          # +ocr_enabled, diarize_enabled, ocr_confidence
+│   ├── pipeline.py        # +_extract_ocr(), _diarize() methods
+│   └── ...                # (models, rag, chat — enhanced for diarization/OCR)
+├── ui/
+│   └── app.py             # Library tab wired, timeline JS fixed, JS bridge
+├── tests/
+│   └── test_basic.py      # +tests for OCR config and diarization config
+├── Dockerfile             # NEW — multi-stage CUDA Dockerfile
+├── docker-compose.yml     # NEW — GPU passthrough compose
+├── .dockerignore          # NEW
+├── requirements.txt       # +paddleocr, pyannote.audio (optional)
+├── pyproject.toml
+├── README.md              # Updated
+└── CHANGELOG.md
+```
+
 ## 0.2.0 (2026-06-26)
 
 ### 🎬 New Features

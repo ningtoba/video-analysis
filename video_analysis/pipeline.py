@@ -75,8 +75,9 @@ class VideoPipeline:
         1. Extract metadata + audio
         2. Detect scenes and extract key frames
         3. Transcribe audio
-        4. Describe frames (objects via YOLO, OCR, OpenCLIP zero-shot)
-        5. Assemble VideoIndex
+        4. Speaker diarization (PyAnnote)
+        5. Describe frames (objects via YOLO, OCR via PaddleOCR, OpenCLIP zero-shot)
+        6. Assemble VideoIndex
         """
         video_path = Path(video_path)
         video_id = video_path.stem
@@ -111,18 +112,39 @@ class VideoPipeline:
         )
         logger.info(f"Transcription: {len(transcript_segments)} segments")
 
-        # Step 6: Run object detection on frames
+        # Step 6: Speaker diarization (PyAnnote)
+        if self.config.diarize_enabled:
+            transcript_segments = self._diarize(
+                audio_path, transcript_segments, video_id
+            )
+            diarized_count = sum(
+                1 for s in transcript_segments if s.speaker is not None
+            )
+            logger.info(
+                f"Speaker diarization: {diarized_count}/{len(transcript_segments)} segments labeled"
+            )
+        else:
+            logger.info("Speaker diarization disabled by config")
+
+        # Step 7: Run object detection on frames
         self._detect_objects_on_frames(scenes)
         logger.info("Object detection complete")
 
-        # Step 7: Run OpenCLIP zero-shot scene classification on frames
+        # Step 7: Run OCR text extraction on frames (PaddleOCR)
+        if self.config.ocr_enabled:
+            self._extract_ocr(scenes)
+            logger.info("OCR text extraction complete")
+        else:
+            logger.info("OCR text extraction disabled by config")
+
+        # Step 8: Run OpenCLIP zero-shot scene classification on frames
         self._describe_scenes_clip(scenes)
         logger.info("OpenCLIP scene classification complete")
 
-        # Step 8: Assign transcript to scenes
+        # Step 9: Assign transcript to scenes
         self._assign_transcript_to_scenes(scenes, transcript_segments)
 
-        # Step 9: Generate sprite sheet for timeline preview
+        # Step 10: Generate sprite sheet for timeline preview
         sprite_path, sprite_meta = self._generate_sprite_sheet(
             video_path, video_id, num_thumbnails=100
         )
@@ -708,6 +730,165 @@ class VideoPipeline:
             import shutil
 
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def _extract_ocr(self, scenes: List[SceneInfo]):
+        """
+        Run OCR text extraction on key frames using PaddleOCR.
+
+        Graceful fallback: if paddleocr is not installed, logs a warning and skips.
+        Extracted text is stored in FrameInfo.ocr_text for each frame.
+        GPU used if available, otherwise CPU.
+        """
+        all_frames = []
+        for scene in scenes:
+            all_frames.extend(scene.key_frames)
+
+        if not all_frames:
+            return
+
+        # Attempt to import PaddleOCR — graceful fallback
+        try:
+            from paddleocr import PaddleOCR
+        except ImportError:
+            logger.warning(
+                "paddleocr not installed. Skipping OCR text extraction. "
+                "Install with: pip install paddleocr"
+            )
+            return
+
+        if not hasattr(self, "_ocr_model") or self._ocr_model is None:
+            try:
+                logger.info("Loading PaddleOCR model...")
+                self._ocr_model = PaddleOCR(
+                    use_angle_cls=True,
+                    lang="en",
+                    show_log=False,
+                    use_gpu=False,  # PaddlePaddle GPU lags CUDA 13.x; use CPU
+                )
+                logger.info("PaddleOCR model loaded successfully (CPU mode)")
+            except Exception as e:
+                logger.warning(f"Failed to load PaddleOCR model: {e}")
+                return
+
+        ocr = self._ocr_model
+        for frame in all_frames:
+            try:
+                result = ocr.ocr(frame.filepath, cls=True)
+                if result and result[0]:
+                    texts = []
+                    for line in result[0]:
+                        bbox, (text, confidence) = line[0], line[1]
+                        if confidence >= 0.3:
+                            texts.append(f"{text} ({confidence:.0%})")
+                    if texts:
+                        frame.ocr_text = "; ".join(texts)
+                        logger.debug(
+                            f"OCR on {Path(frame.filepath).name}: {frame.ocr_text[:80]}"
+                        )
+            except Exception as e:
+                logger.debug(f"OCR error on {frame.filepath}: {e}")
+
+    def _diarize(
+        self,
+        audio_path: Path,
+        transcript_segments: List[TranscriptSegment],
+        video_id: str,
+    ) -> List[TranscriptSegment]:
+        """
+        Run speaker diarization using PyAnnote Audio.
+
+        Assigns speaker labels ('SPEAKER_00', 'SPEAKER_01', etc.) to each
+        transcript segment based on overlapping diarization turns.
+
+        Graceful fallback: if pyannote.audio is not installed, logs a warning
+        and returns the transcript unmodified.
+
+        Args:
+            audio_path: Path to the extracted audio WAV file.
+            transcript_segments: List of TranscriptSegment from transcription.
+            video_id: Unused, kept for future caching.
+
+        Returns:
+            List of TranscriptSegment with speaker labels populated.
+        """
+        try:
+            from pyannote.audio import Pipeline
+            import torch
+        except ImportError:
+            logger.warning(
+                "pyannote.audio not installed. Skipping speaker diarization. "
+                "Install with: pip install pyannote.audio"
+            )
+            return transcript_segments
+
+        if not transcript_segments:
+            return transcript_segments
+
+        if not audio_path.exists():
+            logger.warning(f"Audio file not found for diarization: {audio_path}")
+            return transcript_segments
+
+        if (
+            not hasattr(self, "_diarization_pipeline")
+            or self._diarization_pipeline is None
+        ):
+            try:
+                logger.info("Loading PyAnnote speaker diarization pipeline...")
+                # Use a local pretrained pipeline from huggingface hub
+                # No token needed for pyannote/speaker-diarization-3.1 (MIT license)
+                self._diarization_pipeline = Pipeline.from_pretrained(
+                    "pyannote/speaker-diarization-3.1",
+                    use_auth_token=None,
+                )
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                self._diarization_pipeline.to(device)
+                logger.info(f"PyAnnote pipeline loaded on {device}")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load PyAnnote diarization pipeline: {e}. "
+                    "This may require huggingface hub access. "
+                    "Falling back to no diarization."
+                )
+                return transcript_segments
+
+        pipeline = self._diarization_pipeline
+        try:
+            diarization = pipeline({"audio": str(audio_path)})
+
+            # Build a speaker timeline: list of (start, end, speaker) tuples
+            speaker_turns = []
+            for turn, _, speaker in diarization.itertracks(yield_label=True):
+                speaker_turns.append((turn.start, turn.end, speaker))
+
+            if not speaker_turns:
+                logger.info("No speakers detected by diarization")
+                return transcript_segments
+
+            # Assign speaker labels to transcript segments by overlap
+            for seg in transcript_segments:
+                seg_start = seg.start
+                seg_end = seg.end
+                # Find which speaker turn has the most overlap
+                best_speaker = None
+                best_overlap = 0.0
+                for sp_start, sp_end, speaker in speaker_turns:
+                    overlap_start = max(seg_start, sp_start)
+                    overlap_end = min(seg_end, sp_end)
+                    overlap = max(0, overlap_end - overlap_start)
+                    if overlap > best_overlap:
+                        best_overlap = overlap
+                        best_speaker = speaker
+                if best_speaker and best_overlap > 0.1:
+                    seg.speaker = best_speaker
+
+            logger.info(
+                f"Diarization complete: {len(speaker_turns)} turns, "
+                f"{len(set(s for _, _, s in speaker_turns))} speakers"
+            )
+        except Exception as e:
+            logger.warning(f"Diarization failed: {e}")
+
+        return transcript_segments
 
     def cleanup(self):
         """Release GPU memory from all loaded models."""

@@ -47,6 +47,13 @@ class Config:
     # Clip export
     clip_export_dir: Path = field(init=False)
 
+    # OCR (PaddleOCR)
+    ocr_enabled: bool = True
+    ocr_confidence: float = 0.3
+
+    # Diarization (PyAnnote)
+    diarize_enabled: bool = True
+
     # UI
     ui_host: str = "0.0.0.0"
     ui_port: int = 7860

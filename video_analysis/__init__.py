@@ -11,4 +11,4 @@ Modules:
 
 from video_analysis import pipeline, rag, models, chat, config
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

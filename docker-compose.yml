@@ -1,0 +1,39 @@
+# docker-compose.yml for video-analysis platform
+# GPU-accelerated with RTX 4070 support
+
+services:
+  video-analysis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: video-analysis
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - VIDEO_ANALYSIS_DATA=/app/data
+      - WHISPER_MODEL=large-v3
+      - WHISPER_DEVICE=cuda
+      - UI_HOST=0.0.0.0
+      - UI_PORT=7860
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7860')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
