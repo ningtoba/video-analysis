@@ -153,9 +153,17 @@ class VideoPipeline:
     def _get_active_stages(self) -> set:
         """Return the set of stage names that should be SKIPPED based on processing_mode.
 
-        In ``audio_only`` mode, all visual processing stages are skipped.
-        In ``video_full`` mode (default), no stages are skipped.
+        Modes:
+        - ``"video_full"`` (default): no stages skipped, full visual + audio pipeline.
+        - ``"audio_only"``: skip all visual stages (scene_detection, frame_extraction, etc.).
+        - ``"auto"``: use file-type heuristic classifier (classifier.py) to determine
+          the appropriate stages based on the video file being processed.
+
+        ``auto`` mode requires ``self._current_video_path`` to be set before calling
+        ``process()``.
         """
+        if self.config.processing_mode == "video_full":
+            return set()
         if self.config.processing_mode == "audio_only":
             logger.info("Audio-only mode: skipping all visual stages")
             return {
@@ -170,7 +178,34 @@ class VideoPipeline:
                 "sprite_sheet",
                 "rag_indexing",
             }
-        return set()
+
+        # Auto mode: delegate to the file-type classifier
+        video_path = getattr(self, "_current_video_path", None)
+        if video_path is None:
+            logger.warning(
+                "Auto mode requested but _current_video_path not set — "
+                "falling back to video_full (no stages skipped)"
+            )
+            return set()
+
+        try:
+            from video_analysis.classifier import pipeline_skipped_stages
+
+            skipped = pipeline_skipped_stages(
+                video_path,
+                processing_mode="auto",
+                use_ml=False,  # ML classifier is opt-in; extension + ffprobe are sufficient
+            )
+            logger.info(
+                f"Auto-classified {video_path.name}: "
+                f"skipping stages: {skipped if skipped else 'none'}"
+            )
+            return skipped
+        except Exception as e:
+            logger.warning(
+                f"Auto-classification failed ({e}) — falling back to video_full"
+            )
+            return set()
 
     def process(self, video_path: str) -> VideoIndex:
         """
@@ -191,6 +226,9 @@ class VideoPipeline:
         video_path = Path(video_path)
         video_id = video_path.stem
         logger.info(f"Processing video: {video_path.name}")
+
+        # Set the current video path for auto-classification in _get_active_stages()
+        self._current_video_path = video_path
 
         # Determine which stages to skip based on processing_mode
         skipped_stages = self._get_active_stages()

@@ -121,7 +121,7 @@ class Config:
     library_max_videos: int = 50
 
     # Processing mode (v0.22.0)
-    processing_mode: str = "video_full"  # "video_full" or "audio_only"
+    processing_mode: str = "video_full"  # "video_full", "audio_only", or "auto"
 
     # Frame sampling
     adaptive_frame_sampling: bool = False  # motion-based adaptive sampling
@@ -198,15 +198,15 @@ class Config:
     agentic_max_rounds: int = 3  # max iterative rounds (default: 3)
     agentic_min_confidence: float = 0.5  # min avg top-3 score to stop early
     # Audio-Only Processing Mode (v0.23.0)
-    processing_mode: str = "video_full"  # "video_full" or "audio_only"
+    # processing_mode is defined above (line ~123)
+
     # Conversation Memory (v0.23.0)
-    conversation_memory_enabled: bool = True
-    conversation_memory_max_entries: int = 50
-    conversation_memory_ttl_days: int = 30
+    # conversation_memory_enabled, conversation_memory_max_entries,
+    # conversation_memory_ttl_days are defined above (lines ~165-173)
+
     # Structured JSON Logging (v0.23.0)
-    structured_logging_enabled: bool = True
-    structured_logging_format: str = "auto"  # "auto", "console", "json"
-    structured_logging_level: str = "INFO"
+    # structured_logging_enabled, structured_logging_format,
+    # structured_logging_level are defined above (lines ~106-111)
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
@@ -268,7 +268,7 @@ class Config:
             self.frame_storage_mode = storage_env
         # Override processing_mode from env var
         processing_env = os.environ.get("PROCESSING_MODE", "").lower()
-        if processing_env in ("video_full", "audio_only"):
+        if processing_env in ("video_full", "audio_only", "auto"):
             self.processing_mode = processing_env
         for d in [
             self.data_dir,

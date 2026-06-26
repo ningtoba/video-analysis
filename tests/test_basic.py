@@ -1462,10 +1462,10 @@ def test_rag_multi_hop_no_subqueries():
 
 
 def test_version_0_15_0():
-    """Test version is now 0.23.0."""
+    """Test version is now 0.24.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.23")
+    assert __version__.startswith("0.24")
 
 
 # ====================================================================
@@ -1887,10 +1887,10 @@ def test_scene_graph_track_id_entity_matching():
 
 
 def test_version_0_20_0():
-    """Test that version is now 0.23.0."""
+    """Test version is now 0.24.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.23")
+    assert __version__.startswith("0.24")
 
 
 if __name__ == "__main__":

@@ -289,9 +289,9 @@ python tests/test_basic.py
 |- [x] Conversation memory — `video_analysis/memory.py`, ChromaDB-backed persistent chat history
 |- [x] Structured JSON logging — structlog integration across pipeline stages
 |- [ ] Dependency modernization — update pyproject.toml bounds for torch>=2.5.0, transformers>=4.50.0
-|- [ ] Pipeline caching + incremental re-indexing (content-addressable per-stage cache)
-|- [ ] PipelineOrchestrator heuristic — file-type based stage selection
-|- [ ] Pipeline benchmarking infra — pynvml per-stage VRAM tracking, pytest-benchmark suite
+||- [x] Pipeline caching + incremental re-indexing — `video_analysis/cache.py`, content-addressable SHA-256 per-stage cache with persistent index, config-aware invalidation, TTL expiry
+||- [x] PipelineOrchestrator heuristic — `video_analysis/orchestrator.py`, file-type + ffprobe + heuristic classification into 7 video types with stage overrides
+||- [ ] Pipeline benchmarking infra — pynvml per-stage VRAM tracking, pytest-benchmark suite
 |- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy
 |- [ ] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows)
 |- [ ] InsightFace face recognition (RetinaFace + ArcFace, cross-video person identity)
