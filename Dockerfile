@@ -27,7 +27,7 @@ FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 LABEL org.opencontainers.image.title="Video Analysis Platform"
 LABEL org.opencontainers.image.description="Self-hosted video analysis with AI chatbot — scene understanding, RAG, clip export"
-LABEL org.opencontainers.image.version="0.3.0"
+LABEL org.opencontainers.image.version="0.4.0"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1

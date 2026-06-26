@@ -3,6 +3,8 @@ Gradio-based UI for the video analysis platform.
 
 Features:
 - Video upload with drag-and-drop
+- YouTube URL import
+- Batch video processing queue
 - Video player with timeline + thumbnail preview
 - Analysis progress with real-time updates
 - Chat interface with source citations and clickable timestamps
@@ -26,6 +28,7 @@ from video_analysis.pipeline import VideoPipeline
 from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
 from video_analysis.models import format_timestamp, VideoIndex
+from ui.utils import parse_yt_url, queue_html
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +114,14 @@ body { background: #0f0d1a; color: var(--text); font-family: 'Inter', sans-serif
 
 /* Clip export */
 .clip-preview { border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; margin-top: 0.5rem; }
+
+/* Batch queue status */
+.queue-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+.queue-item .q-status { font-size: 0.8rem; padding: 0.15rem 0.4rem; border-radius: 4px; }
+.queue-item .q-status.pending { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.queue-item .q-status.done { background: rgba(52,211,153,0.15); color: #34d399; }
+.queue-item .q-status.error { background: rgba(239,68,68,0.15); color: #ef4444; }
+.queue-item .q-status.active { background: rgba(124,58,237,0.15); color: #a78bfa; animation: pulse 1s infinite; }
 """
 
 
@@ -173,13 +184,14 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
         vid = gr.State("")
         vpath = gr.State("")
         busy = gr.State(False)
+        batch_queue = gr.State([])  # list of {name, filepath, url, status}
 
         # -- header --
         with gr.Row(elem_classes="container"):
             with gr.Column():
                 gr.HTML(
                     '<div class="header"><h1>🎥 Video Analysis</h1>'
-                    "<p>Upload a video, let AI analyze it, then ask questions</p></div>"
+                    "<p>Upload a video, paste a URL, or batch process — let AI analyze it, then ask questions</p></div>"
                 )
             with gr.Column(scale=0, min_width=180):
                 status = gr.HTML('<span class="badge ready">● Ready</span>')
@@ -190,19 +202,34 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 with gr.Row(equal_height=False):
                     # LEFT: upload + player
                     with gr.Column(scale=3, min_width=480):
-                        gr.Markdown("### Upload Video")
+                        gr.Markdown("### Upload Video or Paste URL")
                         video_input = gr.Video(
-                            label="Drop or select a video",
+                            label="Drop or select a video file",
                             sources=["upload", "path"],
                             format="mp4",
-                            height=360,
+                            height=320,
+                        )
+                        url_input = gr.Textbox(
+                            label="Or paste a YouTube/URL",
+                            placeholder="https://www.youtube.com/watch?v=...",
+                            lines=1,
                         )
                         with gr.Row():
                             process_btn = gr.Button(
-                                "⚡ Analyze", variant="primary", size="lg", scale=2
+                                "⚡ Analyze Upload",
+                                variant="primary",
+                                size="lg",
+                                scale=2,
+                            )
+                            import_url_btn = gr.Button(
+                                "🌐 Download & Analyze URL",
+                                variant="secondary",
+                                size="lg",
+                                scale=2,
                             )
                             clear_btn = gr.Button("🗑 Clear", scale=1)
 
+                        # Progress panel
                         progress_panel = gr.Group(visible=False)
                         with progress_panel:
                             gr.Markdown("### Analysis Progress")
@@ -257,7 +284,39 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             label="Show source citations", value=True
                         )
 
-            # ============ TAB 2: LIBRARY ============
+            # ============ TAB 2: BATCH PROCESSING ============
+            with gr.TabItem("📦 Batch", id="batch"):
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        gr.Markdown("### Batch Import")
+                        batch_urls = gr.Textbox(
+                            label="URLs (one per line)",
+                            placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/watch?v=...",
+                            lines=6,
+                        )
+                        batch_files = gr.File(
+                            label="Or upload video files",
+                            file_count="multiple",
+                            file_types=[".mp4", ".webm", ".mov", ".avi", ".mkv"],
+                        )
+                        with gr.Row():
+                            add_batch_btn = gr.Button(
+                                "➕ Add to Queue", variant="primary", size="lg", scale=2
+                            )
+                            process_batch_btn = gr.Button(
+                                "▶️ Process All",
+                                variant="secondary",
+                                size="lg",
+                                scale=2,
+                            )
+                            clear_batch_btn = gr.Button("🗑 Clear Queue", scale=1)
+                    with gr.Column(scale=3):
+                        gr.Markdown("### Queue")
+                        batch_status = gr.HTML(
+                            '<p style="color:var(--text-muted);padding:1rem;">Queue is empty.</p>'
+                        )
+
+            # ============ TAB 3: LIBRARY ============
             with gr.TabItem("📚 Library", id="library"):
                 with gr.Row():
                     with gr.Column(scale=2):
@@ -389,6 +448,150 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             finally:
                 busy.value = False
 
+        # --- Import from URL ---
+        def do_import_url(url: str, state_vid: str):
+            if not url or busy.value:
+                return (
+                    state_vid,
+                    state_vid,
+                    None,
+                    gr.update(visible=False),
+                    None,
+                    None,
+                    gr.update(visible=False),
+                    status,
+                    progress_html,
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                )
+
+            if not parse_yt_url(url):
+                status.value = (
+                    '<span class="badge error">● Unsupported URL format</span>'
+                )
+                return (
+                    state_vid,
+                    state_vid,
+                    None,
+                    gr.update(visible=False),
+                    None,
+                    None,
+                    gr.update(visible=False),
+                    status,
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                )
+
+            busy.value = True
+            status.value = '<span class="badge busy">● Downloading...</span>'
+
+            try:
+                yield (
+                    _progress_html(0, "Downloading video from URL..."),
+                    status,
+                    True,
+                    None,
+                    None,
+                    None,
+                    gr.update(visible=False),
+                    vid,
+                    vpath,
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                )
+
+                downloaded = pipeline.download_from_url(url, config.video_dir)
+                if downloaded is None:
+                    status.value = '<span class="badge error">● Download failed</span>'
+                    yield (
+                        _progress_html(-1, "❌ Failed to download video"),
+                        status,
+                        True,
+                        None,
+                        state_vid,
+                        state_vid,
+                        gr.update(visible=False),
+                        state_vid,
+                        state_vid,
+                        gr.update(visible=False),
+                        gr.update(visible=False),
+                    )
+                    return
+
+                logger.info(f"Downloaded to: {downloaded}")
+
+                yield (
+                    _progress_html(1, "Processing downloaded video..."),
+                    status,
+                    True,
+                    None,
+                    None,
+                    None,
+                    gr.update(visible=False),
+                    vid,
+                    vpath,
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                )
+
+                index = pipeline.process(str(downloaded))
+
+                yield (
+                    _progress_html(6, "Indexing content for Q&A..."),
+                    status,
+                    True,
+                    None,
+                    None,
+                    None,
+                    gr.update(visible=False),
+                    vid,
+                    vpath,
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                )
+
+                rag.index_video(index)
+                chat_session.reset_history()
+
+                status.value = (
+                    '<span class="badge ready">● Ready — ask questions</span>'
+                )
+                yield (
+                    _progress_html(8, f"✅ Complete — {_video_summary(index)}"),
+                    status,
+                    True,
+                    str(downloaded),
+                    index.video_id,
+                    str(downloaded),
+                    gr.update(visible=True),
+                    index.video_id,
+                    str(downloaded),
+                    gr.update(visible=True),
+                    gr.update(visible=True),
+                )
+
+            except Exception as e:
+                logger.error(f"Import error: {e}", exc_info=True)
+                status.value = (
+                    f'<span class="badge error">● Error: {str(e)[:100]}</span>'
+                )
+                yield (
+                    _progress_html(-1, f"❌ {str(e)[:200]}"),
+                    status,
+                    True,
+                    None,
+                    state_vid,
+                    state_vid,
+                    gr.update(visible=False),
+                    state_vid,
+                    state_vid,
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                )
+            finally:
+                busy.value = False
+
         # --- Send Chat Message ---
         def do_send(msg: str, history: list, video_id: str, show_src: bool):
             if not msg or not video_id:
@@ -457,10 +660,129 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 logger.error(f"Library refresh error: {e}")
                 return f'<p style="color:var(--text-muted);">Error loading library: {str(e)[:100]}</p>'
 
+        # --- Batch Queue ---
+        def do_add_to_queue(urls: str, files: list, queue: list):
+            """Add URLs and uploaded files to the batch queue."""
+            queue = list(queue) if queue else []
+
+            # Add URLs
+            if urls:
+                for url in urls.strip().split("\n"):
+                    url = url.strip()
+                    if url and parse_yt_url(url):
+                        queue.append(
+                            {
+                                "name": url[:60] + "..." if len(url) > 60 else url,
+                                "url": url,
+                                "filepath": None,
+                                "status": "pending",
+                            }
+                        )
+
+            # Add files
+            if files:
+                for f in files:
+                    if isinstance(f, str):
+                        queue.append(
+                            {
+                                "name": Path(f).name,
+                                "url": None,
+                                "filepath": f,
+                                "status": "pending",
+                            }
+                        )
+                    elif hasattr(f, "name"):
+                        queue.append(
+                            {
+                                "name": f.name,
+                                "url": None,
+                                "filepath": f.name,
+                                "status": "pending",
+                            }
+                        )
+
+            return queue, queue_html(queue)
+
+        def do_process_batch(queue: list):
+            """Process all items in the batch queue sequentially."""
+            if not queue:
+                return queue, queue_html([]), status
+
+            busy.value = True
+            status.value = '<span class="badge busy">● Batch processing...</span>'
+
+            for item in queue:
+                if item["status"] != "pending":
+                    continue
+
+                item["status"] = "active"
+                yield queue, queue_html(queue), status
+
+                try:
+                    filepath = item.get("filepath")
+                    url = item.get("url")
+
+                    if url:
+                        # Download first
+                        downloaded = pipeline.download_from_url(url, config.video_dir)
+                        if downloaded is None:
+                            item["status"] = "error"
+                            yield queue, queue_html(queue), status
+                            continue
+                        filepath = str(downloaded)
+                    elif filepath:
+                        # Copy file to video dir
+                        pid = str(uuid.uuid4())[:8]
+                        dest = config.video_dir / f"{pid}.mp4"
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(filepath, dest)
+                        filepath = str(dest)
+
+                    if not filepath:
+                        item["status"] = "error"
+                        yield queue, queue_html(queue), status
+                        continue
+
+                    # Process
+                    index = pipeline.process(filepath)
+                    rag.index_video(index)
+                    item["status"] = "done"
+
+                except Exception as e:
+                    logger.error(f"Batch item error: {e}")
+                    item["status"] = "error"
+
+                yield queue, queue_html(queue), status
+
+            busy.value = False
+            status.value = '<span class="badge ready">● Batch complete</span>'
+            yield queue, queue_html(queue), status
+
+        def do_clear_batch():
+            return [], queue_html([])
+
         # Wire events
         evt = process_btn.click(
             fn=do_process,
             inputs=[video_input, vid],
+            outputs=[
+                progress_html,
+                status,
+                progress_panel,
+                video_player,
+                vid,
+                vpath,
+                export_group,
+                vid,
+                vpath,
+                progress_panel,
+                export_group,
+            ],
+        )
+
+        import_url_btn.click(
+            fn=do_import_url,
+            inputs=[url_input, vid],
             outputs=[
                 progress_html,
                 status,
@@ -512,6 +834,22 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             ],
         )
         refresh_lib_btn.click(refresh_library, outputs=[library_list])
+
+        # Batch events
+        add_batch_btn.click(
+            do_add_to_queue,
+            inputs=[batch_urls, batch_files, batch_queue],
+            outputs=[batch_queue, batch_status],
+        )
+        process_batch_btn.click(
+            do_process_batch,
+            inputs=[batch_queue],
+            outputs=[batch_queue, batch_status, status],
+        )
+        clear_batch_btn.click(
+            do_clear_batch,
+            outputs=[batch_queue, batch_status],
+        )
 
         # --- Library video selection ---
         def do_select_video(video_id: str):
@@ -593,7 +931,9 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     if (previewEl) return;
     previewEl = document.createElement('div');
     previewEl.className = 'timeline-preview';
-    previewEl.innerHTML = '<div class="tp-img-wrap"><img alt="" /></div><div class="tp-time">00:00:00.000</div>';
+    previewEl.innerHTML = '<div class="tp-img-wrap"><img alt="" style="width:160px;height:90px;" /></div><div class="tp-time" style="text-align:center;font-family:monospace;font-size:0.8rem;padding:2px 4px;">00:00:00.000</div>';
+    // Add CSS for the hover card
+    previewEl.style.cssText = 'position:fixed;z-index:9999;background:#1e1b2e;border:1px solid #3d3a50;border-radius:8px;padding:4px;box-shadow:0 4px 20px rgba(0,0,0,0.6);pointer-events:none;display:none;';
     document.body.appendChild(previewEl);
   }
 
@@ -627,9 +967,9 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     img.style.background = `url(${spriteUrl}) no-repeat`;
     img.style.backgroundSize = `${spriteMeta.num_columns * spriteMeta.thumbnail_width}px ${spriteMeta.num_rows * spriteMeta.thumbnail_height}px`;
     img.style.backgroundPosition = `-${thumb.x}px -${thumb.y}px`;
+    img.style.width = spriteMeta.thumbnail_width + 'px';
+    img.style.height = spriteMeta.thumbnail_height + 'px';
     img.src = ''; // clear src to show background
-    // Fallback: set src to sprite sheet (browsers will show top-left without bg-position)
-    // We rely on background rendering via the div style above.
     timeEl.textContent = formatTime(timestamp);
     previewEl.style.display = 'block';
   }
@@ -642,43 +982,36 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     cleanupFns.forEach(fn => fn());
     cleanupFns = [];
 
-    // Find sprite metadata URL: look for JSON next to sprite
-    // The sprite sheet URL is derived from the video source name
+    // Find sprite metadata URL
     function loadSpriteData() {
       const src = video.querySelector('source')?.src || video.src;
       if (!src) return;
-      // Derive sprite URL from video path
-      // Convention: /data/thumbnails/{video_id}_sprite.jpg
-      // We look up via the video_id embedded in the filename
-      const baseUrl = src.substring(0, src.lastIndexOf('/'));
       const segments = src.split('/');
       const filename = segments[segments.length - 1];
       const videoId = filename.replace(/[.]mp4$/, '').replace(/[.]webm$/, '').replace(/[.]mov$/, '');
 
-      // Try to fetch the metadata JSON
-      // The sprite and JSON live at: /data/thumbnails/{videoId}_sprite.json relative to app
-      const metaUrl = `/file=${baseUrl}/../../thumbnails/${videoId}_sprite.json`.replace(/\\/+/g, '/');
-      const spriteImgUrl = `/file=${baseUrl}/../../thumbnails/${videoId}_sprite.jpg`.replace(/\\/+/g, '/');
+      // Try multiple paths for the sprite data
+      const attempts = [
+        `/file=data/thumbnails/${videoId}_sprite.json`,
+        `/file=/app/data/thumbnails/${videoId}_sprite.json`,
+      ];
+      const spriteAttempts = [
+        `/file=data/thumbnails/${videoId}_sprite.jpg`,
+        `/file=/app/data/thumbnails/${videoId}_sprite.jpg`,
+      ];
 
-      fetch(metaUrl)
-        .then(r => r.json())
-        .then(meta => {
-          spriteMeta = meta;
-          spriteUrl = spriteImgUrl;
-          console.log('[TimelinePreview] Sprite loaded:', spriteMeta.num_thumbnails, 'thumbnails');
-        })
-        .catch(() => {
-          // Try alternative: relative to data dir
-          const altMetaUrl = `/file=data/thumbnails/${videoId}_sprite.json`;
-          const altSpriteUrl = `/file=data/thumbnails/${videoId}_sprite.jpg`;
-          fetch(altMetaUrl)
-            .then(r => r.json())
-            .then(meta => {
-              spriteMeta = meta;
-              spriteUrl = altSpriteUrl;
-            })
-            .catch(e => console.warn('[TimelinePreview] No sprite data found:', e.message));
-        });
+      function tryFetch(index) {
+        if (index >= attempts.length) return;
+        fetch(attempts[index])
+          .then(r => r.json())
+          .then(meta => {
+            spriteMeta = meta;
+            spriteUrl = spriteAttempts[index];
+            console.log('[TimelinePreview] Sprite loaded:', meta.num_thumbnails, 'thumbnails');
+          })
+          .catch(() => tryFetch(index + 1));
+      }
+      tryFetch(0);
     }
 
     // Listen to source changes
@@ -691,18 +1024,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     setTimeout(loadSpriteData, 500);
 
     // ── Timeline hover detection ──
-    // Gradio 6 uses a custom <gradio-video> web component.
-    // Instead of looking for input[type=range], we listen for
-    // mousemove on the video container and use the video duration
-    // to compute the time position.
-    function findVideoRect() {
-      const vid = video;
-      if (!vid) return null;
-      const controls = vid.closest('gradio-video') || vid.parentElement;
-      if (!controls) return vid.getBoundingClientRect();
-      return controls.getBoundingClientRect();
-    }
-
     function onTimelineHover(e) {
       if (!spriteMeta) { if (previewEl) previewEl.style.display = 'none'; return; }
 

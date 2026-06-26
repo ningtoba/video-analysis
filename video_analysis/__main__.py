@@ -3,8 +3,10 @@
 Video Analysis Platform — Entry point.
 
 Usage:
-    python -m video_analysis          # Launch the web UI
-    python -m video_analysis --cli    # CLI mode (batch process)
+    python -m video_analysis                          # Launch the web UI
+    python -m video_analysis --cli --video FILE       # CLI mode (single video)
+    python -m video_analysis --url URL                # Download & process YouTube URL
+    python -m video_analysis --batch urls.txt         # Batch process from URL list
 """
 
 import argparse
@@ -58,6 +60,58 @@ def cli_mode(args):
                 print(f"  [{format_timestamp(s.timestamp)}] {s.text[:100]}...")
 
 
+def url_mode(args):
+    """Download a YouTube URL and process it."""
+    config = Config()
+    pipeline = VideoPipeline(config)
+    rag = VideoRAG(config)
+
+    print(f"Downloading from URL: {args.url}")
+    downloaded = pipeline.download_from_url(args.url, config.video_dir)
+    if downloaded is None:
+        print("  ❌ Download failed")
+        return
+
+    print(f"  Downloaded to: {downloaded}")
+    args.video = str(downloaded)
+    cli_mode(args)
+
+
+def batch_mode(args):
+    """Batch process multiple videos from a URL list file."""
+    config = Config()
+    pipeline = VideoPipeline(config)
+    rag = VideoRAG(config)
+
+    with open(args.batch) as f:
+        urls_or_paths = [line.strip() for line in f if line.strip()]
+
+    print(f"Batch processing {len(urls_or_paths)} items...")
+    success = 0
+    for i, item in enumerate(urls_or_paths):
+        print(f"\n[{i + 1}/{len(urls_or_paths)}] {item[:80]}...")
+        try:
+            if item.startswith(("http://", "https://")):
+                downloaded = pipeline.download_from_url(item, config.video_dir)
+                if downloaded is None:
+                    print("  ❌ Download failed, skipping")
+                    continue
+                filepath = str(downloaded)
+            else:
+                filepath = item
+
+            index = pipeline.process(filepath)
+            rag.index_video(index)
+            print(
+                f"  ✅ {index.video_id}: {len(index.scenes)} scenes, {index.duration:.0f}s"
+            )
+            success += 1
+        except Exception as e:
+            print(f"  ❌ Error: {e}")
+
+    print(f"\n✅ Batch complete: {success}/{len(urls_or_paths)} succeeded")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Video Analysis Platform — analyze videos and chat about their content",
@@ -66,6 +120,10 @@ def main():
         "--cli", action="store_true", help="Run in CLI mode instead of UI"
     )
     parser.add_argument("--video", type=str, help="Video file to process")
+    parser.add_argument("--url", type=str, help="YouTube URL to download and process")
+    parser.add_argument(
+        "--batch", type=str, help="Path to file with URLs/paths (one per line)"
+    )
     parser.add_argument("--query", type=str, help="Question to ask about the video")
     parser.add_argument("--no-index", action="store_true", help="Skip RAG indexing")
     parser.add_argument("--host", type=str, default=None, help="UI host")
@@ -84,7 +142,11 @@ def main():
 
     setup_logging(args.verbose)
 
-    if args.cli or args.video:
+    if args.batch:
+        batch_mode(args)
+    elif args.url:
+        url_mode(args)
+    elif args.cli or args.video:
         if not args.video:
             parser.error("--video is required in CLI mode")
         cli_mode(args)

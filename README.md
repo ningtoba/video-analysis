@@ -1,14 +1,15 @@
 # 🎥 Video Analysis Platform
 
-**Self-hosted video analysis with an AI chatbot.** Upload any video, let the AI pipeline extract and analyze every detail (transcription, scene detection, object recognition, semantic description), then ask natural language questions about the content with precise timestamp citations.
+**Self-hosted video analysis with an AI chatbot.** Upload any video, paste a YouTube URL, or batch-process files — let the AI pipeline extract and analyze every detail (transcription, scene detection, object recognition, semantic description, OCR, speaker diarization), then ask natural language questions about the content with precise timestamp citations.
 
 ```
 ┌──────────────┐    ┌─────────────────────────┐    ┌─────────────────────┐
 │  Upload Video│───▶│  Analysis Pipeline       │───▶│  RAG Vector Index   │
 │  (drag-drop) │    │  FFmpeg → Whisper        │    │  ChromaDB + BGE     │
-│              │    │  → Scene Detect          │    │  + Cross-Encoder    │
-└──────────────┘    │  → YOLO → CLIP → Index  │    └─────────┬───────────┘
-                    │  → Sprite Sheet          │              │
+│  or YouTube  │    │  → Scene Detect          │    │  + Cross-Encoder    │
+│  URL Import  │    │  → YOLO → CLIP → Index  │    └─────────┬───────────┘
+└──────────────┘    │  → Sprite Sheet          │              │
+                    │  → OCR → Diarization     │              │
                     └─────────────────────────┘              │
 ┌──────────────┐    ┌─────────────────────┐                  │
 │  Ask Q&A     │◀───│  Context Retrieval   │◀─────────────────┘
@@ -20,15 +21,17 @@
 ## ✨ Features
 
 - **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR), object detection (YOLO), semantic scene description (OpenCLIP)
+- **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
+- **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
 - **🔍 RAG-Powered** — ChromaDB vector store + BGE embeddings + cross-encoder re-ranking for accurate retrieval
 - **✂️ Clip Export** — Export precise video clips at any timestamp range from the UI
 - **📚 Video Library** — Multi-video management with searchable library tab
-- **🖼️ Timeline Preview** — Sprite sheet generation for visual timeline browsing
-- **🎨 Polished UI** — Gradio 6 dark theme with tabs, responsive layout, real-time progress
+- **🖼️ Timeline Preview** — Sprite sheet generation for visual timeline browsing (hover to preview frames)
+- **🎨 Polished UI** — Gradio 6 dark theme with tabs (Analysis, Batch, Library), responsive layout, real-time progress
 - **⚡ GPU Accelerated** — RTX 4070 CUDA support for all models with sequential loading to manage 12GB VRAM
 - **🔒 100% Local** — No API keys, no cloud services, all processing on your hardware
-- **🖥️ CLI Mode** — Batch process videos and query from the terminal
+- **🖥️ CLI Mode** — Process videos, download from URLs, batch process, and query from the terminal
 
 ## 🚀 Quick Start
 
@@ -48,8 +51,8 @@ cd /home/nekophobia/Projects/video-analysis
 # Install dependencies
 pip install -r requirements.txt
 
-# Optional — for object detection
-pip install ultralytics
+# Optional — for object detection, OCR, diarization
+pip install ultralytics paddleocr pyannote.audio
 ```
 
 ### Launch the Web UI
@@ -65,6 +68,12 @@ Then open **http://localhost:7860** in your browser.
 ```bash
 # Process a video and ask a question
 python -m video_analysis --cli --video my_video.mp4 --query "What objects are visible?"
+
+# Download from YouTube and process
+python -m video_analysis --url "https://www.youtube.com/watch?v=..."
+
+# Batch process from a list file
+python -m video_analysis --batch urls.txt
 ```
 
 ## 🏗️ Architecture
@@ -103,12 +112,13 @@ User Question
 
 | Module | Path | Purpose |
 |--------|------|---------|
-| `pipeline` | `video_analysis/pipeline.py` | Video processing — scene detection, frame extraction, transcription, diarization, YOLO, OCR, CLIP, sprite sheets |
+| `pipeline` | `video_analysis/pipeline.py` | Video processing — scene detection, frame extraction, transcription, diarization, YOLO, OCR, CLIP, sprite sheets, YouTube/URL download |
 | `rag` | `video_analysis/rag.py` | ChromaDB indexing, hybrid retrieval, re-ranking, temporal expansion |
 | `chat` | `video_analysis/chat.py` | LLM Q&A with conversation history and source citations |
 | `models` | `video_analysis/models.py` | Data models — VideoIndex, SceneInfo, FrameInfo, ChatMessage |
 | `config` | `video_analysis/config.py` | Configuration with sensible defaults |
-| `ui/app` | `ui/app.py` | Gradio web interface with dark theme, tabs, library, clip export |
+| `ui/app` | `ui/app.py` | Gradio web interface with dark theme, tabs, library, clip export, batch queue, URL import |
+| `ui/utils` | `ui/utils.py` | Shared UI utility functions (importable without gradio) |
 
 ## 💻 Tech Stack
 
@@ -126,6 +136,7 @@ User Question
 | **Vector Store** | ChromaDB | Persistent, local, no server needed |
 | **Embeddings** | BAAI/bge-small-en-v1.5 | Strong retrieval, light weight |
 | **Re-ranker** | cross-encoder/ms-marco-MiniLM | Boosts precision to ~95%+ |
+| **Video Import** | yt-dlp | Downloads from YouTube, Vimeo, Twitch, and 1000+ sites |
 | **LLM** | DeepSeek-V4-Flash (via Hermes) | Fast, capable, local provider |
 | **GPU** | RTX 4070 (CUDA 13.3) | All models run with GPU acceleration |
 
@@ -141,6 +152,7 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model for RAG |
 | `OCR_ENABLED` | `true` | Enable PaddleOCR text extraction |
 | `DIARIZE_ENABLED` | `true` | Enable PyAnnote speaker diarization |
+| `YT_DLP_ENABLED` | `true` | Enable YouTube/URL video import |
 | `UI_HOST` | `0.0.0.0` | Web UI bind address |
 | `UI_PORT` | `7860` | Web UI port |
 
@@ -180,11 +192,13 @@ python tests/test_basic.py
 - [x] Speaker diarization (PyAnnote)
 - [x] OCR text extraction (PaddleOCR)
 - [x] Docker deployment
+- [x] YouTube URL import (yt-dlp)
+- [x] Batch video processing queue
 - [ ] Frame preview on timeline hover (CSS sprite sheet overlay)
-- [ ] Batch video processing
-- [ ] YouTube URL import
 - [ ] PySceneDetect for improved scene boundaries
 - [ ] OpenCLIP ViT-L-14 upgrade (richer scene descriptions)
+- [ ] ColBERTv2 late-interaction re-ranking
+- [ ] Action recognition (VideoMAE/TimeSformer)
 
 ## 📝 License
 

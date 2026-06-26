@@ -910,6 +910,68 @@ class VideoPipeline:
 
         gc.collect()
 
+    @staticmethod
+    def download_from_url(
+        url: str, output_dir: Optional[Path] = None
+    ) -> Optional[Path]:
+        """
+        Download a video from YouTube or other supported platforms using yt-dlp.
+
+        Args:
+            url: Video URL (YouTube, Vimeo, etc.)
+            output_dir: Directory to save the downloaded video. Defaults to config video_dir.
+
+        Returns:
+            Path to the downloaded video file, or None on failure.
+        """
+        try:
+            import yt_dlp
+        except ImportError:
+            logger.error("yt-dlp not installed. Install with: pip install yt-dlp")
+            return None
+
+        output_dir = output_dir or Path("data/videos")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        output_path = output_dir / "%(id)s.%(ext)s"
+        ydl_opts = {
+            "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            "outtmpl": str(output_path),
+            "quiet": True,
+            "no_warnings": True,
+            "merge_output_format": "mp4",
+            "postprocessors": [
+                {
+                    "key": "FFmpegVideoConvertor",
+                    "preferedformat": "mp4",
+                }
+            ],
+        }
+
+        try:
+            logger.info(f"Downloading video from URL: {url}")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                video_id = info.get("id", "unknown")
+                # The actual file path after download
+                downloaded = output_dir / f"{video_id}.mp4"
+                if downloaded.exists():
+                    logger.info(f"Downloaded: {downloaded}")
+                    return downloaded
+                # Fallback: try to find any video file in output dir
+                import glob
+
+                candidates = list(output_dir.glob(f"{video_id}.*"))
+                video_exts = {".mp4", ".mkv", ".webm", ".mov", ".avi"}
+                for c in candidates:
+                    if c.suffix.lower() in video_exts:
+                        logger.info(f"Downloaded: {c}")
+                        return c
+                return None
+        except Exception as e:
+            logger.error(f"Failed to download video: {e}")
+            return None
+
     def export_clip(
         self,
         video_path: str,

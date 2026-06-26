@@ -61,6 +61,14 @@ class Config:
     # Library
     library_max_videos: int = 50
 
+    # YouTube / URL import
+    yt_dlp_enabled: bool = True
+    yt_dlp_format: str = "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+    yt_dlp_output_template: str = "%(id)s.%(ext)s"
+
+    # Batch processing
+    batch_concurrent: int = 1  # process 1 video at a time (sequential queue)
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"

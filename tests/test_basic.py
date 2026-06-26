@@ -312,6 +312,68 @@ def test_rag_imports():
     shutil.rmtree("/tmp/va_test_rag", ignore_errors=True)
 
 
+def test_yt_dlp_import():
+    """Test that yt-dlp can be imported (optional dep)."""
+    try:
+        import yt_dlp
+
+        assert yt_dlp is not None
+    except ImportError:
+        pass  # optional dependency, not required
+
+
+def test_download_from_url_no_url():
+    """Test download_from_url handles missing yt-dlp gracefully."""
+    from video_analysis.pipeline import VideoPipeline
+
+    pipeline = VideoPipeline(Config(data_dir="/tmp/va_test_yt"))
+    result = pipeline.download_from_url("", Path("/tmp"))
+    # Should not crash — returns None
+    assert result is None
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_yt", ignore_errors=True)
+
+
+def test_parse_yt_url():
+    """Test URL pattern matching."""
+    from ui.utils import parse_yt_url
+
+    assert parse_yt_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ") is True
+    assert parse_yt_url("https://youtu.be/dQw4w9WgXcQ") is True
+    assert parse_yt_url("https://vimeo.com/123456789") is True
+    assert parse_yt_url("https://example.com/video.mp4") is False
+    assert parse_yt_url("") is False
+
+
+def test_batch_queue_html():
+    """Test queue HTML rendering."""
+    from ui.utils import queue_html
+
+    html = queue_html([])
+    assert "empty" in html.lower()
+
+    items = [
+        {"name": "test1.mp4", "status": "pending"},
+        {"name": "test2.mp4", "status": "done"},
+    ]
+    html = queue_html(items)
+    assert "test1.mp4" in html
+    assert "test2.mp4" in html
+
+
+def test_config_yt_dlp_fields():
+    """Test that yt-dlp config fields exist."""
+    cfg = Config(data_dir="/tmp/va_test_yt_config")
+    assert cfg.yt_dlp_enabled is True
+    assert "bestvideo" in cfg.yt_dlp_format
+    assert "%(id)s" in cfg.yt_dlp_output_template
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_yt_config", ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_scene_info()

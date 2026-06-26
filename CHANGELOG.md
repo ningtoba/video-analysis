@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.4.0 (2026-06-26)
+
+### 🎬 New Features
+
+- **🌐 YouTube URL Import**: Download and analyze videos directly from YouTube, Vimeo, and other platforms via yt-dlp integration. Paste any URL in the UI or use `--url` in CLI mode.
+- **📦 Batch Processing Queue**: New batch processing tab allows queuing multiple videos (by URL or file upload) for sequential analysis. Batch mode also available via `--batch urls.txt` in CLI.
+- **🗂️ UI Utils Module**: Extracted `parse_yt_url()` and `queue_html()` into `ui/utils.py` — importable without gradio dependency, enabling proper unit testing of UI logic.
+
+### 🔧 Improvements
+
+- **Timeline Hover Preview JS Fix**: Enhanced the JavaScript timeline preview with proper CSS positioning, multiple sprite URL fallback paths, and fixed floating-point hover card rendering. Preview now shows thumbnail + timestamp on timeline hover.
+- **CLI Enhancements**: Added `--url` flag for YouTube downloads, `--batch` flag for processing from a file list, and improved error handling.
+- **Config**: New `yt_dlp_enabled`, `yt_dlp_format`, `yt_dlp_output_template`, and `batch_concurrent` configuration fields.
+
+### 📦 Dependencies
+
+- **New**: `yt-dlp>=2024.0.0` — YouTube/URL video import and batch processing
+
+### 🏗️ Architecture
+
+```
+video-analysis/
+├── video_analysis/
+│   ├── __init__.py        # v0.4.0
+│   ├── config.py          # +yt_dlp_enabled, yt_dlp_format, batch_concurrent
+│   ├── pipeline.py        # +download_from_url() static method
+│   └── ...                # (models, rag, chat — unchanged)
+├── ui/
+│   ├── app.py             # +YouTube import, batch tab, enhanced timeline JS
+│   ├── utils.py           # NEW — importable utility functions
+│   └── ...
+├── tests/
+│   └── test_basic.py      # +5 tests: yt-dlp import, download fallback, URL parsing, queue HTML, config fields
+├── Dockerfile             # v0.4.0 label
+├── requirements.txt       # +yt-dlp
+├── pyproject.toml         # v0.4.0
+├── README.md              # Updated with new features
+└── CHANGELOG.md
+```
+
 ## 0.3.0 (2026-06-26)
 
 ### 🎬 New Features
@@ -21,66 +61,15 @@
 - **New optional**: `pyannote.audio>=3.1.0` — Speaker diarization
 - Both are optional with graceful fallbacks if not installed.
 
-### 🏗️ Architecture
-
-```
-video-analysis/
-├── video_analysis/
-│   ├── __init__.py        # v0.3.0
-│   ├── config.py          # +ocr_enabled, diarize_enabled, ocr_confidence
-│   ├── pipeline.py        # +_extract_ocr(), _diarize() methods
-│   └── ...                # (models, rag, chat — enhanced for diarization/OCR)
-├── ui/
-│   └── app.py             # Library tab wired, timeline JS fixed, JS bridge
-├── tests/
-│   └── test_basic.py      # +tests for OCR config and diarization config
-├── Dockerfile             # NEW — multi-stage CUDA Dockerfile
-├── docker-compose.yml     # NEW — GPU passthrough compose
-├── .dockerignore          # NEW
-├── requirements.txt       # +paddleocr, pyannote.audio (optional)
-├── pyproject.toml
-├── README.md              # Updated
-└── CHANGELOG.md
-```
-
 ## 0.2.0 (2026-06-26)
 
 ### 🎬 New Features
 
 - **Clip Export**: Export video clips at precise timestamps directly from the UI — select start/end times and export a trimmed MP4
 - **📚 Video Library**: Multi-video management with library tab, refresh, and video info display
-- **🖼️ Sprite Sheet Timeline Preview**: Automatic generation of 100-thumbnail sprite sheets for visual timeline browsing (pending UI integration)
+- **🖼️ Sprite Sheet Timeline Preview**: Automatic generation of 100-thumbnail sprite sheets for visual timeline browsing
 - **🧠 OpenCLIP Zero-shot Classification**: Rich semantic scene descriptions (indoor/outdoor, interview, lecture, etc.) using OpenCLIP ViT-B-32 embeddings on each key frame — improves RAG context quality
-- **🎛️ GPU Pipeline Management**: Sequential model loading/unloading to respect 12GB VRAM limits (Whisper → YOLO → CLIP models are loaded one at a time)
-
-### 🔧 Improvements
-
-- **Enhanced Data Models**: VideoIndex now tracks sprite sheet path and metadata; FrameInfo supports descriptions from CLIP classification
-- **Better Progress Tracking**: Pipeline now reports 9 steps instead of 7 (added frame description + sprite sheet generation)
-- **Expanded Test Suite**: 13 tests (up from 6) covering new models, config paths, and import sanity checks
-- **Refined UI**: Tabs for Analysis and Library, clip export controls, progress panel reliable visibility toggling
-
-### 🏗️ Architecture
-
-```
-video-analysis/
-├── video_analysis/
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── config.py         # +clip_export_dir, library_max_videos
-│   ├── models.py         # +sprite_sheet, sprite_metadata on VideoIndex
-│   ├── pipeline.py       # +sprite_sheet, export_clip, CLIP description
-│   ├── rag.py            # (unchanged)
-│   └── chat.py           # (unchanged)
-├── ui/
-│   └── app.py            # Tabs, clip export, library, enhanced progress
-├── tests/
-│   └── test_basic.py     # 13 tests
-├── requirements.txt      # +open-clip-torch, pillow
-├── pyproject.toml
-├── README.md
-└── CHANGELOG.md
-```
+- **🎛️ GPU Pipeline Management**: Sequential model loading/unloading to respect 12GB VRAM limits
 
 ## 0.1.0 (2026-06-26)
 
@@ -91,5 +80,5 @@ video-analysis/
 - **Chat interface**: Video Q&A with source citations (clickable timestamps), conversation history
 - **Web UI**: Gradio Blocks with dark theme, video upload, real-time analysis progress, streaming chat
 - **CLI mode**: Batch processing and Q&A from the terminal
-- **GPU acceleration**: Full CUDA support for RTX 4070 (faster-whisper, sentence-transformers, torch)
+- **GPU acceleration**: Full CUDA support for RTX 4070
 - **All local**: No API keys required — runs entirely on self-hosted hardware
