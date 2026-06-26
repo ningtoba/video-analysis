@@ -693,7 +693,17 @@ class VideoPipeline:
         return transcript_segments, " ".join(full_text_parts)
 
     def _detect_objects_on_frames(self, scenes: List[SceneInfo]):
-        """Run YOLO object detection on all key frames."""
+        """Run YOLO object detection on all key frames.
+
+        When ``config.entity_tracking_enabled`` is True, uses YOLO's built-in
+        ByteTrack/BoT-SORT tracker to assign persistent track IDs to detected
+        objects across consecutive frames. This enables entity-level indexing
+        and cross-scene / cross-video entity matching.
+
+        Track IDs are stored as ``track_id`` in each detection dict.
+        When tracking is disabled, each frame is processed independently
+        (original behavior).
+        """
         all_frames = []
         for scene in scenes:
             all_frames.extend(scene.key_frames)
@@ -721,31 +731,81 @@ class VideoPipeline:
                     logger.warning(f"Could not load any YOLO model: {e2}")
                     return
 
-        # Process frames in batches
-        for frame in all_frames:
-            try:
-                results = self._yolo_model(
-                    frame.filepath,
-                    conf=self.config.yolo_confidence,
-                    verbose=False,
-                )
-                detections = []
-                for r in results:
-                    for box in r.boxes:
-                        cls_id = int(box.cls[0])
-                        conf = float(box.conf[0])
-                        label = r.names[cls_id] if r.names else str(cls_id)
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        detections.append(
-                            {
-                                "label": label,
-                                "confidence": round(conf, 3),
-                                "bbox": [round(x, 1) for x in [x1, y1, x2, y2]],
-                            }
-                        )
-                frame.objects = detections
-            except Exception as e:
-                logger.warning(f"Detection error on {frame.filepath}: {e}")
+        tracking_enabled = self.config.entity_tracking_enabled
+
+        if tracking_enabled:
+            # Use YOLO's built-in tracking (ByteTrack by default)
+            # Track across all frames in temporal order for persistent IDs
+            logger.info(
+                f"Entity tracking enabled (tracker: {self.config.entity_tracker_type})"
+            )
+            # Build a temporal frame list: sort all frames across all scenes by timestamp
+            temporal_frames = sorted(all_frames, key=lambda f: f.timestamp)
+            # We need to run track() on each frame sequentially so ByteTrack
+            # maintains its kalman filter state across frames.
+            # Use persist=True so track IDs carry across frame-to-frame calls.
+            # We group by scene and process scenes in order so track() state
+            # persists within-but-not-across scenes (objects don't survive cuts).
+            # Actually, objects CAN survive cuts (e.g. person on both sides),
+            # so process all frames in single temporal order.
+            for frame in temporal_frames:
+                try:
+                    results = self._yolo_model.track(
+                        frame.filepath,
+                        conf=self.config.yolo_confidence,
+                        tracker=self.config.entity_tracker_type,
+                        persist=True,
+                        verbose=False,
+                    )
+                    detections = []
+                    for r in results:
+                        if r.boxes is None or r.boxes.id is None:
+                            continue
+                        for i in range(len(r.boxes)):
+                            cls_id = int(r.boxes.cls[i])
+                            conf = float(r.boxes.conf[i])
+                            track_id = int(r.boxes.id[i])
+                            label = r.names[cls_id] if r.names else str(cls_id)
+                            x1, y1, x2, y2 = r.boxes.xyxy[i].tolist()
+                            detections.append(
+                                {
+                                    "label": label,
+                                    "confidence": round(conf, 3),
+                                    "bbox": [round(x, 1) for x in [x1, y1, x2, y2]],
+                                    "track_id": track_id,
+                                }
+                            )
+                    frame.objects = detections
+                except Exception as e:
+                    logger.warning(
+                        f"Tracking error on {frame.filepath} (t={frame.timestamp:.1f}s): {e}"
+                    )
+        else:
+            # Original per-frame detection without tracking
+            for frame in all_frames:
+                try:
+                    results = self._yolo_model(
+                        frame.filepath,
+                        conf=self.config.yolo_confidence,
+                        verbose=False,
+                    )
+                    detections = []
+                    for r in results:
+                        for box in r.boxes:
+                            cls_id = int(box.cls[0])
+                            conf = float(box.conf[0])
+                            label = r.names[cls_id] if r.names else str(cls_id)
+                            x1, y1, x2, y2 = box.xyxy[0].tolist()
+                            detections.append(
+                                {
+                                    "label": label,
+                                    "confidence": round(conf, 3),
+                                    "bbox": [round(x, 1) for x in [x1, y1, x2, y2]],
+                                }
+                            )
+                    frame.objects = detections
+                except Exception as e:
+                    logger.warning(f"Detection error on {frame.filepath}: {e}")
 
     def _describe_scenes_clip(
         self, scenes: List[SceneInfo], labels: Optional[List[str]] = None

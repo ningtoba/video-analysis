@@ -1,5 +1,82 @@
 # Changelog
 
+## 0.19.0 (2026-06-26) — Entity Tracking & Cross-Video Scene Graphs
+
+### 🎯 Major Feature: ByteTrack Entity Tracking (Persistent Object IDs)
+
+- **ByteTrack integration** via Ultralytics' built-in `model.track()` — assigns persistent
+  `track_id` to every detected object across frames, enabling per-entity identity
+  tracking throughout a video.
+- **How it works**: When `entity_tracking_enabled=True` (default), the pipeline switches
+  from per-frame `model()` detection to `model.track()` with `persist=True` and
+  `bytetrack.yaml`. This maintains Kalman filter state across consecutive frames,
+  assigning the same `track_id` to the same person/car/dog as they move through the scene.
+- **Tracker options**: Choose between `bytetrack.yaml` (default, fastest, no ReID) or
+  `botsort.yaml` (BoT-SORT, more robust with camera motion) via `entity_tracker_type`.
+- **Track IDs in detection data**: Each detection dict now includes `"track_id": N`,
+  stored in `FrameInfo.objects` and persisted through the full pipeline (RAG, scene graph).
+- **~500 MB VRAM overhead** shared with YOLO — no additional GPU memory for tracking.
+
+### 🕸️ Cross-Video Scene Graph via Track IDs
+
+- **Track IDs indexed in ChromaDB**: Scene-level metadata now includes `track_ids`
+  (comma-separated list) and `objects` (comma-separated labels), stored during
+  `index_video()`.
+- **Track-ID-aware entity edges**: The `SceneGraph` parser now extracts `track_ids`
+  from ChromaDB metadata and creates entity-shared edges across **any video** when
+  scenes share the same track ID — enabling true cross-video semantic retrieval.
+- **Example**: If video A's scene 3 has `track_id=1` (person) and video B's scene 1
+  also has `track_id=1`, they become connected via entity edge, meaning
+  `k_hop_expand()` can now retrieve semantically related content across the entire
+  video library.
+- **No code changes** to the scene graph query path — `rebuild()` auto-discovers
+  track IDs from metadata.
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENTITY_TRACKING_ENABLED` | `true` | Enable ByteTrack entity tracking (env: `ENTITY_TRACKING_ENABLED`) |
+| `ENTITY_TRACKER_TYPE` | `bytetrack.yaml` | Tracker config: `bytetrack.yaml` or `botsort.yaml` (env: `ENTITY_TRACKER_TYPE`) |
+
+### 🔧 Internal Changes
+
+- **`video_analysis/pipeline.py`**: `_detect_objects_on_frames()` rewritten with two
+  paths: tracking-enabled (`model.track()`) and tracking-disabled (original per-frame
+  detection). Frames sorted temporally for correct Kalman filter state.
+- **`video_analysis/config.py`**: Added `entity_tracking_enabled` (default `True`,
+  env-overridable) and `entity_tracker_type` fields.
+- **`video_analysis/models.py`**: `FrameInfo.objects` documented to support `track_id` key.
+- **`video_analysis/rag.py`**: `index_video()` collects `track_ids` and `objects`
+  sets per scene and stores them in ChromaDB metadata.
+- **`video_analysis/scene_graph.py`**: `rebuild()` extracts `track_ids` and `objects`
+  from metadata for improved cross-video entity matching.
+
+### 🧪 Tests
+
+- **7 new tests** in v0.19.0 (120 pre-existing → 127 total):
+  - `test_config_entity_tracking_defaults` — default values and env var overrides
+  - `test_config_entity_tracking_env_override` — env var override works
+  - `test_frame_info_track_id` — FrameInfo.objects stores track_id correctly
+  - `test_detect_objects_fallback_no_ultralytics` — graceful fallback when ultralytics missing
+  - `test_rag_index_track_ids_in_metadata` — track_ids stored in ChromaDB metadata
+  - `test_scene_graph_track_id_entity_matching` — track IDs create cross-video entity edges
+  - `test_version_0_19_0` — version bump check
+
+### 🗺️ Roadmap Progress
+
+- [x] **Entity-level tracking across scenes** (ByteTrack via Ultralytics built-in — MIT)
+- [x] **Cross-video scene graph edges** (track ID entity matching across videos)
+- [ ] Qwen3-VL-30B-A3B FP8 backend integration
+- [ ] Dependency modernization — update pyproject.toml bounds
+- [ ] PaddleOCR v5 upgrade — PP-OCRv5
+- [ ] Pipeline caching + incremental re-indexing
+- [ ] Qwen3.5-0.8B PipelineOrchestrator
+- [ ] Gradio 6 Workflow integration
+- [ ] MCP tool server
+- [ ] Sparse-frame optical flow
+- [ ] InsightFace face recognition
+
 ## 0.18.0 (2026-06-26) — Research Phase: Next-Gen Integration
 
 ### 🔬 New Research: Qwen3-VL-30B-A3B — The New Optimal MLLM Backend

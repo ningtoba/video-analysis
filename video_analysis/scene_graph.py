@@ -146,6 +146,30 @@ class SceneGraph:
                             obj = obj.strip().lower()
                             if obj:
                                 entities.add(f"obj:{obj}")
+            # Also extract objects from metadata's objects field (new in v0.19.0+)
+            meta_objects = meta.get("objects", "")
+            if meta_objects:
+                if isinstance(meta_objects, str):
+                    obj_list = meta_objects.split(",")
+                elif isinstance(meta_objects, list):
+                    obj_list = meta_objects
+                else:
+                    obj_list = []
+                for obj_str in obj_list:
+                    obj_name = obj_str.strip().lower()
+                    if obj_name:
+                        entities.add(f"obj:{obj_name}")
+            # Extract track IDs from metadata for cross-scene entity matching
+            track_ids_raw = meta.get("track_ids", "")
+            if track_ids_raw:
+                if isinstance(track_ids_raw, str):
+                    for tid in track_ids_raw.split(","):
+                        tid = tid.strip()
+                        if tid:
+                            entities.add(f"track:{tid}")
+                elif isinstance(track_ids_raw, (list, tuple)):
+                    for tid in track_ids_raw:
+                        entities.add(f"track:{str(tid)}")
             if "[Action at" in doc_text:
                 for line in doc_text.split("\n"):
                     if line.startswith("[Action at") and ":" in line:

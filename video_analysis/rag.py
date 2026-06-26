@@ -8,7 +8,7 @@ hybrid retrieval with re-ranking for accurate video Q&A.
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 from dataclasses import dataclass
 
 import numpy as np
@@ -406,6 +406,7 @@ class VideoRAG:
 
             # Frame descriptions and objects
             frame_objects = set()
+            scene_track_ids: Set[int] = set()
             for frame in scene.key_frames:
                 if frame.description:
                     parts.append(
@@ -413,6 +414,9 @@ class VideoRAG:
                     )
                 for obj in frame.objects:
                     frame_objects.add(obj["label"])
+                    tid = obj.get("track_id")
+                    if tid is not None:
+                        scene_track_ids.add(int(tid))
                 if frame.ocr_text and frame.ocr_text.strip():
                     parts.append(
                         f"[Text in frame at {format_timestamp(frame.timestamp)}]: {frame.ocr_text}"
@@ -436,16 +440,19 @@ class VideoRAG:
 
             chunk_id = f"{video_index.video_id}_scene_{scene.scene_id:04d}"
             chunks.append(scene_text)
-            metadatas.append(
-                {
-                    "video_id": video_index.video_id,
-                    "filename": video_index.filename,
-                    "scene_id": scene.scene_id,
-                    "start_time": scene.start_time,
-                    "end_time": scene.end_time,
-                    "chunk_type": "scene",
-                }
-            )
+            meta: dict = {
+                "video_id": video_index.video_id,
+                "filename": video_index.filename,
+                "scene_id": scene.scene_id,
+                "start_time": scene.start_time,
+                "end_time": scene.end_time,
+                "chunk_type": "scene",
+            }
+            # Include track IDs for scene-graph entity matching
+            if scene_track_ids:
+                meta["objects"] = ",".join(sorted(frame_objects))
+                meta["track_ids"] = ",".join(str(t) for t in sorted(scene_track_ids))
+            metadatas.append(meta)
             ids.append(chunk_id)
 
             # --- Frame chunks (per-frame granularity) ---

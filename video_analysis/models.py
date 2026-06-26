@@ -17,6 +17,9 @@ class FrameInfo:
     scene_id: Optional[int] = None
     description: Optional[str] = None
     objects: List[dict] = field(default_factory=list)
+    # Each object dict can now include:
+    #   {"label": "person", "confidence": 0.95, "bbox": [...],
+    #    "track_id": 1}  # ByteTrack persistent ID across frames (optional)
     ocr_text: Optional[str] = None
     action: Optional[str] = None  # X-CLIP action recognition label
     action_confidence: Optional[float] = None  # confidence score for the action

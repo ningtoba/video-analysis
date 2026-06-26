@@ -44,6 +44,14 @@ class Config:
     yolo_model: str = "yolo26x.pt"  # Latest YOLO26
     yolo_confidence: float = 0.25
 
+    # Entity tracking (ByteTrack via Ultralytics built-in — MIT)
+    entity_tracking_enabled: bool = (
+        True  # overridden by ENTITY_TRACKING_ENABLED env var
+    )
+    entity_tracker_type: str = (
+        "bytetrack.yaml"  # overridden by ENTITY_TRACKER_TYPE env var  # "bytetrack.yaml" or "botsort.yaml"
+    )
+
     # RAG — Embedding
     # BGE-VL-base as the primary embedding model (MIT, ~0.8 GB VRAM).
     # Replaces the dual-model approach (SentenceTransformer + Qwen3-VL).
@@ -183,6 +191,14 @@ class Config:
         size_env = os.environ.get("VIDEO_MLLM_MODEL_SIZE", "").upper()
         if size_env in ("2.2B", "500M", "256M"):
             self.video_mllm_model_size = size_env
+        # Override entity_tracking_enabled from env var
+        entity_env = os.environ.get("ENTITY_TRACKING_ENABLED", "").lower()
+        if entity_env in ("false", "0", "no"):
+            self.entity_tracking_enabled = False
+        # Override entity_tracker_type from env var
+        tracker_env = os.environ.get("ENTITY_TRACKER_TYPE", "").lower()
+        if tracker_env in ("bytetrack.yaml", "botsort.yaml"):
+            self.entity_tracker_type = tracker_env
         for d in [
             self.data_dir,
             self.video_dir,
