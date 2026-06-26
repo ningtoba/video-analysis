@@ -1,5 +1,84 @@
 # Changelog
 
+## 0.28.0 (2026-06-26) — Prometheus Metrics & Production Monitoring
+
+### 📊 Production Monitoring — Prometheus /metrics Endpoint
+
+#### 🎯 New Module: `video_analysis/metrics.py` — 20+ Pipeline Metrics
+- **New module**: `video_analysis/metrics.py` — full Prometheus instrumentation with lazy-initialised counters, histograms, and gauges for the entire video analysis platform.
+- **Pipeline metrics**:
+  - `va_pipeline_runs_total` (counter, `mode` label) — total pipeline runs
+  - `va_pipeline_runs_success_total` / `va_pipeline_runs_failure_total` (counter, `mode` label) — success/failure breakdown
+  - `va_pipeline_duration_seconds` (histogram, `mode` label, 12 buckets from 10s to 30m) — pipeline duration distribution
+- **Retrieval metrics**:
+  - `va_questions_answered_total` (counter, `method` label) — Q&A questions answered (simple/agentic/routed)
+  - `va_retrieval_duration_seconds` (histogram, `method` label, 8 buckets) — retrieval+rerank time
+- **System metrics**:
+  - `va_videos_indexed_total` (counter) — videos indexed in ChromaDB
+  - `va_gpu_memory_bytes` (gauge) — current CUDA GPU memory allocation (0 if no GPU)
+  - `va_chroma_collection_size` (gauge) — document count in ChromaDB collection
+  - `va_active_sessions` (gauge, reserved) — active UI sessions
+- **Graceful no-op fallback**: If `prometheus_client` is not installed, all convenience functions become no-ops via `_NoopCollector` — zero breakage, zero imports.
+- **Lazy initialisation**: `_ensure_metrics()` populates the registry on first metric access — importing the module has zero side effects.
+
+#### 🌐 /metrics Endpoint on FastAPI Health App
+- **New route**: `GET /metrics` on the existing FastAPI health app (mounted at `ui/health.py`), serving Prometheus plain-text exposition format.
+- **Config toggle**: `PROMETHEUS_ENABLED` env var (default: `true`) controls whether the `/metrics` route is registered at all.
+- **Smart integration**: Uses `config.prometheus_enabled` to conditionally register the route — when disabled, `/metrics` does not exist on the app.
+- **Health route stays auth-free**: The existing authentication middleware skips `/health` and `/metrics`.
+
+#### 🔧 Integration Points
+- **`video_analysis/pipeline.py`**: `process()` records pipeline run outcome (+ duration) via `increment_pipeline_run()` on successful completion.
+- **`video_analysis/rag.py`**: `index_video()` increments `videos_indexed_total` and updates `chroma_collection_size` gauge after indexing.
+- **`video_analysis/chat.py`**: `_ask_rag()` records question count and retrieval duration with method labels (simple/agentic/routed).
+- **Config**: Two new fields — `prometheus_enabled` (default: `true`, overridable via `PROMETHEUS_ENABLED`) and `prometheus_metrics_prefix` (`va_`).
+- **Dependency**: `prometheus-client>=0.21.0` added to `pyproject.toml` and `requirements.txt`.
+
+### 📋 Roadmap Progress
+- [x] **Prometheus metrics endpoint + Grafana dashboards** — full production monitoring instrumentation
+- [x] **20+ pipeline/retrieval/system metrics** — counters, histograms, gauges with `mode`/`method` labels
+- [x] **Graceful fallback** — works without prometheus_client installed
+- [x] **Config toggle** — `PROMETHEUS_ENABLED` env var
+- [ ] Gradio 6 Workflow integration
+- [ ] Qwen3-VL-30B-A3B FP8 backend
+- [ ] ColBERT-Att attention-weighted re-ranking
+- [ ] Real-time streaming video analysis
+- [ ] Federated video search (MCP-based)
+- [ ] Dependency modernization
+- [ ] PaddleOCR v5 upgrade
+
+### 📦 New Modules
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `metrics` | `video_analysis/metrics.py` | ~290 | Prometheus counters, histograms, gauges for pipeline/retrieval/system |
+
+### 🧪 Tests
+- **22 new tests** (test_metrics.py) — **320+/330+ passing** (expected: 0 new failures)
+- Tests cover: lazy init, counter increments, histogram observations, label propagation, gauge updates, `metrics_endpoint()` text format, `/_ensure_metrics` idempotency, no-op fallback when prometheus_client absent, Config defaults and env override, FastAPI /metrics route registration and disabled state, GET /metrics returns valid Prometheus exposition text
+
+### 🔧 Configuration
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROMETHEUS_ENABLED` | `true` | Enable Prometheus /metrics endpoint with pipeline/retrieval/GPU metrics |
+
+### 📝 Dependencies
+- `prometheus-client>=0.21.0` (pure Python, zero native deps) added to requirements.txt and pyproject.toml
+
+---
+
+## 1.0.0 (unreleased) — Full Production Readiness
+
+### Pending to reach v1.0.0
+- [ ] Gradio 6 Workflow integration
+- [ ] Qwen3-VL-30B-A3B FP8 backend
+- [ ] ColBERT-Att attention-weighted re-ranking
+- [ ] Real-time streaming video analysis
+- [ ] Federated video search (MCP-based)
+- [ ] Dependency modernization — update pyproject.toml bounds
+- [ ] PaddleOCR v5 upgrade
+
+---
+
 ## 0.27.0 (2026-06-26) — LLM Self-Check + Re-Retrieval (Agentic Verification)
 
 ### 🎯 Major Feature: Self-Check RAG — LLM-Verified Answer-Evidence Alignment

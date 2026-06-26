@@ -217,6 +217,10 @@ class Config:
     # Gradio Workflow (v0.26.0)
     workflow_enabled: bool = True  # enable Gradio Workflow visual pipeline builder UI
 
+    # Prometheus Metrics (v0.28.0)
+    prometheus_enabled: bool = True  # overridden by PROMETHEUS_ENABLED env var
+    prometheus_metrics_prefix: str = "va_"  # prefix for all metric names
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -287,6 +291,10 @@ class Config:
         workflow_env = os.environ.get("WORKFLOW_ENABLED", "").lower()
         if workflow_env in ("false", "0", "no"):
             self.workflow_enabled = False
+        # Override prometheus_enabled from env var
+        prom_env = os.environ.get("PROMETHEUS_ENABLED", "").lower()
+        if prom_env in ("false", "0", "no"):
+            self.prometheus_enabled = False
         for d in [
             self.data_dir,
             self.video_dir,

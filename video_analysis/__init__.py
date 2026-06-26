@@ -25,4 +25,4 @@ from video_analysis import (
 
 # face module is optional (requires insightface) — import on demand only
 
-__version__ = "0.27.0"
+__version__ = "0.28.0"

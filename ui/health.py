@@ -127,7 +127,7 @@ def _check_models() -> dict:
     return models
 
 
-def _setup_routes(app: FastAPI) -> None:
+def _setup_routes(app: FastAPI, config: Optional[Config] = None) -> None:
     """Register all routes on the FastAPI app."""
 
     @app.get("/health", response_model=HealthResponse)
@@ -201,6 +201,21 @@ def _setup_routes(app: FastAPI) -> None:
             has_sprite=info.has_sprite,
         )
 
+    # Prometheus /metrics endpoint (v0.28.0)
+    metrics_enabled = config is not None and config.prometheus_enabled
+
+    if metrics_enabled:
+
+        @app.get("/metrics")
+        async def metrics():
+            from video_analysis.metrics import metrics_endpoint
+
+            content = metrics_endpoint()
+            return Response(
+                content=content,
+                media_type="text/plain; charset=utf-8",
+            )
+
 
 def _setup_auth_middleware(app: FastAPI, config: Config) -> None:
     """Add HTTP Basic Auth middleware to the FastAPI app if configured.
@@ -264,7 +279,7 @@ def create_health_app(config: Config) -> FastAPI:
         description="REST API for the self-hosted video analysis platform",
     )
 
-    _setup_routes(app)
+    _setup_routes(app, config)
 
     # Apply auth middleware if configured
     _setup_auth_middleware(app, config)

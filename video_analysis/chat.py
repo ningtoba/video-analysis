@@ -133,18 +133,39 @@ class VideoChat:
         return message
 
     def _ask_rag(self, query: str, video_id: Optional[str] = None) -> ChatMessage:
+        import time as _time
+
+        _start = _time.perf_counter()
         # Retrieve relevant context — use agentic retrieval if enabled,
         # otherwise use routed retrieval (or standard retrieval)
         if self.config.agentic_retrieval_enabled:
             chunks = self.rag.agentic_retrieve(query, video_id=video_id)
+            _method = "agentic"
         elif (
             self.config.query_routing_enabled
             or self.config.scene_graph_enabled
             or self.config.multi_hop_enabled
         ):
             chunks = self.rag.routed_retrieve(query, video_id=video_id)
+            _method = "routed"
         else:
             chunks = self.rag.retrieve(query, video_id=video_id)
+            _method = "simple"
+
+        _retrieval_dur = _time.perf_counter() - _start
+
+        # Record retrieval metrics
+        try:
+            from video_analysis.metrics import increment_question, observe_retrieval
+
+            increment_question(method=_method)
+            observe_retrieval(
+                chunks=len(chunks) if chunks else 0,
+                method=_method,
+                duration_s=_retrieval_dur,
+            )
+        except Exception:
+            pass
 
         if not chunks:
             return ChatMessage(

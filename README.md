@@ -203,7 +203,8 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `STRUCTURED_LOGGING_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `FACE_RECOGNITION_ENABLED` | `false` | Enable InsightFace face detection & recognition (requires insightface + onnxruntime-gpu) |
 | `FACE_DETECTION_MODEL` | `buffalo_l` | InsightFace model pack for detection/recognition |
-| `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold for face identity matching |
+|| `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold for face identity matching |
+|| `PROMETHEUS_ENABLED` | `true` | Enable Prometheus /metrics endpoint with pipeline/retrieval/GPU metrics |
 
 ## 🧪 Running Tests
 
@@ -304,13 +305,12 @@ python tests/test_basic.py
 ||- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy (backward compatible, no code change needed)
 |- [x] InsightFace face recognition (SCRFD-10G + ArcFace, cross-video person identity)
 |- [x] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
+|- [x] **Prometheus metrics endpoint + Grafana dashboards** — 20+ counters/histograms/gauges for pipeline runs, retrieval, GPU memory, ChromaDB size, and question answering; graceful fallback when prometheus_client absent; config toggle via `PROMETHEUS_ENABLED`
 |- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
-||- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
+|||- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 |- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)
 |- [ ] Federated video search (MCP-based cross-instance query)
-|- [ ] Prometheus metrics endpoint + Grafana dashboards
 |
-
-## 📝 License
+|
 
 MIT

@@ -224,6 +224,9 @@ class VideoPipeline:
         11. Generate sprite sheet timeline preview
         12. Build VideoIndex
         """
+        import time as _time
+
+        _process_start = _time.perf_counter()
         video_path = Path(video_path)
         video_id = video_path.stem
         logger.info(f"Processing video: {video_path.name}")
@@ -397,6 +400,20 @@ class VideoPipeline:
             sprite_sheet=str(sprite_path) if sprite_path else None,
             sprite_metadata=sprite_meta or {},
         )
+
+        # Record metrics
+        try:
+            from video_analysis.metrics import increment_pipeline_run
+
+            _process_dur = _time.perf_counter() - _process_start
+            increment_pipeline_run(
+                mode=self.config.processing_mode,
+                success=True,
+                duration_s=_process_dur,
+            )
+        except Exception:
+            pass
+
         return index
 
     def _get_duration(self, video_path: Path) -> float:

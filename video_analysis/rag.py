@@ -647,6 +647,21 @@ class VideoRAG:
 
         logger.info(f"Indexed {len(chunks)} chunks for {video_index.video_id}")
 
+        # Record metrics
+        try:
+            from video_analysis.metrics import (
+                videos_indexed_total,
+                update_chroma_collection_size,
+            )
+
+            videos_indexed_total.inc()
+            try:
+                update_chroma_collection_size(self.collection.count())
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     def retrieve(
         self,
         query: str,
