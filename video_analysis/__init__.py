@@ -31,6 +31,7 @@ from video_analysis import (
     federation,
     llm_provider,
     stream_chat,
+    curator,
 )
 
 # face module is optional (requires insightface) — import on demand only
@@ -41,7 +42,7 @@ from video_analysis import (
 
 # api and stream_chat modules are imported on demand
 
-__version__ = "0.44.0"
+__version__ = "0.45.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

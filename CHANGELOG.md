@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.45.0 (2026-06-27) — Autonomous Video Curator: MCR Closed-Loop Exploration
+
+### 🧠 Autonomous Video Curator (`video_analysis/curator.py`)
+
+A brand-new **closed-loop video exploration agent** inspired by InternVideo3's
+Multimodal Contextual Reasoning (MCR, arXiv:2606.12195, Jun 2026) and HKUDS
+VideoAgent's all-in-one agentic framework.
+
+Whereas the existing `VideoUnderstandingAgent` is **reactive** (answers questions
+about already-processed videos), the `VideoCurator` is **proactive** — it
+initiates its own exploration of video content, maintains a structured knowledge
+base of findings, decides what to explore next based on curiosity, and produces
+comprehensive autonomous reports.
+
+**Architecture (Observation → Analysis → Memory → Reasoning → Action loop):**
+
+- **`VideoCurator`** — orchestrates the closed-loop MCR cycle:
+  1. **OBSERVE** — samples frames across the timeline, queries RAG, extracts transcript
+  2. **ANALYZE** — uses Video MLLM + available tools to interpret observations
+  3. **MEMORIZE** — stores findings in `CuratorKnowledge` (shared evolving context with entities, observations, knowledge gaps)
+  4. **REASON** — `CuriosityStrategy` decides what to explore next based on coverage gaps, unanswered questions, and saturation
+  5. **ACT** — invokes the right tool (analyze_frames, search_rag, detect_objects, etc.)
+  6. **REPEAT** — configurable max iterations with early-stop saturation detection
+
+- **`CuratorKnowledge`** — the shared evolving context across MCR iterations:
+  - `CuratorObservation` — individual timestamped analysis findings
+  - `CuratorEntity` — persistent entity tracking across observations (people, objects, locations)
+  - Knowledge gaps, exploration/answered question tracking
+  - Full exploration timeline
+
+- **`CuriosityStrategy`** — heuristic-driven next-action selection:
+  - 6 strategy rules: broad sweep → unanswered questions → temporal coverage → knowledge gaps → deep focus → generate questions
+  - Configurable curiosity threshold (0.0-1.0) controls exploration aggressiveness
+  - Saturation detection stops early when no new knowledge being added
+
+- **`VideoCuratorReport`** — comprehensive curated output:
+  - Auto-generated overview with statistics
+  - Entity discovery sections (people, objects, locations)
+  - Timeline of key moments
+  - Complete exploration trajectory
+  - Markdown and JSON output formats
+  - Persistent knowledge state (save/load for cross-session curation)
+
+### 🔧 Config & CLI
+
+- `CURATOR_ENABLED` (env var, default: `false`) — enable autonomous curator
+- `CURATOR_CURIOSITY` (env var, default: `0.5`) — exploration aggressiveness
+- `CURATOR_MAX_ITERATIONS` (env var, default: `15`) — max MCR loop iterations
+- `CURATOR_OUTPUT_DIR` (env var) — output directory for reports
+
+### 📦 Module
+
+- `video_analysis.curator` — importable via `from video_analysis.curator import VideoCurator`
+- `run_curation()` — convenience entrypoint for CLI/TUI use
+- Knowledge state persistence: `_save_knowledge_state()` / `load_knowledge_state()`
+- Research document: `docs/research/v0.45.0-autonomous-video-curator-mcr.md`
+
+### 🧪 Test Coverage
+
+- **40 new tests** covering all data types, curiosity strategy, report generation, knowledge persistence, and graceful degradation
+- 631 total tests passing (0 failures)
+
 ## 0.44.0 (2026-06-27) — Pipeline Evaluation Harness & Grafana Dashboard
 
 ### 🧪 Pipeline Evaluation Harness (`video_analysis/evaluation.py`)

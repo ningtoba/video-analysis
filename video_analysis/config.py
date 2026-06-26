@@ -292,6 +292,12 @@ class Config:
     # Camera Tab (v0.41.0 — webcam/live camera capture & analysis)
     camera_enabled: bool = False  # overridden by CAMERA_ENABLED env var
 
+    # Autonomous Video Curator (v0.45.0 — closed-loop MCR exploration agent)
+    curator_enabled: bool = False  # overridden by CURATOR_ENABLED env var
+    curator_curiosity: float = 0.5  # overridden by CURATOR_CURIOSITY env var (0.0-1.0)
+    curator_max_iterations: int = 15  # overridden by CURATOR_MAX_ITERATIONS env var
+    curator_output_dir: str = ""  # overridden by CURATOR_OUTPUT_DIR env var
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -442,6 +448,29 @@ class Config:
         camera_env = os.environ.get("CAMERA_ENABLED", "").lower()
         if camera_env in ("true", "1", "yes"):
             self.camera_enabled = True
+        # Override curator config from env vars (v0.45.0)
+        curator_env = os.environ.get("CURATOR_ENABLED", "").lower()
+        if curator_env in ("true", "1", "yes"):
+            self.curator_enabled = True
+        curiosity_env = os.environ.get("CURATOR_CURIOSITY", "")
+        if curiosity_env:
+            try:
+                val = float(curiosity_env)
+                if 0.0 <= val <= 1.0:
+                    self.curator_curiosity = val
+            except ValueError:
+                pass
+        max_iter_env = os.environ.get("CURATOR_MAX_ITERATIONS", "")
+        if max_iter_env:
+            try:
+                val = int(max_iter_env)
+                if val > 0:
+                    self.curator_max_iterations = val
+            except ValueError:
+                pass
+        out_dir_env = os.environ.get("CURATOR_OUTPUT_DIR", "")
+        if out_dir_env:
+            self.curator_output_dir = out_dir_env
         # Override live stream config from env vars (v0.40.0)
         ls_env = os.environ.get("LIVE_STREAM_ENABLED", "").lower()
         if ls_env in ("true", "1", "yes"):

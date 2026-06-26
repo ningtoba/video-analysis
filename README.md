@@ -41,8 +41,9 @@
 - **🎨 Polished UI** — Gradio 6 dark theme with tabs (Analysis, Batch, Library), responsive layout, real-time progress
 - **⚡ GPU Accelerated** — RTX 4070 CUDA support for all models with sequential loading to manage 12GB VRAM
 - **🔒 100% Local** — No API keys, no cloud services, all processing on your hardware
-- **🧑‍🤝‍🧑 Face Recognition** — InsightFace (SCRFD-10G + ArcFace W50) for face detection, 512-d embeddings, and cross-video person identity matching (optional, ~1.1 GB VRAM)
-- **🖥️ CLI Mode** — Process videos, download from URLs, batch process, and query from the terminal
+|- **🧑‍🤝‍🧑 Face Recognition** — InsightFace (SCRFD-10G + ArcFace W50) for face detection, 512-d embeddings, and cross-video person identity matching (optional, ~1.1 GB VRAM)
+|- **🕵️ Autonomous Video Curator** (v0.45.0) — closed-loop MCR video exploration agent that proactively watches videos, discovers entities/objects/scenes, builds structured knowledge, and generates comprehensive curation reports without being asked specific questions; inspired by InternVideo3's Multimodal Contextual Reasoning and HKUDS VideoAgent
+|- **🖥️ CLI Mode** — Process videos, download from URLs, batch process, and query from the terminal
 
 ## 🚀 Quick Start
 
@@ -160,7 +161,8 @@ User Question
 | `agent` | `video_analysis/agent.py` | Agentic Video Understanding Agent — multi-tool video analysis agent |
 | `chapters` | `video_analysis/chapters.py` | Video content chaptering — topic segmentation & LLM chapter title generation |
 | `evaluation` | `video_analysis/evaluation.py` | Pipeline evaluation harness — benchmark-driven quality regression detection (v0.44.0) |
-| `job_queue` | `video_analysis/job_queue.py` | In-process async job queue — background video processing with status polling |
+|| `job_queue` | `video_analysis/job_queue.py` | In-process async job queue — background video processing with status polling |
+|| `curator` | `video_analysis/curator.py` | Autonomous Video Curator — closed-loop MCR exploration agent (v0.45.0) |
 
 ## 💻 Tech Stack
 
@@ -261,8 +263,12 @@ Set via environment variables or edit `video_analysis/config.py`:
 ||| `LIVE_STREAM_AUTO_RECONNECT` | `true` | Auto-reconnect on stream loss |
 ||| `LIVE_STREAM_MAX_RETRIES` | `3` | Max reconnection attempts |
 |||| `LIVE_STREAM_RETRY_DELAY` | `5.0` | Delay between retries (seconds) |
-|| `JOB_QUEUE_MAX_CONCURRENT` | `1` | Max concurrent background processing jobs (v0.43.0) |
-|| `EVAL_ENABLED` | `false` | Enable evaluation harness CLI tasks (v0.44.0) |
+||| `JOB_QUEUE_MAX_CONCURRENT` | `1` | Max concurrent background processing jobs (v0.43.0) |
+||| `EVAL_ENABLED` | `false` | Enable evaluation harness CLI tasks (v0.44.0) |
+||| `CURATOR_ENABLED` | `false` | Enable autonomous MCR video curator (v0.45.0) |
+||| `CURATOR_CURIOSITY` | `0.5` | Exploration aggressiveness for curator (0.0-1.0) |
+||| `CURATOR_MAX_ITERATIONS` | `15` | Max MCR closed-loop iterations |
+||| `CURATOR_OUTPUT_DIR` | (auto) | Output directory for curation reports |
 
 ## 🧪 Running Tests
 
