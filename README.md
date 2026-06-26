@@ -20,7 +20,7 @@
 
 ## ✨ Features
 
-- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR), object detection (YOLO), semantic scene description (OpenCLIP)
+- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
 - **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
@@ -95,6 +95,7 @@ Video File
 │                            ├── YOLO object detection
 │                            ├── PaddleOCR text extraction
 │                            ├── OpenCLIP zero-shot scene classification
+│                            ├── X-CLIP zero-shot action recognition (optional)
 │                            └── Frame metadata
 ├── FFmpeg ──→ Sprite sheet (100 thumbnails for timeline)
 └── Merge ──→ Structured VideoIndex
@@ -171,6 +172,8 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `CLIP_FRAME_DEDUP` | `false` | Enable CLIP-similarity frame deduplication |
 | `CLIP_FRAME_DEDUP_THRESHOLD` | `0.92` | Similarity threshold for frame deduplication |
 | `MULTIMODAL_EMBEDDING` | `false` | Enable Qwen3-VL-Embedding multimodal search (Apache 2.0) |
+| `ACTION_RECOGNITION_ENABLED` | `false` | Enable X-CLIP zero-shot action recognition (requires transformers) |
+| `ACTION_MODEL_NAME` | `microsoft/xclip-base-patch16-zero-shot` | X-CLIP model for action recognition |
 
 ## 🧪 Running Tests
 
@@ -221,7 +224,7 @@ python tests/test_basic.py
 - [x] Gradio auth via env vars
 - [x] Motion-based adaptive frame sampling
 - [x] CLIP-similarity frame deduplication
-- [ ] Action recognition (InternVideo2.5 — research complete)
+- [ ] Action recognition (X-CLIP — zero-shot open-vocabulary action detection, ~4GB VRAM)
 - [ ] Video MLLM integration (VideoChat-Flash for long-context video understanding)
 
 ## 📝 License

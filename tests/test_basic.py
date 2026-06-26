@@ -698,7 +698,89 @@ def test_config_colbert_reranker():
     shutil.rmtree("/tmp/va_test_colbert_cfg", ignore_errors=True)
 
 
-# ── Catch-all runner (for python tests/test_basic.py direct execution) ──
+def test_config_action_recognition():
+    """Test action recognition config fields."""
+    from video_analysis.config import Config
+
+    cfg = Config(data_dir="/tmp/va_test_action_cfg")
+    assert hasattr(cfg, "action_recognition_enabled")
+    assert hasattr(cfg, "action_model_name")
+    assert hasattr(cfg, "action_categories_count")
+    assert cfg.action_recognition_enabled is False
+    assert "xclip" in cfg.action_model_name.lower()
+    assert cfg.action_categories_count == 26
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_action_cfg", ignore_errors=True)
+
+
+def test_action_recognizer_import():
+    """Test ActionRecognizer can be imported and reports defaults."""
+    from video_analysis.action import ActionRecognizer, DEFAULT_ACTION_CATEGORIES
+
+    assert len(DEFAULT_ACTION_CATEGORIES) == 26
+    assert "a person walking" in DEFAULT_ACTION_CATEGORIES
+    assert "no person visible" in DEFAULT_ACTION_CATEGORIES
+
+    recognizer = ActionRecognizer(device="cpu")
+    assert recognizer.model_name == "microsoft/xclip-base-patch16-zero-shot"
+    assert recognizer.device == "cpu"
+    assert len(recognizer.categories) == 26
+
+
+def test_action_recognizer_classify_no_frames():
+    """Test ActionRecognizer.classify handles empty list."""
+    from video_analysis.action import ActionRecognizer
+
+    recognizer = ActionRecognizer(device="cpu")
+    result = recognizer.classify([])
+    assert result == []
+
+
+def test_action_recognizer_fallback_no_model():
+    """Test ActionRecognizer.classify handles non-existent frame files gracefully."""
+    from video_analysis.action import ActionRecognizer
+    from video_analysis.models import FrameInfo
+
+    recognizer = ActionRecognizer(device="cpu")
+    frames = [FrameInfo(timestamp=0.0, filepath="/nonexistent.jpg", scene_id=0)]
+    result = recognizer.classify(frames)
+    assert len(result) == 1
+    # Should return (frame, None, None) gracefully
+    assert result[0][0].timestamp == 0.0
+    assert result[0][1] is None
+    assert result[0][2] is None
+
+
+def test_frame_info_action_fields():
+    """Test FrameInfo has action and action_confidence fields."""
+    from video_analysis.models import FrameInfo, format_timestamp
+
+    frame = FrameInfo(
+        timestamp=10.0,
+        filepath="/tmp/frame.jpg",
+        scene_id=0,
+        action="a person walking",
+        action_confidence=0.85,
+    )
+    assert frame.action == "a person walking"
+    assert frame.action_confidence == 0.85
+
+
+def test_config_action_env_var(monkeypatch):
+    """Test ACTION_RECOGNITION_ENABLED env var."""
+    monkeypatch.setenv("ACTION_RECOGNITION_ENABLED", "true")
+    from video_analysis.config import Config
+
+    cfg = Config(data_dir="/tmp/va_test_action_env")
+    assert cfg.action_recognition_enabled is True
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_action_env", ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_scene_info()

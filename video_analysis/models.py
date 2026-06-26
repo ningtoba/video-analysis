@@ -18,6 +18,8 @@ class FrameInfo:
     description: Optional[str] = None
     objects: List[dict] = field(default_factory=list)
     ocr_text: Optional[str] = None
+    action: Optional[str] = None  # X-CLIP action recognition label
+    action_confidence: Optional[float] = None  # confidence score for the action
 
 
 @dataclass
@@ -76,6 +78,8 @@ class VideoIndex:
                             "description": f.description,
                             "objects": f.objects,
                             "ocr_text": f.ocr_text,
+                            "action": f.action,
+                            "action_confidence": f.action_confidence,
                         }
                         for f in s.key_frames
                     ],

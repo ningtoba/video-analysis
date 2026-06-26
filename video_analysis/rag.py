@@ -59,6 +59,8 @@ class VideoRAG:
         self.config = config or Config()
         self._collection = None
         self._embedding_model = None
+        self._multimodal_embedder = None
+        self._multimodal_tokenizer = None
         self._chroma_client = None
 
     @property
@@ -90,7 +92,19 @@ class VideoRAG:
             logger.info(f"Created collection: {self.config.chroma_collection}")
 
     def _get_embedding(self, text: str) -> List[float]:
-        """Get embedding vector for text."""
+        """Get embedding vector for text.
+
+        When ``multimodal_embedding_enabled`` is set in config, this method
+        delegates to :meth:`_get_multimodal_embedding` without an image path
+        (text-only mode of the multimodal model).  Otherwise uses the
+        configured SentenceTransformer embedding model.
+        """
+        # If multimodal embedding is enabled, route through the multimodal
+        # model even for text-only queries — this avoids loading two models
+        # (SentenceTransformer + Qwen3-VL) and keeps one unified embedding space.
+        if self.config.multimodal_embedding_enabled:
+            return self._get_multimodal_embedding(text)
+
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError:
@@ -131,12 +145,6 @@ class VideoRAG:
             logger.debug(
                 "transformers or Pillow not available for multimodal embedding"
             )
-            return self._get_embedding(text)
-
-        if self._embedding_model is not None and not isinstance(
-            self._embedding_model, str
-        ):
-            # Already loaded a SentenceTransformer — fall back for now
             return self._get_embedding(text)
 
         model_id = self.config.multimodal_embedding_model
@@ -201,6 +209,15 @@ class VideoRAG:
                     parts.append(
                         f"[Text in frame at {format_timestamp(frame.timestamp)}]: {frame.ocr_text}"
                     )
+                if frame.action:
+                    conf_str = (
+                        f" ({frame.action_confidence:.0%})"
+                        if frame.action_confidence
+                        else ""
+                    )
+                    parts.append(
+                        f"[Action at {format_timestamp(frame.timestamp)}]: {frame.action}{conf_str}"
+                    )
 
             if frame_objects:
                 parts.append(f"[Objects detected]: {', '.join(sorted(frame_objects))}")
@@ -237,6 +254,13 @@ class VideoRAG:
                     frame_parts.append(f"[Objects]: {obj_str}")
                 if frame.ocr_text and frame.ocr_text.strip():
                     frame_parts.append(f"[Text]: {frame.ocr_text}")
+                if frame.action:
+                    conf_str = (
+                        f" ({frame.action_confidence:.0%})"
+                        if frame.action_confidence
+                        else ""
+                    )
+                    frame_parts.append(f"[Action]: {frame.action}{conf_str}")
 
                 frame_text = "\n".join(frame_parts)
                 if len(frame_text) < 10:  # skip empty chunks

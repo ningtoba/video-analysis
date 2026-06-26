@@ -1,6 +1,30 @@
 # Changelog
 
-## 0.10.0 (2026-06-26)
+## 0.11.0 (2026-06-26)
+
+### 🎬 Major Feature: X-CLIP Zero-Shot Action Recognition
+
+- **Open-vocabulary action detection**: Added `ActionRecognizer` module at `video_analysis/action.py` wrapping Microsoft X-CLIP (`microsoft/xclip-base-patch16-zero-shot`, 200M params, Apache 2.0). Classifies per-frame human activities (walking, running, cooking, typing, etc.) with confidence scores — no training required, works out of the box.
+- **Pipeline integration**: New pipeline step (Step 10) between OpenCLIP and transcript assignment. Runs sequentially, loads X-CLIP (~4GB VRAM), classifies all key frames in GPU-efficient batches, then unloads the model to free VRAM.
+- **Config toggle**: `ACTION_RECOGNITION_ENABLED=true` env var to enable. New config fields: `action_recognition_enabled`, `action_model_name`, `action_categories_count`.
+- **RAG context**: Action labels are indexed in ChromaDB alongside transcript, objects, OCR, and scene descriptions. Queries like "when is someone cooking?" or "find scenes with people fighting" retrieve relevant video segments.
+- **Graceful fallback**: If `transformers` is unavailable or model download fails, the step is silently skipped — no breaking changes.
+- **26 default action categories**: Covers common video scenarios (walking, running, sitting, cooking, typing, driving, fighting, etc.) with "no person visible" as the catch-all.
+
+### 🐛 Bug Fixes & Improvements
+
+- **Pipeline step numbering**: Fixed duplicate Step 7 (OCR) and duplicate Step 10 (Index). Steps are now correctly numbered 1–13 throughout.
+- **Multimodal embedding fallback fix**: Fixed a bug where `_get_embedding()` would load a SentenceTransformer first, causing `_get_multimodal_embedding()` to silently fall back to text-only. Now `_get_embedding()` routes through the multimodal model when `multimodal_embedding_enabled=True`, ensuring one unified embedding space.
+- **README roadmap**: Updated stale reference to "InternVideo2.5" for action recognition → now correctly references X-CLIP.
+
+### 🧪 Tests
+
+- 6 new tests: config action fields, ActionRecognizer import/defaults, empty classify list, graceful file-not-found fallback, FrameInfo action fields, ACTION_RECOGNITION_ENABLED env var.
+- Pre-existing test suite: 43 → 49 tests passing.
+
+### 🏗️ Architecture
+
+```
 
 ### 🔬 Major Enhancement: Qwen3-VL Multimodal Embedding (Apache 2.0)
 

@@ -68,6 +68,7 @@ class VideoPipeline:
         self._clip_model = None
         self._clip_preprocess = None
         self._clip_tokenizer = None
+        self._action_recognizer = None
 
     def process(self, video_path: str) -> VideoIndex:
         """
@@ -76,8 +77,13 @@ class VideoPipeline:
         2. Detect scenes and extract key frames
         3. Transcribe audio
         4. Speaker diarization (PyAnnote)
-        5. Describe frames (objects via YOLO, OCR via PaddleOCR, OpenCLIP zero-shot)
-        6. Assemble VideoIndex
+        5. Run object detection on frames (YOLO)
+        6. Run OCR text extraction (PaddleOCR)
+        7. Run OpenCLIP zero-shot scene classification
+        8. Run action recognition (X-CLIP, optional)
+        9. Assign transcript to scenes
+        10. Generate sprite sheet timeline preview
+        11. Build VideoIndex
         """
         video_path = Path(video_path)
         video_id = video_path.stem
@@ -130,27 +136,34 @@ class VideoPipeline:
         self._detect_objects_on_frames(scenes)
         logger.info("Object detection complete")
 
-        # Step 7: Run OCR text extraction on frames (PaddleOCR)
+        # Step 8: Run OCR text extraction on frames (PaddleOCR)
         if self.config.ocr_enabled:
             self._extract_ocr(scenes)
             logger.info("OCR text extraction complete")
         else:
             logger.info("OCR text extraction disabled by config")
 
-        # Step 8: Run OpenCLIP zero-shot scene classification on frames
+        # Step 9: Run OpenCLIP zero-shot scene classification on frames
         self._describe_scenes_clip(scenes)
         logger.info("OpenCLIP scene classification complete")
 
-        # Step 9: Assign transcript to scenes
+        # Step 10: Action recognition (optional X-CLIP)
+        if self.config.action_recognition_enabled:
+            self._classify_actions(scenes)
+            logger.info("Action recognition complete")
+        else:
+            logger.info("Action recognition disabled by config")
+
+        # Step 11: Assign transcript to scenes
         self._assign_transcript_to_scenes(scenes, transcript_segments)
 
-        # Step 10: Generate sprite sheet for timeline preview
+        # Step 12: Generate sprite sheet for timeline preview
         sprite_path, sprite_meta = self._generate_sprite_sheet(
             video_path, video_id, num_thumbnails=100
         )
         logger.info(f"Sprite sheet generated: {sprite_path}")
 
-        # Step 10: Build index
+        # Step 13: Build index
         index = VideoIndex(
             video_id=video_id,
             filename=video_path.name,
@@ -782,6 +795,60 @@ class VideoPipeline:
                 gc.collect()
                 logger.info("OpenCLIP model unloaded from GPU to free VRAM")
 
+    def _classify_actions(self, scenes: List[SceneInfo]):
+        """Run X-CLIP zero-shot action recognition on key frames.
+
+        Loads the ActionRecognizer lazily on first call.  After classifying
+        all frames, unloads the model to free VRAM.  Graceful fallback if
+        ``transformers`` is unavailable or the model download fails.
+
+        Sets ``FrameInfo.action`` and ``FrameInfo.action_confidence`` on
+        each frame.
+        """
+        all_frames = []
+        for scene in scenes:
+            all_frames.extend(scene.key_frames)
+
+        if not all_frames:
+            return
+
+        try:
+            from video_analysis.action import (
+                ActionRecognizer,
+                DEFAULT_ACTION_CATEGORIES,
+            )
+
+            if self._action_recognizer is None:
+                categories = DEFAULT_ACTION_CATEGORIES
+                self._action_recognizer = ActionRecognizer(
+                    model_name=self.config.action_model_name,
+                    categories=categories,
+                )
+
+            recognizer = self._action_recognizer
+            results = recognizer.classify(all_frames)
+
+            action_count = 0
+            for frame, action, conf in results:
+                if action is not None:
+                    frame.action = action
+                    frame.action_confidence = conf
+                    action_count += 1
+
+            # Unload model to free VRAM
+            recognizer.unload()
+            self._action_recognizer = None
+
+            logger.info(
+                f"Action recognition: {action_count}/{len(all_frames)} frames classified"
+            )
+        except ImportError:
+            logger.debug(
+                "transformers not available for action recognition -- skipping"
+            )
+        except Exception as e:
+            logger.warning(f"Action recognition failed: {e}")
+
     def _assign_transcript_to_scenes(
         self, scenes: List[SceneInfo], transcript: List[TranscriptSegment]
     ):
@@ -1118,6 +1185,12 @@ class VideoPipeline:
             self._clip_model = None
             self._clip_preprocess = None
             self._clip_tokenizer = None
+        if self._action_recognizer is not None:
+            try:
+                self._action_recognizer.unload()
+            except Exception:
+                pass
+            self._action_recognizer = None
         import torch
 
         torch.cuda.empty_cache()

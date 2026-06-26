@@ -100,6 +100,13 @@ class Config:
     # Batch processing
     batch_concurrent: int = 1  # process 1 video at a time (sequential queue)
 
+    # Action recognition (optional X-CLIP)
+    action_recognition_enabled: bool = (
+        False  # overridden by ACTION_RECOGNITION_ENABLED env var in __post_init__
+    )
+    action_model_name: str = "microsoft/xclip-base-patch16-zero-shot"
+    action_categories_count: int = 26  # all DEFAULT_ACTION_CATEGORIES
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -108,6 +115,10 @@ class Config:
         self.thumbnails_dir = self.data_dir / "thumbnails"
         self.chroma_path = self.data_dir / "chroma"
         self.clip_export_dir = self.data_dir / "clips"
+        # Override action_recognition_enabled from env var (can't read at class body time)
+        env_val = os.environ.get("ACTION_RECOGNITION_ENABLED", "").lower()
+        if env_val in ("true", "1", "yes"):
+            self.action_recognition_enabled = True
         for d in [
             self.data_dir,
             self.video_dir,
