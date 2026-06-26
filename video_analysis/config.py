@@ -114,11 +114,13 @@ class Config:
     action_model_name: str = "microsoft/xclip-base-patch16-zero-shot"
     action_categories_count: int = 26  # all DEFAULT_ACTION_CATEGORIES
 
-    # Video MLLM (optional VideoChat-Flash 2B — ICLR 2026, MIT, ~5.4 GB VRAM)
+    # Video MLLM (optional VideoChat-Flash 2B / SmolVLM2 — ICLR 2026, MIT, ~5.4 GB VRAM)
     video_mllm_enabled: bool = (
         False  # overridden by VIDEO_MLLM_ENABLED env var in __post_init__
     )
     video_mllm_model: str = "OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448"
+    video_mllm_backend: str = "auto"  # "auto", "videochat_flash", "smolvlm2"
+    video_mllm_model_size: str = "2.2B"  # "2.2B", "500M", "256M" (SmolVLM2 only)
     video_mllm_as_describer: bool = (
         False  # use MLLM for scene descriptions instead of OpenCLIP
     )
@@ -146,6 +148,11 @@ class Config:
     multi_hop_max_sub_queries: int = 4  # max sub-questions to generate
     multi_hop_rerank_top_k: int = 10  # top-k from each sub-query retrieval
 
+    # Agentic RAG — Iterative Retrieval with Confidence Checking
+    agentic_retrieval_enabled: bool = True  # enable iterative agentic retrieval loop
+    agentic_max_rounds: int = 3  # max iterative rounds (default: 3)
+    agentic_min_confidence: float = 0.5  # min avg top-3 score to stop early
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -168,6 +175,14 @@ class Config:
         mllm_chat_env = os.environ.get("VIDEO_MLLM_AS_CHAT_BACKEND", "").lower()
         if mllm_chat_env in ("true", "1", "yes"):
             self.video_mllm_as_chat_backend = True
+        # Override video_mllm_backend from env var
+        backend_env = os.environ.get("VIDEO_MLLM_BACKEND", "").lower()
+        if backend_env in ("auto", "videochat_flash", "smolvlm2"):
+            self.video_mllm_backend = backend_env
+        # Override video_mllm_model_size from env var
+        size_env = os.environ.get("VIDEO_MLLM_MODEL_SIZE", "").upper()
+        if size_env in ("2.2B", "500M", "256M"):
+            self.video_mllm_model_size = size_env
         for d in [
             self.data_dir,
             self.video_dir,

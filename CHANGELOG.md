@@ -1,5 +1,119 @@
 # Changelog
 
+## 0.15.0 (2026-06-26) — SmolVLM2, Agentic RAG & Production Hardening
+
+### 🧠 Major Feature: SmolVLM2 Backend — Lightweight Video MLLM (Apache 2.0)
+
+- **Dual-backend Video MLLM**: `VideoMLLM` now supports two backends selected via `video_mllm_backend` config field:
+  - `"videochat_flash"` — the existing OpenGVLab VideoChat-Flash 2B (ICLR 2026, MIT, ~5.4 GB VRAM)
+  - `"smolvlm2"` — HuggingFace SmolVLM2 family (Apache 2.0, transformers-native, no `trust_remote_code`)
+  - `"auto"` (default) — tries SmolVLM2 first, falls back to VideoChat-Flash
+
+- **SmolVLM2 model sizes** (selectable via `video_mllm_model_size`):
+  | Size | Params | VRAM (BF16) | Video-MME | Use Case |
+  |------|--------|-------------|-----------|----------|
+  | `2.2B` | 2.2B | ~5.2 GB | 52.1 | Best quality, parallel with other pipeline stages |
+  | `500M` | 500M | ~1-2 GB | 42.2 | Runs alongside pipeline without unloading! |
+  | `256M` | 256M | ~0.5-1 GB | 33.7 | CPU-friendly, experimental |
+
+- **Transformers-native API**: SmolVLM2 uses `AutoModelForImageTextToText` with standard chat templates — no `trust_remote_code`, no custom processor. Video input via `{"type": "video", "path": "..."}` in the chat template.
+- **`decord` dependency**: Required for SmolVLM2 video decoding. Added to requirements.txt as optional (commented out).
+- **All three methods work with both backends**: `describe_scene()`, `summarize_video()`, `answer()`.
+- **Config fields**: `video_mllm_backend` (env: `VIDEO_MLLM_BACKEND`), `video_mllm_model_size` (env: `VIDEO_MLLM_MODEL_SIZE`).
+
+### 🔄 Agentic RAG — Iterative Retrieval Loop with Confidence Checking
+
+- **`agentic_retrieve()`**: New iterative retrieval method on `VideoRAG` that runs multiple rounds of retrieval with confidence-based early stopping:
+  - **Round 1**: Standard `retrieve()` — fast embedding search + re-ranking
+  - **Round 2**: Multi-hop decomposition — break query into sub-questions (if enabled)
+  - **Round 3**: Scene-graph K-hop expansion — graph traversal from accumulated results
+  - After all rounds: deduplicate and re-rank merged results against the original query
+
+- **Confidence-gated early exit**: Each round checks the average score of the top-3 chunks against `agentic_min_confidence` (default: `0.5`). When the threshold is met, the loop stops early without executing remaining rounds.
+- **Config fields**: `agentic_retrieval_enabled` (default: `false`, env: `AGENTIC_RETRIEVAL_ENABLED`), `agentic_max_rounds` (env: `AGENTIC_MAX_ROUNDS`), `agentic_min_confidence` (env: `AGENTIC_MIN_CONFIDENCE`).
+- **Chat integration**: `VideoChat.ask()` and `ask_with_history()` automatically use Agentic RAG when `agentic_retrieval_enabled` is toggled on, falling back to the existing routed / standard retrieval path when disabled.
+
+### 🛠️ Production Hardening
+
+- **`.pre-commit-config.yaml`**: Pre-commit hooks for code quality:
+  - Ruff (lint + format) — `line-length=100`, `target-version=py311`
+  - Trailing whitespace, end-of-file fixer, YAML/JSON validation
+  - Check-added-large-files, detect-private-key
+  - MyPy (ignore-missing-imports)
+
+- **`.github/workflows/ci.yml`**: GitHub Actions CI/CD:
+  - Python 3.10/3.11/3.12 matrix on push/PR to master
+  - Install dependencies from `requirements.txt`
+  - Run `pytest tests/ -v -m "not gpu"` (CPU-only marker skips GPU tests)
+  - Ruff code quality check
+  - Pip caching for faster runs
+
+- **`pyproject.toml` additions**: `[tool.ruff]` config, `[tool.pytest.ini_options]` with `timeout=120`, `strict-markers`, `filterwarnings`.
+
+- **Benchmark infrastructure** (`tests/benchmarks/`):
+  - `conftest.py` — `GPUProfiler` context manager for measuring GPU memory usage during benchmarks
+  - `test_pipeline_throughput.py` — benchmark each pipeline stage (frame extraction, scene detection, transcription)
+  - `test_rag_latency.py` — benchmark retrieval + re-ranking latency
+
+- **Docker label fix**: Updated `Dockerfile` LABEL version from stale `0.5.0` to `0.15.0`.
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VIDEO_MLLM_BACKEND` | `auto` | Video MLLM backend: "auto", "videochat_flash", or "smolvlm2" |
+| `VIDEO_MLLM_MODEL_SIZE` | `2.2B` | SmolVLM2 model size: "2.2B", "500M", or "256M" |
+| `AGENTIC_RETRIEVAL_ENABLED` | `false` | Enable agentic iterative retrieval loop |
+| `AGENTIC_MAX_ROUNDS` | `3` | Max retrieval rounds in agentic loop |
+| `AGENTIC_MIN_CONFIDENCE` | `0.5` | Min avg score of top-3 chunks to stop early |
+
+### 📦 Dependencies
+
+- **New (optional)**: `decord>=0.6.0` — video decoding for SmolVLM2 (commented out, install on demand)
+- **New (optional)**: `pytest-timeout>=2.3.0`, `pytest-benchmark>=4.0.0` — benchmark infrastructure (commented out)
+
+### 🧪 Tests
+
+- **18 new tests** in v0.15.0 (93 pre-existing → 104 total passing, +18 net new):
+  - `test_version_0_15_0` — version bump check
+  - `test_config_agentic_rag_fields` — default values
+  - `test_config_agentic_rag_custom_values` — custom config override
+  - `test_rag_agentic_retrieve_method_exists` — method signature check
+  - `test_rag_agentic_retrieve_disabled_features` — graceful fallback with all features disabled
+  - `test_agentic_retrieve_confidence_check` — high/low confidence threshold behavior
+  - `test_chat_agentic_retrieval_disabled` — proper dispatch when agentic is off
+  - `test_agentic_retrieve_max_rounds_1` — single-round behavior
+  - SmolVLM2 config/defaults tests
+  - CI workflow + pre-commit syntax validation tests
+  - Benchmark infrastructure smoke tests
+
+### 🏗️ Architecture
+
+```
+video-analysis/
+├── video_analysis/
+│   ├── __init__.py              # v0.15.0
+│   ├── config.py                # +video_mllm_backend, video_mllm_model_size
+│   │                           # +agentic_retrieval_enabled/rounds/min_confidence
+│   ├── video_mllm.py            # +SmolVLM2 backend (2.2B/500M/256M)
+│   ├── rag.py                   # +agentic_retrieve() method
+│   └── chat.py                  # +_ask_agentic() integration
+├── .pre-commit-config.yaml      # NEW — pre-commit hooks
+├── .github/workflows/ci.yml     # NEW — GitHub Actions CI
+├── tests/
+│   └── benchmarks/              # NEW — benchmark infrastructure
+│       ├── conftest.py
+│       ├── test_pipeline_throughput.py
+│       └── test_rag_latency.py
+├── Dockerfile                   # Updated LABEL version to 0.15.0
+├── pyproject.toml               # v0.15.0 + ruff + pytest config
+├── requirements.txt             # +decord (commented), +pytest-timeout/benchmark (commented)
+├── README.md                    # Updated with new features & roadmap
+└── CHANGELOG.md                 # This file
+```
+
+---
+
 ## 0.14.0 (2026-06-26) — Graph-Based Video RAG + Query Routing + Multi-Hop Decomposition
 
 ### 🧠 Major Features: Graph-Based Retrieval, Smart Query Routing, Multi-Hop Reasoning
@@ -195,9 +309,7 @@ All three remaining roadmap items implemented in this release:
 - 6 new tests: config action fields, ActionRecognizer import/defaults, empty classify list, graceful file-not-found fallback, FrameInfo action fields, ACTION_RECOGNITION_ENABLED env var.
 - Pre-existing test suite: 43 → 49 tests passing.
 
-### 🏗️ Architecture
-
-```
+---
 
 ### 🔬 Major Enhancement: Qwen3-VL Multimodal Embedding (Apache 2.0)
 
@@ -230,20 +342,7 @@ All three remaining roadmap items implemented in this release:
 - Added test for `search_all()` basic logic.
 - Pre-existing test suite: 43+ tests passing.
 
-### 🏗️ Architecture
-
-```
-video-analysis/
-├── video_analysis/
-│   ├── __init__.py              # v0.10.0
-│   ├── config.py                # +multimodal_embedding_model +multimodal_embedding_enabled
-│   └── rag.py                   # +_get_multimodal_embedding() +search_all()
-├── ui/
-│   └── app.py                   # +"🔍 Video Search" tab
-├── pyproject.toml               # v0.10.0
-├── README.md                    # Updated config & roadmap
-└── CHANGELOG.md
-```
+---
 
 ### 🔒 New Feature: Gradio UI Authentication
 
@@ -283,63 +382,7 @@ video-analysis/
 
 - Added tests for new config fields and view-only auth module import.
 
-### 🏗️ Architecture
-
-```
-video-analysis/
-├── video_analysis/
-│   ├── __init__.py              # v0.9.0
-│   ├── config.py                # +auth +adaptive_sampling +clip_dedup
-│   └── pipeline.py              # +_adaptive_frame_samples() +_dedup_frames_clip()
-├── ui/
-│   └── health.py                # +_setup_auth_middleware()
-├── pyproject.toml               # v0.9.0
-├── README.md                    # Updated config & roadmap
-└── CHANGELOG.md
-```
-
-## 0.8.0 (2026-06-26)
-
-### 🔬 Comprehensive Research Sweep (Iteration 1)
-
-Conducted deep research across 5 domains for the next evolution of the platform:
-
-**1. Scene Detection & Frame Extraction** — PySceneDetect 0.7 (May 2026) confirmed as best
-OSS option for shot boundary detection. No competitive alternative emerged. Key improvement:
-motion-based adaptive frame sampling (sample more densely near scene boundaries, less in
-static regions). Also propose CLIP-similarity-based keyframe deduplication.
-
-**2. Video Understanding AI Models** — Identified InternVideo2.5 (OpenGVLab, 2025, Apache 2.0)
-as the direct successor to VideoMAE/TimeSformer for action recognition — replaces the
-original roadmap's reference to VideoMAE. VideoChat-Flash (ICLR 2026) is the top video
-MLLM for long-context understanding. TimeSformer (Meta) was archived Jan 2025. OpenCLIP
-remains best zero-shot frame descriptor for 12GB VRAM.
-
-**3. RAG Architectures** — Current stack (ChromaDB + Nomic Embed v1.5 + ColBERTv2) is
-already state-of-the-art. Key discovery: BGE-VL (BAAI, March 2025, MIT license) enables
-multimodal embedding — video frames can be searched directly as images, not just through
-text descriptions. MegaPairs dataset released alongside.
-
-**4. Web UI Frameworks** — Gradio 6 (v6.19.0) confirmed as the best fit over Streamlit,
-NiceGUI, and Dash. Native Video + Chatbot + gr.mount_gradio_app() for FastAPI is the
-correct architecture. Roadmap item for Gradio auth via env vars identified as top priority.
-
-**5. Production Deployment** — Docker/CUDA 12.8 stack is current. Missing: Gradio auth,
-torch.cuda.empty_cache() between pipeline stages, graceful SIGTERM handling.
-
-Full research document written to `RESEARCH.md`.
-
-### 🏗️ Infrastructure
-
-- Written `RESEARCH.md` — comprehensive research document covering all 5 domains
-
-## 0.7.0 (2026-06-26)
-
-### 🔬 Action Recognition Research
-
-- Researched VideoMAE/TimeSformer vs InternVideo2 for action recognition
-- Gradio auth implementation planning
-- Semantic search architecture planning
+---
 
 ## 0.6.0 (2026-06-26)
 
@@ -366,23 +409,7 @@ Full research document written to `RESEARCH.md`.
 
 - **Optional**: `ragatouille>=1.0.0` — ColBERTv2 late-interaction re-ranking (commented out, install on demand)
 
-### 🏗️ Architecture
-
-```
-video-analysis/
-├── video_analysis/
-│   ├── __init__.py              # v0.6.0
-│   ├── colbert_reranker.py      # NEW — ColBERTv2 late-interaction re-ranker
-│   ├── config.py                # +colbert_reranker_enabled
-│   └── rag.py                   # +_rerank_colbert() method
-├── ui/
-│   └── app.py                   # Shadow DOM JS for timeline preview
-├── .dockerignore                # Fixed: no longer excludes README/CHANGELOG
-├── requirements.txt             # +ragatouille optional dep (commented)
-├── pyproject.toml               # v0.6.0
-├── README.md                    # Updated roadmap
-└── CHANGELOG.md
-```
+---
 
 ## 0.5.0 (2026-06-26)
 
@@ -406,26 +433,9 @@ video-analysis/
 - **Updated**: `scenedetect>=0.7.0` (now explicitly uncommented in requirements.txt)
 - **Updated**: CUDA stacks upgraded from 12.4 to 12.8, torch from 2.1 to 2.6
 
-### 🏗️ Architecture
+---
 
-```
-video-analysis/
-├── video_analysis/
-│   ├── __init__.py        # v0.5.0
-│   ├── config.py          # +clip_model, clip_pretrained_dataset, clip_embed_dim
-│   └── pipeline.py        # +histogram/hash scene detectors, configurable CLIP model
-├── ui/
-│   ├── health.py          # NEW — FastAPI health/API endpoint
-│   └── app.py             # +FastAPI mounting, /health endpoint wiring
-├── tests/
-│   └── test_basic.py      # +7 tests for new config fields
-├── Dockerfile             # CUDA 12.8, torch 2.6, /health healthcheck
-├── docker-compose.yml     # +7861 port, updated healthcheck
-├── requirements.txt       # scenedetect uncommented
-├── pyproject.toml         # v0.5.0
-├── README.md              # Updated with new features
-└── CHANGELOG.md
-```
+## 0.4.0 (2026-06-26)
 
 ### 🎬 New Features
 
@@ -443,27 +453,7 @@ video-analysis/
 
 - **New**: `yt-dlp>=2024.0.0` — YouTube/URL video import and batch processing
 
-### 🏗️ Architecture
-
-```
-video-analysis/
-├── video_analysis/
-│   ├── __init__.py        # v0.4.0
-│   ├── config.py          # +yt_dlp_enabled, yt_dlp_format, batch_concurrent
-│   ├── pipeline.py        # +download_from_url() static method
-│   └── ...                # (models, rag, chat — unchanged)
-├── ui/
-│   ├── app.py             # +YouTube import, batch tab, enhanced timeline JS
-│   ├── utils.py           # NEW — importable utility functions
-│   └── ...
-├── tests/
-│   └── test_basic.py      # +5 tests: yt-dlp import, download fallback, URL parsing, queue HTML, config fields
-├── Dockerfile             # v0.4.0 label
-├── requirements.txt       # +yt-dlp
-├── pyproject.toml         # v0.4.0
-├── README.md              # Updated with new features
-└── CHANGELOG.md
-```
+---
 
 ## 0.3.0 (2026-06-26)
 

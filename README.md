@@ -20,7 +20,9 @@
 
 ## ✨ Features
 
+- **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 3 rounds (standard → multi-hop → scene-graph expansion), inspired by Self-RAG and FLARE
 - **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**
+- **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) for video-native scene description, summarization, and Q&A
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
 - **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
@@ -181,8 +183,13 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `ACTION_MODEL_NAME` | `microsoft/xclip-base-patch16-zero-shot` | X-CLIP model for action recognition |
 | `VIDEO_MLLM_ENABLED` | `false` | Enable VideoChat-Flash 2B video MLLM (~5.4 GB VRAM) |
 | `VIDEO_MLLM_MODEL` | `OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448` | Video MLLM model name |
+| `VIDEO_MLLM_BACKEND` | `auto` | Video MLLM backend (auto/videochat_flash/smolvlm2) |
+| `VIDEO_MLLM_MODEL_SIZE` | `2.2B` | SmolVLM2 model size (2.2B/500M/256M) |
 | `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions (replaces OpenCLIP) |
 | `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
+| `AGENTIC_RETRIEVAL_ENABLED` | `false` | Enable agentic iterative retrieval loop |
+| `AGENTIC_MAX_ROUNDS` | `3` | Max retrieval rounds in agentic loop |
+| `AGENTIC_MIN_CONFIDENCE` | `0.5` | Min avg score of top-3 chunks to stop early |
 
 ## 🧪 Running Tests
 
@@ -244,6 +251,13 @@ python tests/test_basic.py
 - [x] Graph-based video RAG (VGent/ViG-RAG inspired — scene-graph retrieval + K-hop expansion)
 - [x] Query classification & routing (text/visual/temporal modality dispatch)
 - [x] Multi-hop query decomposition (sub-question → retrieve → reason)
+- [x] **SmolVLM2 dual-backend** (Apache 2.0 — 2.2B, 500M, 256M video MLLM via transformers-native API)
+- [x] **Agentic RAG** (iterative retrieval loop with confidence-based early stopping, 3-round strategy)
+- [x] **CI/CD + pre-commit hooks** (GitHub Actions matrix build, ruff, mypy, benchmark infrastructure)
+- [ ] Entity-level indexing across scenes (track people/objects with persistent IDs)
+- [ ] Cross-video scene graph edges (multi-video semantic retrieval)
+- [ ] Gradio 6 Workflow integration (expose pipeline stages as composable APIs)
+- [ ] Sparse-frame optical flow for motion-based adaptive frame sampling
 
 ## 📝 License
 

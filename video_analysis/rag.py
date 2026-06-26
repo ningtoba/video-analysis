@@ -1061,6 +1061,178 @@ class VideoRAG:
         )
         return merged[: top_k * 2]
 
+    # ------------------------------------------------------------------
+    # Agentic RAG — Iterative Retrieval with Confidence Checking
+    # ------------------------------------------------------------------
+
+    def agentic_retrieve(
+        self,
+        query: str,
+        video_id: Optional[str] = None,
+        top_k: Optional[int] = None,
+        query_time: Optional[float] = None,
+    ) -> List[RetrievedChunk]:
+        """Iterative agentic retrieval with confidence-based early stopping.
+
+        Implements a multi-round retrieval loop inspired by **Self-RAG** and
+        **FLARE** (Forward-Looking Active REtrieval): each round retrieves,
+        scores, and checks whether the top results are confident enough to
+        stop.  If not, the next round deploys a more powerful strategy:
+
+        | Round | Strategy | Detail |
+        |-------|----------|--------|
+        | 1 | Standard ``retrieve()`` | Fast embedding search + re-ranking |
+        | 2 | Multi-hop decomposition | Break query into sub-questions (if enabled) |
+        | 3 | Scene-graph expansion | K-hop graph traversal from accumulated results |
+
+        After all rounds, results are deduplicated and re-ranked against the
+        original query.
+
+        Args:
+            query: Natural language question.
+            video_id: Optional filter to specific video.
+            top_k: Number of final results.
+            query_time: Optional timestamp for temporal weighting.
+
+        Returns:
+            Deduplicated, re-ranked list of RetrievedChunk.
+        """
+        top_k = top_k or self.config.top_k_retrieval
+        max_rounds = self.config.agentic_max_rounds
+        min_confidence = self.config.agentic_min_confidence
+
+        accumulated: Dict[str, RetrievedChunk] = {}
+        logger.info(
+            f"Agentic RAG: starting {max_rounds}-round retrieval "
+            f"(min_confidence={min_confidence})"
+        )
+
+        for round_num in range(1, max_rounds + 1):
+            round_chunks: List[RetrievedChunk] = []
+
+            if round_num == 1:
+                # Round 1: Standard retrieval
+                logger.info(
+                    f"Agentic RAG round {round_num}/{max_rounds}: standard retrieval"
+                )
+                round_chunks = self.retrieve(
+                    query=query,
+                    video_id=video_id,
+                    top_k=top_k * 2,
+                    query_time=query_time,
+                )
+
+            elif round_num == 2 and self.config.multi_hop_enabled:
+                # Round 2: Multi-hop decomposition
+                logger.info(
+                    f"Agentic RAG round {round_num}/{max_rounds}: multi-hop decomposition"
+                )
+                router = self._get_query_router()
+                sub_queries = None
+                if router is not None:
+                    decision = router.classify_and_decompose(query)
+                    if decision.sub_queries:
+                        sub_queries = decision.sub_queries
+                if sub_queries:
+                    round_chunks = self._multi_hop_retrieve(
+                        query=query,
+                        sub_queries=sub_queries,
+                        video_id=video_id,
+                        top_k=top_k,
+                        query_time=query_time,
+                    )
+                else:
+                    logger.info(
+                        "Multi-hop decomposition unavailable — falling back to standard retrieve"
+                    )
+                    round_chunks = self.retrieve(
+                        query=query,
+                        video_id=video_id,
+                        top_k=top_k * 2,
+                        query_time=query_time,
+                    )
+
+            elif round_num == 3 and self.config.scene_graph_enabled:
+                # Round 3: Scene-graph expansion on accumulated results
+                logger.info(
+                    f"Agentic RAG round {round_num}/{max_rounds}: scene-graph expansion"
+                )
+                # Use accumulated chunks as seeds for graph expansion
+                if accumulated:
+                    seed_chunks = list(accumulated.values())
+                else:
+                    seed_chunks = self.retrieve(
+                        query=query,
+                        video_id=video_id,
+                        top_k=top_k,
+                        query_time=query_time,
+                    )
+                scene_graph = self._get_scene_graph()
+                if scene_graph is not None and scene_graph.k_hop_expansion > 0:
+                    round_chunks = scene_graph.expand_chunks(seed_chunks)
+                else:
+                    round_chunks = seed_chunks
+
+            else:
+                # Fallback for rounds beyond 3 or when features disabled
+                logger.info(
+                    f"Agentic RAG round {round_num}/{max_rounds}: standard retrieval (fallback)"
+                )
+                round_chunks = self.retrieve(
+                    query=query,
+                    video_id=video_id,
+                    top_k=top_k,
+                    query_time=query_time,
+                )
+
+            # Merge round results into accumulated dict (dedup by chunk_id)
+            for c in round_chunks:
+                key = c.chunk_id
+                if key not in accumulated or c.score > accumulated[key].score:
+                    accumulated[key] = c
+
+            # Confidence check: compute avg score of top-3 chunks
+            sorted_chunks = sorted(
+                accumulated.values(), key=lambda x: x.score, reverse=True
+            )
+            top_n = min(3, len(sorted_chunks))
+            if top_n > 0:
+                avg_score = sum(sorted_chunks[i].score for i in range(top_n)) / top_n
+                logger.info(
+                    f"Agentic RAG round {round_num}/{max_rounds}: "
+                    f"top-{top_n} avg score={avg_score:.4f} "
+                    f"(threshold={min_confidence})"
+                )
+                if avg_score >= min_confidence and round_num < max_rounds:
+                    logger.info(
+                        f"Agentic RAG: confidence threshold met at round {round_num} — stopping early"
+                    )
+                    break
+            else:
+                logger.info(
+                    f"Agentic RAG round {round_num}/{max_rounds}: no results yet"
+                )
+
+        # Final deduplication (already done), re-rank against original query
+        final_chunks = list(accumulated.values())
+        logger.info(
+            f"Agentic RAG: {len(final_chunks)} unique chunks across "
+            f"{len(final_chunks)} accumulated — re-ranking"
+        )
+
+        try:
+            final_chunks = self._rerank(query, final_chunks, top_k)
+        except ImportError:
+            final_chunks.sort(key=lambda c: c.score, reverse=True)
+            final_chunks = final_chunks[:top_k]
+
+        # Optional ColBERTv2 late-interaction re-ranking
+        if self.config.colbert_reranker_enabled:
+            final_chunks = self._rerank_colbert(query, final_chunks, top_k)
+
+        logger.info(f"Agentic RAG complete: returning {len(final_chunks)} chunks")
+        return final_chunks
+
     def list_videos(self) -> List[str]:
         """List all indexed video IDs."""
         all_meta = self.collection.get(include=["metadatas"])

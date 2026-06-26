@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "video-analysis"
-version = "0.14.0"
+version = "0.15.0"
 description = "Self-hosted video analysis platform with AI chatbot — scene understanding, RAG, clip export, YouTube import, batch processing, health API"
 readme = "README.md"
 authors = [
@@ -30,6 +30,29 @@ dependencies = [
 
 [project.scripts]
 video-analysis = "video_analysis.__main__:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 120
+timeout_method = "thread"
+markers = [
+    "gpu: marks tests that require CUDA GPU (deselect with '-m \"not gpu\"')",
+    "slow: marks slow tests (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests (not unit tests)",
+    "benchmark: marks benchmark tests (uses pytest-benchmark)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+addopts = "-v --strict-markers"
 
 [tool.setuptools.packages.find]
 include = ["video_analysis*"]

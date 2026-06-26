@@ -47,7 +47,7 @@ FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
 LABEL org.opencontainers.image.title="Video Analysis Platform"
 LABEL org.opencontainers.image.description="Self-hosted video analysis with AI chatbot — scene understanding, RAG, clip export, YouTube import, batch processing"
-LABEL org.opencontainers.image.version="0.5.0"
+LABEL org.opencontainers.image.version="0.15.0"
 LABEL org.opencontainers.image.vendor="Nous Research"
 LABEL org.opencontainers.image.documentation="https://github.com/.../video-analysis"
 

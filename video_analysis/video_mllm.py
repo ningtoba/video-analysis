@@ -1,10 +1,14 @@
 """
 Video MLLM (Multimodal Large Language Model) module.
 
-Wraps **VideoChat-Flash** (OpenGVLab, ICLR 2026) — a hierarchical compression
-video MLLM that supports long-context video understanding with only 16
-tokens per frame.  The 2B variant (``OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448``)
-fits in ~5.4 GB BF16 on a 12 GB RTX 4070 with comfortable headroom.
+Supports two backends:
+- **VideoChat-Flash** (OpenGVLab, ICLR 2026) — a hierarchical compression
+  video MLLM that supports long-context video understanding with only 16
+  tokens per frame.  The 2B variant (``OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448``)
+  fits in ~5.4 GB BF16 on a 12 GB RTX 4070 with comfortable headroom.
+- **SmolVLM2** (HuggingFaceTB) — a family of compact vision-language models
+  (2.2B, 500M, 256M) using standard ``AutoModelForImageTextToText`` from
+  transformers (no trust_remote_code).  Uses ``decord`` for video decoding.
 
 Provides:
 - ``describe_scene(frames)`` — richer scene descriptions than OpenCLIP labels
@@ -22,24 +26,42 @@ All methods gracefully return None when the model is unavailable
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 
 logger = logging.getLogger(__name__)
 
+# SmolVLM2 model paths
+SMOLVLM2_MODEL_PATHS = {
+    "2.2B": "HuggingFaceTB/SmolVLM2-2.2B-Instruct",
+    "500M": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+    "256M": "HuggingFaceTB/SmolVLM2-256M-Video-Instruct",
+}
+
+BackendType = Literal["auto", "videochat_flash", "smolvlm2"]
+ModelSizeType = Literal["2.2B", "500M", "256M"]
+
 
 class VideoMLLM:
-    """Wrapper around VideoChat-Flash for video-native understanding.
+    """Wrapper around VideoChat-Flash or SmolVLM2 for video-native understanding.
 
     Lazy-loads the model on first use and provides GPU memory management
     (load / unload) compatible with the pipeline's sequential model loading
     pattern for 12 GB VRAM.
     """
 
-    def __init__(self, model_name: str = "OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448"):
+    def __init__(
+        self,
+        model_name: str = "OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448",
+        backend: BackendType = "auto",
+        model_size: ModelSizeType = "2.2B",
+    ):
         self.model_name = model_name
+        self.backend = backend
+        self.model_size = model_size
         self._model = None
         self._processor = None
         self._available = None  # None = unchecked, True/False after check
+        self._resolved_backend = None  # which backend was actually loaded
 
     # ------------------------------------------------------------------
     # Availability check & lazy loading
@@ -59,7 +81,6 @@ class VideoMLLM:
             import torch  # noqa: F401
             import transformers  # noqa: F401
 
-            # VideoChat-Flash uses AutoModel with trust_remote_code
             self._available = True
         except ImportError as e:
             logger.warning(f"Video MLLM dependencies not available: {e}")
@@ -67,7 +88,7 @@ class VideoMLLM:
         return self._available
 
     def load(self) -> bool:
-        """Load the VideoChat-Flash model onto GPU.
+        """Load the Video MLLM model onto GPU.
 
         Returns True on success, False if dependencies are missing or
         the model cannot be found on disk / Hugging Face.
@@ -78,11 +99,50 @@ class VideoMLLM:
         if not self.available:
             return False
 
+        # Determine which backend to use
+        backend = self._resolve_backend()
+
+        if backend == "smolvlm2":
+            return self._load_smolvlm2()
+        else:
+            return self._load_videochat_flash()
+
+    def _resolve_backend(self) -> str:
+        """Resolve the backend to use, handling 'auto' fallback."""
+        if self.backend == "videochat_flash":
+            return "videochat_flash"
+        elif self.backend == "smolvlm2":
+            return "smolvlm2"
+        elif self.backend == "auto":
+            # Try SmolVLM2 first (standard API, no trust_remote_code)
+            try:
+                import torch  # noqa: F401
+                import transformers  # noqa: F401
+                import decord  # noqa: F401
+
+                # Check if the smolvlm2 model path exists
+                model_path = SMOLVLM2_MODEL_PATHS.get(self.model_size)
+                if model_path:
+                    logger.info(f"Auto backend: trying SmolVLM2 ({model_path}) first")
+                    return "smolvlm2"
+            except ImportError:
+                pass
+            # Fall back to VideoChat-Flash
+            logger.info("Auto backend: falling back to VideoChat-Flash")
+            return "videochat_flash"
+        else:
+            logger.warning(
+                f"Unknown backend '{self.backend}', falling back to videochat_flash"
+            )
+            return "videochat_flash"
+
+    def _load_videochat_flash(self) -> bool:
+        """Load VideoChat-Flash model."""
         try:
             import torch
             from transformers import AutoModel, AutoProcessor
 
-            logger.info(f"Loading Video MLLM model: {self.model_name}")
+            logger.info(f"Loading VideoChat-Flash model: {self.model_name}")
             self._model = AutoModel.from_pretrained(
                 self.model_name,
                 trust_remote_code=True,
@@ -95,10 +155,58 @@ class VideoMLLM:
                 self.model_name,
                 trust_remote_code=True,
             )
-            logger.info("Video MLLM model loaded successfully")
+            self._resolved_backend = "videochat_flash"
+            logger.info("VideoChat-Flash model loaded successfully")
             return True
         except Exception as e:
-            logger.warning(f"Failed to load Video MLLM model: {e}")
+            logger.warning(f"Failed to load VideoChat-Flash model: {e}")
+            self._model = None
+            self._processor = None
+            self._available = False
+            return False
+
+    def _load_smolvlm2(self) -> bool:
+        """Load SmolVLM2 model using standard AutoModelForImageTextToText."""
+        try:
+            import torch
+            from transformers import (
+                AutoModelForImageTextToText,
+                AutoProcessor,
+            )
+
+            model_path = SMOLVLM2_MODEL_PATHS.get(self.model_size)
+            if model_path is None:
+                logger.warning(
+                    f"Unknown SmolVLM2 model size '{self.model_size}'. "
+                    f"Valid options: {list(SMOLVLM2_MODEL_PATHS.keys())}"
+                )
+                self._available = False
+                return False
+
+            logger.info(
+                f"Loading SmolVLM2 model: {model_path} (size={self.model_size})"
+            )
+
+            # Load processor first (needed for chat template processing)
+            self._processor = AutoProcessor.from_pretrained(model_path)
+
+            # Load model without trust_remote_code (standard HF model)
+            self._model = AutoModelForImageTextToText.from_pretrained(
+                model_path,
+                trust_remote_code=False,
+                torch_dtype=torch.bfloat16,
+                device_map="cuda" if torch.cuda.is_available() else "cpu",
+            )
+            self._model.eval()
+            self._resolved_backend = "smolvlm2"
+
+            # Update model_name to the actual path used
+            self.model_name = model_path
+
+            logger.info("SmolVLM2 model loaded successfully")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to load SmolVLM2 model: {e}")
             self._model = None
             self._processor = None
             self._available = False
@@ -118,6 +226,7 @@ class VideoMLLM:
             del self._processor
             self._model = None
             self._processor = None
+            self._resolved_backend = None
             gc.collect()
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
@@ -127,8 +236,78 @@ class VideoMLLM:
     # Video-native understanding methods
     # ------------------------------------------------------------------
 
+    def _ensure_loaded(self) -> bool:
+        """Ensure model is loaded, dispatching to the right backend."""
+        return self.load()
+
+    def _build_messages(
+        self,
+        prompt: str,
+        frames: Optional[List[str]] = None,
+        video_path: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Build chat messages for the correct backend format.
+
+        SmolVLM2 uses chat templates with video/image content blocks,
+        while VideoChat-Flash uses its image/video processor fields directly.
+        This method primarily prepares data for SmolVLM2; VideoChat-Flash
+        handles its own formatting in the processor.
+        """
+        if self._resolved_backend == "smolvlm2":
+            content = []
+            if frames:
+                for fp in frames:
+                    content.append({"type": "image", "path": fp})
+            if video_path:
+                content.append({"type": "video", "path": video_path})
+            content.append({"type": "text", "text": prompt})
+            return [{"role": "user", "content": content}]
+        return []
+
+    def _decode_video_frames(
+        self, video_path: str, num_frames: int = 32
+    ) -> Optional[List[str]]:
+        """Decode video frames using decord (for SmolVLM2 backend).
+
+        Returns a list of temporary frame file paths, or None on failure.
+        """
+        try:
+            import decord
+            import tempfile
+            from PIL import Image
+
+            decord.bridge.set_bridge("torch")
+            vr = decord.VideoReader(video_path)
+            total_frames = len(vr)
+            if total_frames == 0:
+                return None
+
+            # Sample evenly spaced frame indices
+            indices = [
+                int(i * total_frames / num_frames)
+                for i in range(min(num_frames, total_frames))
+            ]
+            frames = vr.get_batch(indices)
+
+            temp_dir = tempfile.mkdtemp(prefix="smolvlm2_frames_")
+            paths = []
+            for i, frame_tensor in enumerate(frames):
+                img = Image.fromarray(frame_tensor.numpy())
+                fp = Path(temp_dir) / f"frame_{i:04d}.jpg"
+                img.save(fp)
+                paths.append(str(fp))
+            return paths
+        except ImportError:
+            logger.warning(
+                "decord not installed; cannot decode video frames for SmolVLM2"
+            )
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to decode video frames with decord: {e}")
+            return None
+
     def describe_scene(self, frames: List[str], prompt: str = None) -> Optional[str]:
-        """Describe a scene from its key frames using VideoChat-Flash.
+        """Describe a scene from its key frames.
 
         Args:
             frames: List of paths to frame images.
@@ -140,7 +319,7 @@ class VideoMLLM:
         """
         if not frames:
             return None
-        if not self.load():
+        if not self._ensure_loaded():
             return None
 
         try:
@@ -153,20 +332,25 @@ class VideoMLLM:
                 "the overall mood or tone."
             )
 
-            # Prepare inputs: VideoChat-Flash accepts image paths + text
-            inputs = self._processor(
-                images=frames,
-                text=prompt,
-                return_tensors="pt",
-            )
-            if torch.cuda.is_available():
-                inputs = {k: v.cuda() for k, v in inputs.items()}
+            if self._resolved_backend == "smolvlm2":
+                return self._smolvlm2_generate(prompt, frames=frames)
+            else:
+                # VideoChat-Flash path
+                inputs = self._processor(
+                    images=frames,
+                    text=prompt,
+                    return_tensors="pt",
+                )
+                if torch.cuda.is_available():
+                    inputs = {k: v.cuda() for k, v in inputs.items()}
 
-            with torch.no_grad():
-                output = self._model.generate(**inputs, max_new_tokens=256)
+                with torch.no_grad():
+                    output = self._model.generate(**inputs, max_new_tokens=256)
 
-            description = self._processor.decode(output[0], skip_special_tokens=True)
-            return description.strip()
+                description = self._processor.decode(
+                    output[0], skip_special_tokens=True
+                )
+                return description.strip()
         except Exception as e:
             logger.warning(f"Video MLLM scene description failed: {e}")
             return None
@@ -179,14 +363,13 @@ class VideoMLLM:
     ) -> Optional[str]:
         """Generate a comprehensive summary of the entire video.
 
-        The model internally samples frames from the video file using
-        VideoChat-Flash's native video handling, which uses hierarchical
-        compression to represent long videos with few tokens.
+        The model internally samples frames from the video file.  SmolVLM2
+        uses decord for frame decoding and chat templates; VideoChat-Flash
+        handles sampling natively via its processor.
 
         Args:
             video_path: Path to the video file.
-            num_frames: Number of frames to sample (VideoChat-Flash handles
-                the sampling internally).
+            num_frames: Number of frames to sample.
             prompt: Optional custom summary prompt.
 
         Returns:
@@ -196,7 +379,7 @@ class VideoMLLM:
         if not video.exists():
             logger.warning(f"Video file not found: {video_path}")
             return None
-        if not self.load():
+        if not self._ensure_loaded():
             return None
 
         try:
@@ -209,21 +392,39 @@ class VideoMLLM:
                 "textual information visible on screen."
             )
 
-            # VideoChat-Flash can accept a video path directly
-            inputs = self._processor(
-                videos=[str(video)],
-                text=prompt,
-                return_tensors="pt",
-                num_frames=num_frames,
-            )
-            if torch.cuda.is_available():
-                inputs = {k: v.cuda() for k, v in inputs.items()}
+            if self._resolved_backend == "smolvlm2":
+                # Decode frames with decord, then pass to model
+                frame_paths = self._decode_video_frames(
+                    str(video), num_frames=num_frames
+                )
+                if frame_paths is None:
+                    return None
+                try:
+                    result = self._smolvlm2_generate(prompt, frames=frame_paths)
+                    return result
+                finally:
+                    # Clean up temp frames
+                    import shutil
 
-            with torch.no_grad():
-                output = self._model.generate(**inputs, max_new_tokens=512)
+                    temp_dir = Path(frame_paths[0]).parent if frame_paths else None
+                    if temp_dir and temp_dir.exists():
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+            else:
+                # VideoChat-Flash path
+                inputs = self._processor(
+                    videos=[str(video)],
+                    text=prompt,
+                    return_tensors="pt",
+                    num_frames=num_frames,
+                )
+                if torch.cuda.is_available():
+                    inputs = {k: v.cuda() for k, v in inputs.items()}
 
-            summary = self._processor.decode(output[0], skip_special_tokens=True)
-            return summary.strip()
+                with torch.no_grad():
+                    output = self._model.generate(**inputs, max_new_tokens=512)
+
+                summary = self._processor.decode(output[0], skip_special_tokens=True)
+                return summary.strip()
         except Exception as e:
             logger.warning(f"Video MLLM summarization failed: {e}")
             return None
@@ -234,12 +435,12 @@ class VideoMLLM:
         frames: Optional[List[str]] = None,
         video_path: Optional[str] = None,
     ) -> Optional[str]:
-        """Answer a question about video content using VideoChat-Flash.
+        """Answer a question about video content.
 
         Args:
             query: Natural language question.
             frames: Optional list of frame image paths for visual context.
-            video_path: Optional video file path (VideoChat-Flash handles
+            video_path: Optional video file path (the model handles
                 its own frame sampling when a video path is given).
 
         Returns:
@@ -248,36 +449,112 @@ class VideoMLLM:
         if not frames and not video_path:
             logger.warning("No frames or video path provided for VLM QA")
             return None
-        if not self.load():
+        if not self._ensure_loaded():
             return None
 
         try:
             import torch
 
-            if video_path:
-                inputs = self._processor(
-                    videos=[video_path],
-                    text=query,
-                    return_tensors="pt",
-                    num_frames=16,
-                )
-            elif frames:
-                inputs = self._processor(
-                    images=frames,
-                    text=query,
-                    return_tensors="pt",
-                )
-            else:
-                return None
+            if self._resolved_backend == "smolvlm2":
+                if video_path:
+                    frame_paths = self._decode_video_frames(video_path, num_frames=16)
+                    if frame_paths is None:
+                        return None
+                    try:
+                        result = self._smolvlm2_generate(query, frames=frame_paths)
+                        return result
+                    finally:
+                        import shutil
 
+                        temp_dir = Path(frame_paths[0]).parent if frame_paths else None
+                        if temp_dir and temp_dir.exists():
+                            shutil.rmtree(temp_dir, ignore_errors=True)
+                else:
+                    return self._smolvlm2_generate(query, frames=frames)
+            else:
+                # VideoChat-Flash path
+                if video_path:
+                    inputs = self._processor(
+                        videos=[video_path],
+                        text=query,
+                        return_tensors="pt",
+                        num_frames=16,
+                    )
+                elif frames:
+                    inputs = self._processor(
+                        images=frames,
+                        text=query,
+                        return_tensors="pt",
+                    )
+                else:
+                    return None
+
+                if torch.cuda.is_available():
+                    inputs = {k: v.cuda() for k, v in inputs.items()}
+
+                with torch.no_grad():
+                    output = self._model.generate(**inputs, max_new_tokens=512)
+
+                answer_text = self._processor.decode(
+                    output[0], skip_special_tokens=True
+                )
+                return answer_text.strip()
+        except Exception as e:
+            logger.warning(f"Video MLLM QA failed: {e}")
+            return None
+
+    def _smolvlm2_generate(
+        self,
+        prompt: str,
+        frames: Optional[List[str]] = None,
+        video_path: Optional[str] = None,
+        max_new_tokens: int = 512,
+    ) -> Optional[str]:
+        """Generate text using SmolVLM2 with chat templates.
+
+        SmolVLM2 uses ``{"type": "video", "path": "..."}`` or
+        ``{"type": "image", "path": "..."}`` content blocks in
+        the chat template.
+        """
+        try:
+            import torch
+
+            content = []
+            if frames:
+                for fp in frames:
+                    content.append({"type": "image", "path": fp})
+            if video_path:
+                content.append({"type": "video", "path": video_path})
+            content.append({"type": "text", "text": prompt})
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": content,
+                }
+            ]
+
+            # Apply chat template to build inputs
+            inputs = self._processor.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+
+            # Move inputs to GPU if available
             if torch.cuda.is_available():
                 inputs = {k: v.cuda() for k, v in inputs.items()}
 
             with torch.no_grad():
-                output = self._model.generate(**inputs, max_new_tokens=512)
+                output = self._model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                )
 
-            answer = self._processor.decode(output[0], skip_special_tokens=True)
-            return answer.strip()
+            generated_text = self._processor.decode(output[0], skip_special_tokens=True)
+            return generated_text.strip()
         except Exception as e:
-            logger.warning(f"Video MLLM QA failed: {e}")
+            logger.warning(f"SmolVLM2 generation failed: {e}")
             return None
