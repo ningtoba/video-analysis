@@ -21,4 +21,4 @@ from video_analysis import (
     quality,
 )
 
-__version__ = "0.21.0"
+__version__ = "0.22.0"

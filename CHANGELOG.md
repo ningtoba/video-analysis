@@ -78,7 +78,53 @@
 | `QUALITY_SKIP_OCR_ON_BLURRY` | `true` | Skip OCR on blurry/static frames |
 | `QUALITY_SKIP_YOLO_ON_DARK` | `true` | Skip YOLO on dark/bright frames |
 
-### 🔬 Research Phase: Video Pipeline Infrastructure Evolution
+### 🔬 Research Phase: Conversation Memory, Structured Logging & Dependency Modernization
+
+The v0.22.0 research phase bridges the infrastructure focus of v0.21 with production-quality implementation planning. Rather than adding new models (v0.3-v0.20 covered every MLLM), it prioritizes:
+
+#### 🔊 Audio-Only Processing Mode
+- **Design**: New `processing_mode` config (`video_full`/`audio_only`) filters pipeline stages
+- **Affected**: Skips scene detection, frame extraction, YOLO, OCR, CLIP, sprite sheets, RAG indexing
+- **Preserved**: Audio extraction, transcription, diarization
+- **Impact**: 50-75% faster for podcasts/lectures, zero extra dependencies
+- **Config**: `processing_mode` (env: `PROCESSING_MODE`)
+
+#### 💬 Multi-Modal Conversation Memory
+- **Design**: New `video_analysis/memory.py` with `ConversationMemory` class
+- **Storage**: Dedicated ChromaDB collection (`conversation_memory`) to avoid polluting video search
+- **Retrieval**: Top-3 relevant past Q&A pairs prepended to LLM system prompt
+- **Capacity**: Max 50 entries, 30-day TTL, BGE-VL-base embeddings (zero extra VRAM)
+- **Blueprint**: ~150 lines, single new module
+
+#### 📊 Structured JSON Logging
+- **Design**: `structlog` integration across all pipeline stages
+- **Features**: TTY gets colored console, file/pipe gets JSON; log levels (INFO/DEBUG/ERROR)
+- **Classes**: `PipelineLogger` for stage_start/stage_end/stage_error events
+- **Dependency**: `structlog` (pure Python, no native deps)
+
+#### 📦 Dependency Modernization
+| Package | Current Min | Research Target | Notes |
+|---------|-------------|----------------|-------|
+| `gradio` | `>=6.19.0` | Latest 6.x | Workflow subgraph API support |
+| `transformers` | `>=4.45.2` | `>=4.50.0,<5.0` | Avoid v5 breaking changes for now |
+| `torch` | `>=2.1.0` | `>=2.5.0` | FP8, FlashAttention-3, torch.compile |
+| `sentence-transformers` | `>=2.5.0` | `>=3.0.0` | New embedding APIs |
+
+#### 🏗️ Pipeline Caching & Orchestrator Blueprints
+- **Pipeline caching**: SHA-256 content-addressable per-stage cache (70-90% faster re-runs)
+- **PipelineOrchestrator**: File-type heuristic (extension, codec, duration) for stage selection
+- **Benchmarking**: pynvml per-stage VRAM tracking, pytest-benchmark suite
+
+### 🧪 Tests
+- **135 tests passing** (0 failed, 12 deselected as benchmark/slow/gpu)
+- **No regressions** from v0.21.0 P0 implementation
+
+### 📝 New Files
+| File | Size | Purpose |
+|------|------|---------|
+| `docs/research/v0.22.0-research-conversation-memory-and-structured-logging.md` | ~11 KB | v0.22.0 research document |
+
+## 0.21.0 (2026-06-26) — Tiered Frame Storage & Quality Pre-Screening
 
 The v0.3 through v0.20 research phases covered every model, architecture, and pipeline
 enhancement. This research phase shifts focus to what comes after the models are chosen:

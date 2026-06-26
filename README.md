@@ -271,30 +271,30 @@ python tests/test_basic.py
 |- [x] [RESEARCH v0.20] InsightFace integration — RetinaFace + ArcFace person identity blueprint
 |- [x] [RESEARCH v0.20] PipelineOrchestrator — heuristic + Qwen3.5-0.8B ML video type classifier
 |- [x] [RESEARCH v0.20] FFmpeg motion vector extractor — zero-GPU sparse optical flow
-- [ ] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, sliding window for 256K context)
-- [ ] Dependency modernization — update pyproject.toml bounds for torch>=2.5.0, transformers>=4.50.0
-- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy
-- [ ] Pipeline caching + incremental re-indexing (content-addressable per-stage cache)
-- [ ] PipelineOrchestrator heuristic — file-type based stage selection
-- [ ] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows)
-- [ ] InsightFace face recognition (RetinaFace + ArcFace, cross-video person identity)
-- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
-- [ ] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU)
-- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
-- [ ] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
-|- [x] [RESEARCH v0.21] Tiered frame storage — JPEG WebP AVIF compression profiles, 60-75% disk savings
-|- [x] Tiered frame storage — `video_analysis/storage.py`, three-tier JPEG/WebP, configurable sizes
-|- [x] Video quality pre-screening — `video_analysis/quality.py`, Laplacian blur + brightness + static
-|- [x] [RESEARCH v0.21] Audio-only processing mode (skip GPU visual stages for podcasts/lectures)
-|- [x] [RESEARCH v0.21] Multi-modal conversation memory (ChromaDB-backed persistent chat history)
-||- [x] [RESEARCH v0.21] Video quality pre-screening (Laplacian blur, BRISQUE, static frame detection)
-||- [x] [RESEARCH v0.21] Audio-only processing mode (skip GPU visual stages for podcasts/lectures)
-||- [x] [RESEARCH v0.21] Multi-modal conversation memory (ChromaDB-backed persistent chat history)
-||- [x] [RESEARCH v0.21] Structured JSON logging (structlog for pipeline observability)
-||- [x] [RESEARCH v0.21] Pipeline benchmarking infrastructure (pynvml per-stage VRAM tracking)
-||- [x] [RESEARCH v0.21] Real-time streaming video analysis (chunked processing, watch/stream modes)
-||- [x] [RESEARCH v0.21] Federated video search (MCP-based cross-instance query)
-||- [x] [RESEARCH v0.21] Prometheus metrics endpoint + Grafana dashboards
+|- [ ] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, sliding window for 256K context)
+||- [x] [RESEARCH v0.22] Audio-only processing mode — config-driven stage filtering, 50-75% faster for podcasts/lectures
+||- [x] [RESEARCH v0.22] Conversation memory — ChromaDB-backed persistent chat history, cross-video Q&A continuity
+||- [x] [RESEARCH v0.22] Structured JSON logging — structlog integration across pipeline stages
+||- [x] [RESEARCH v0.22] Dependency modernization — transformers 5.12.1, torch 2.12+, sentence-transformers 5.6+
+||- [x] [RESEARCH v0.22] Pipeline caching blueprint — SHA-256 content-addressable per-stage cache design
+||- [x] [RESEARCH v0.22] PipelineOrchestrator blueprint — file-type heuristic + optional MLLM classifier design
+|- [ ] Audio-only processing mode — `processing_mode` config, stage filtering in pipeline.py
+|- [ ] Conversation memory — `video_analysis/memory.py`, ChromaDB-backed persistent chat history
+|- [ ] Structured JSON logging — structlog integration across pipeline stages
+|- [ ] Dependency modernization — update pyproject.toml bounds for torch>=2.5.0, transformers>=4.50.0
+|- [ ] Pipeline caching + incremental re-indexing (content-addressable per-stage cache)
+|- [ ] PipelineOrchestrator heuristic — file-type based stage selection
+|- [ ] Pipeline benchmarking infra — pynvml per-stage VRAM tracking, pytest-benchmark suite
+|- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy
+|- [ ] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows)
+|- [ ] InsightFace face recognition (RetinaFace + ArcFace, cross-video person identity)
+|- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
+|- [ ] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU)
+|- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
+|- [ ] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
+|- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)
+|- [ ] Federated video search (MCP-based cross-instance query)
+|- [ ] Prometheus metrics endpoint + Grafana dashboards
 |
 
 ## 📝 License
