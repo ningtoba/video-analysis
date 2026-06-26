@@ -301,6 +301,10 @@ class VideoRAG:
             chunks.sort(key=lambda c: c.score, reverse=True)
             chunks = chunks[:top_k]
 
+        # Optional ColBERTv2 late-interaction re-ranking
+        if self.config.colbert_reranker_enabled:
+            chunks = self._rerank_colbert(query, chunks, top_k)
+
         return chunks
 
     def _rerank(
@@ -325,6 +329,53 @@ class VideoRAG:
 
         chunks.sort(key=lambda c: c.score, reverse=True)
         return chunks[:top_k]
+
+    def _rerank_colbert(
+        self, query: str, chunks: List[RetrievedChunk], top_k: int
+    ) -> List[RetrievedChunk]:
+        """Re-rank using optional ColBERTv2 late-interaction model.
+
+        Falls back to the cross-encoder result if ragatouille is not installed.
+        The ColBERTv2 model is loaded lazily, used for re-ranking, then
+        unloaded to free VRAM.
+        """
+        try:
+            from video_analysis.colbert_reranker import ColBERTReranker
+
+            reranker = ColBERTReranker()
+
+            if not reranker.available:
+                logger.info(
+                    "ColBERTv2 re-ranking unavailable (ragatouille not installed)"
+                )
+                return chunks[:top_k]
+
+            # Extract text from chunks for re-ranking
+            texts = [c.text for c in chunks]
+
+            # Re-rank with ColBERTv2
+            scored = reranker.rerank(query=query, documents=texts, top_k=top_k)
+
+            # Map scores back to chunks
+            score_map = {doc: score for doc, score in scored}
+            for chunk in chunks:
+                if chunk.text in score_map:
+                    chunk.score = float(score_map[chunk.text])
+
+            # Unload ColBERTv2 to free VRAM
+            reranker.unload()
+
+            chunks.sort(key=lambda c: c.score, reverse=True)
+            logger.info("ColBERTv2 re-ranking complete")
+            return chunks[:top_k]
+        except ImportError:
+            logger.info(
+                "ColBERTv2 not available — falling back to cross-encoder results"
+            )
+            return chunks[:top_k]
+        except Exception as e:
+            logger.error(f"ColBERTv2 re-ranking failed: {e}")
+            return chunks[:top_k]
 
     def expand_temporal_context(
         self, chunks: List[RetrievedChunk], video_id: str

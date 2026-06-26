@@ -24,20 +24,33 @@ class Config:
     whisper_device: str = "cuda"
     whisper_compute_type: str = "int8_float16"
 
+    # OpenCLIP
+    clip_model: str = "ViT-B-32"  # "ViT-B-32" or "ViT-L-14"
+    clip_pretrained_dataset: str = (
+        "laion2b_s34b_b79k"  # ViT-B-32 default; ViT-L-14 uses laion2b_s32b_b82k
+    )
+    clip_embed_dim: int = 512  # 512 for ViT-B-32, 768 for ViT-L-14
+
     # Frame extraction
     frame_rate: float = 0.5  # 1 frame per 2 seconds default
-    scene_threshold: float = 0.3  # PySceneDetect sensitivity
+    scene_threshold: float = (
+        0.3  # PySceneDetect sensitivity (only used for ffmpeg/content mode)
+    )
+    scene_detector: str = (
+        "adaptive"  # "adaptive", "content", "ffmpeg", "histogram", or "hash"
+    )
 
     # YOLO
     yolo_model: str = "yolo26x.pt"  # Latest YOLO26
     yolo_confidence: float = 0.25
 
     # RAG
-    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
     chroma_collection: str = "video_analysis"
     top_k_retrieval: int = 20
     top_k_rerank: int = 5
     temporal_window: int = 1  # neighbors on each side
+    colbert_reranker_enabled: bool = False  # optional ColBERTv2 late-interaction
 
     # LLM
     llm_model: str = "deepseek-ai/DeepSeek-V4-Flash"

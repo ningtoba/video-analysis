@@ -9,7 +9,7 @@ Features:
 - Analysis progress with real-time updates
 - Chat interface with source citations and clickable timestamps
 - Clip export (jump to precise moments)
-- Multi-video library management
+- Multi-video library management with search and delete
 - Dark theme, responsive layout
 """
 
@@ -60,6 +60,30 @@ LIBRARY_CSS = """
 }
 .library-card .title { font-weight: 600; font-size: 1rem; }
 .library-card .meta { color: var(--text-muted); font-size: 0.85rem; }
+.library-card .badge-stats { 
+    display: inline-flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;
+}
+.library-card .stat {
+    background: rgba(124,58,237,0.1);
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: var(--accent);
+}
+.library-card .delete-btn {
+    float: right;
+    background: rgba(239,68,68,0.15);
+    color: #ef4444;
+    border: none;
+    border-radius: 6px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.library-card .delete-btn:hover {
+    background: rgba(239,68,68,0.3);
+}
 """
 
 CSS = """
@@ -122,6 +146,9 @@ body { background: #0f0d1a; color: var(--text); font-family: 'Inter', sans-serif
 .queue-item .q-status.done { background: rgba(52,211,153,0.15); color: #34d399; }
 .queue-item .q-status.error { background: rgba(239,68,68,0.15); color: #ef4444; }
 .queue-item .q-status.active { background: rgba(124,58,237,0.15); color: #a78bfa; animation: pulse 1s infinite; }
+
+/* Import tab progress */
+.import-progress { margin-top: 1rem; }
 """
 
 
@@ -150,16 +177,99 @@ def _video_summary(index: VideoIndex) -> str:
     return f"{scenes} scenes, {objs} objects, {descs} described frames, {dur:.0f}s"
 
 
-def _library_html(video_ids: List[str], rag: VideoRAG) -> str:
-    """Render library cards as HTML with click-to-select."""
+def _library_card_html(
+    vid: str, rag: VideoRAG, pipeline: VideoPipeline, config: Config
+) -> str:
+    """Render a single library card with rich metadata."""
+    video_path = config.video_dir / f"{vid}.mp4"
+    dur = 0
+    scenes = 0
+    objs = 0
+    info_str = ""
+    file_exists = video_path.exists()
+
+    # Try to get duration from file
+    if file_exists:
+        dur = pipeline._get_duration(video_path)
+
+    # Try to get stats from RAG index metadata
+    try:
+        all_meta = rag.collection.get(
+            where={"video_id": vid},
+            include=["metadatas"],
+        )
+        scene_ids = set()
+        obj_count = 0
+        for meta in all_meta.get("metadatas", []):
+            sid = meta.get("scene_id", -1)
+            if sid >= 0:
+                scene_ids.add(sid)
+        scenes = len(scene_ids)
+        # Estimate objects from metadata keywords
+        obj_count = len(all_meta.get("metadatas", []))
+        objs = obj_count
+    except Exception:
+        pass
+
+    # Build info string
+    parts = []
+    if dur > 0:
+        parts.append(f"⏱ {dur:.0f}s")
+    if scenes > 0:
+        parts.append(f"🎬 {scenes} scenes")
+    if objs > 0:
+        parts.append(f"📦 ~{objs} chunks")
+
+    if parts:
+        info_str = (
+            '<div class="badge-stats">'
+            + "".join(f'<span class="stat">{p}</span>' for p in parts)
+            + "</div>"
+        )
+
+    delete_id = vid
+    html = (
+        f'<div class="library-card" data-video-id="{vid}">'
+        f'<div class="title">{vid}</div>'
+        f'<div class="meta">ID: {vid}</div>'
+        f"{info_str}"
+        f'<button class="delete-btn" onclick="event.stopPropagation(); window.__deleteVideo(\'{delete_id}\')">🗑 Delete</button>'
+        f"</div>"
+    )
+    return html
+
+
+def _library_html(
+    video_ids: List[str],
+    rag: VideoRAG,
+    pipeline: Optional[VideoPipeline] = None,
+    config: Optional[Config] = None,
+) -> str:
+    """Render library cards as HTML with click-to-select and rich metadata."""
     if not video_ids:
         return '<p style="color:var(--text-muted);padding:1rem;">No videos analyzed yet. Upload one above.</p>'
-    html = ""
+    html = '<div id="library-cards-container">'
     for vid in video_ids:
         html += f'<div class="library-card" onclick="window.__selectVideo(\'{vid}\')">'
         html += f'<div class="title">{vid}</div>'
         html += f'<div class="meta">ID: {vid}</div>'
+        # Add stats if we have pipeline/config
+        if pipeline and config:
+            video_path = config.video_dir / f"{vid}.mp4"
+            if video_path.exists():
+                dur = pipeline._get_duration(video_path)
+                parts = []
+                if dur > 0:
+                    parts.append(f"⏱ {dur:.0f}s")
+                if parts:
+                    html += (
+                        '<div class="badge-stats">'
+                        + "".join(f'<span class="stat">{p}</span>' for p in parts)
+                        + "</div>"
+                    )
+        html += f'<button class="delete-btn" onclick="event.stopPropagation(); window.__deleteVideo(\'{vid}\')">🗑 Delete</button>'
         html += "</div>"
+    html += "</div>"
     return html
 
 
@@ -284,7 +394,42 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             label="Show source citations", value=True
                         )
 
-            # ============ TAB 2: BATCH PROCESSING ============
+            # ============ TAB 2: IMPORT (YouTube/URL) ============
+            with gr.TabItem("🌐 Import", id="import"):
+                with gr.Row(equal_height=False):
+                    with gr.Column(scale=2, min_width=480):
+                        gr.Markdown("### Import a Video from URL")
+                        import_url_input = gr.Textbox(
+                            label="Video URL",
+                            placeholder="https://www.youtube.com/watch?v=...",
+                            lines=2,
+                        )
+                        with gr.Row():
+                            import_download_btn = gr.Button(
+                                "⬇️ Download & Analyze",
+                                variant="primary",
+                                size="lg",
+                                scale=2,
+                            )
+                            import_clear_btn = gr.Button("🗑 Clear", scale=1)
+
+                        # Import progress
+                        import_progress_panel = gr.Group(
+                            visible=False, elem_classes="import-progress"
+                        )
+                        with import_progress_panel:
+                            gr.Markdown("### Import Progress")
+                            import_progress_html = gr.HTML("")
+
+                    with gr.Column(scale=3, min_width=500):
+                        gr.Markdown("### Result")
+                        import_video_player = gr.Video(
+                            label="Analyzed Video", visible=False, height=350
+                        )
+                        import_video_id = gr.State("")
+                        import_video_path = gr.State("")
+
+            # ============ TAB 3: BATCH PROCESSING ============
             with gr.TabItem("📦 Batch", id="batch"):
                 with gr.Row():
                     with gr.Column(scale=2):
@@ -311,20 +456,36 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             )
                             clear_batch_btn = gr.Button("🗑 Clear Queue", scale=1)
                     with gr.Column(scale=3):
-                        gr.Markdown("### Queue")
+                        gr.Markdown("### Queue Status")
                         batch_status = gr.HTML(
                             '<p style="color:var(--text-muted);padding:1rem;">Queue is empty.</p>'
                         )
+                        gr.Markdown("### Batch Progress")
+                        batch_overall_progress = gr.HTML(
+                            '<p style="color:var(--text-muted);font-size:0.85rem;">Waiting for items to be added...</p>'
+                        )
 
-            # ============ TAB 3: LIBRARY ============
+            # ============ TAB 4: LIBRARY ============
             with gr.TabItem("📚 Library", id="library"):
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, min_width=350):
                         gr.Markdown("### Your Video Library")
+                        lib_search = gr.Textbox(
+                            label="🔍 Search videos",
+                            placeholder="Filter by name...",
+                            lines=1,
+                        )
+                        with gr.Row():
+                            refresh_lib_btn = gr.Button(
+                                "🔄 Refresh Library", size="sm", scale=2
+                            )
+                            delete_all_lib_btn = gr.Button(
+                                "🗑 Delete All", size="sm", scale=1
+                            )
                         library_list = gr.HTML(
                             '<p style="color:var(--text-muted);padding:1rem;">No videos analyzed yet. Upload one above.</p>'
                         )
-                        refresh_lib_btn = gr.Button("🔄 Refresh Library", size="sm")
+                        delete_status = gr.HTML("")
                     with gr.Column(scale=3):
                         gr.Markdown("### Video Details")
                         lib_video_id = gr.State("")
@@ -592,6 +753,129 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             finally:
                 busy.value = False
 
+        # --- Import Tab: Download from URL (separate handler for Import tab) ---
+        def do_import_tab_download(url: str):
+            """Download from URL in the Import tab, process, and show result in the import tab."""
+            if not url or busy.value:
+                return (
+                    gr.update(visible=False),
+                    gr.update(),
+                    "",
+                    "",
+                    status,
+                )
+
+            if not parse_yt_url(url):
+                status.value = (
+                    '<span class="badge error">● Unsupported URL format</span>'
+                )
+                return (
+                    gr.update(visible=False),
+                    gr.update(
+                        value='<p style="color:#ef4444;">❌ Unsupported URL format. Please enter a YouTube, Vimeo, DailyMotion, or Twitch URL.</p>'
+                    ),
+                    "",
+                    "",
+                    status,
+                )
+
+            busy.value = True
+            status.value = '<span class="badge busy">● Downloading...</span>'
+
+            try:
+                yield (
+                    gr.update(visible=True),
+                    gr.update(
+                        value=_progress_html(0, "⬇️ Downloading video from URL...")
+                    ),
+                    "",
+                    "",
+                    status,
+                )
+
+                downloaded = pipeline.download_from_url(url, config.video_dir)
+                if downloaded is None:
+                    status.value = '<span class="badge error">● Download failed</span>'
+                    yield (
+                        gr.update(visible=True),
+                        gr.update(
+                            value=_progress_html(
+                                -1, "❌ Download failed. Check the URL and try again."
+                            )
+                        ),
+                        "",
+                        "",
+                        status,
+                    )
+                    return
+
+                logger.info(f"Import tab: Downloaded to: {downloaded}")
+
+                yield (
+                    gr.update(visible=True),
+                    gr.update(
+                        value=_progress_html(1, "⚙️ Processing downloaded video...")
+                    ),
+                    "",
+                    "",
+                    status,
+                )
+
+                index = pipeline.process(str(downloaded))
+
+                yield (
+                    gr.update(visible=True),
+                    gr.update(
+                        value=_progress_html(6, "📝 Indexing content for Q&A...")
+                    ),
+                    "",
+                    "",
+                    status,
+                )
+
+                rag.index_video(index)
+
+                status.value = (
+                    '<span class="badge ready">● Ready — ask questions</span>'
+                )
+
+                video_path_str = str(downloaded)
+                yield (
+                    gr.update(visible=True, value=video_path_str),
+                    gr.update(
+                        value=_progress_html(
+                            8, f"✅ Complete — {_video_summary(index)}"
+                        )
+                    ),
+                    index.video_id,
+                    video_path_str,
+                    status,
+                )
+
+            except Exception as e:
+                logger.error(f"Import tab error: {e}", exc_info=True)
+                status.value = (
+                    f'<span class="badge error">● Error: {str(e)[:100]}</span>'
+                )
+                yield (
+                    gr.update(visible=False),
+                    gr.update(value=_progress_html(-1, f"❌ {str(e)[:200]}")),
+                    "",
+                    "",
+                    status,
+                )
+            finally:
+                busy.value = False
+
+        def clear_import_tab():
+            return (
+                "",
+                gr.update(visible=False),
+                gr.update(value=""),
+                "",
+                "",
+            )
+
         # --- Send Chat Message ---
         def do_send(msg: str, history: list, video_id: str, show_src: bool):
             if not msg or not video_id:
@@ -654,11 +938,98 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
         def refresh_library():
             try:
                 video_ids = rag.list_videos()
-                html = _library_html(video_ids, rag)
-                return html
+                html = _library_html(video_ids, rag, pipeline, config)
+                return html, ""
             except Exception as e:
                 logger.error(f"Library refresh error: {e}")
-                return f'<p style="color:var(--text-muted);">Error loading library: {str(e)[:100]}</p>'
+                return (
+                    f'<p style="color:var(--text-muted);">Error loading library: {str(e)[:100]}</p>',
+                    "",
+                )
+
+        def search_library(query: str):
+            """Filter library by video name/ID keyword."""
+            try:
+                video_ids = rag.list_videos()
+                if query:
+                    query_lower = query.lower().strip()
+                    video_ids = [v for v in video_ids if query_lower in v.lower()]
+                html = _library_html(video_ids, rag, pipeline, config)
+                if query and not video_ids:
+                    html = f'<p style="color:var(--text-muted);padding:1rem;">No videos matching "{query}".</p>'
+                return html
+            except Exception as e:
+                logger.error(f"Library search error: {e}")
+                return f'<p style="color:var(--text-muted);">Error searching library: {str(e)[:100]}</p>'
+
+        def delete_library_video(video_id: str):
+            """Delete a video from the library (RAG index + video file)."""
+            if not video_id:
+                return (
+                    gr.update(),
+                    '<p style="color:var(--text-muted);">No video specified.</p>',
+                )
+            try:
+                # Delete from RAG index
+                rag.delete_video(video_id)
+
+                # Also try to remove the video file
+                video_path = config.video_dir / f"{video_id}.mp4"
+                if video_path.exists():
+                    video_path.unlink()
+
+                # Also try to remove thumbnail data
+                thumb_json = config.thumbnails_dir / f"{video_id}_sprite.json"
+                thumb_jpg = config.thumbnails_dir / f"{video_id}_sprite.jpg"
+                if thumb_json.exists():
+                    thumb_json.unlink()
+                if thumb_jpg.exists():
+                    thumb_jpg.unlink()
+
+                # Refresh library
+                video_ids = rag.list_videos()
+                html = _library_html(video_ids, rag, pipeline, config)
+                return (
+                    gr.update(value=html),
+                    f'<p style="color:#34d399;">✅ Deleted "{video_id}"</p>',
+                )
+            except Exception as e:
+                logger.error(f"Delete video error: {e}")
+                return (
+                    gr.update(),
+                    f'<p style="color:#ef4444;">❌ Error deleting {video_id}: {str(e)[:100]}</p>',
+                )
+
+        def delete_all_library():
+            """Delete all videos from the library."""
+            try:
+                video_ids = rag.list_videos()
+                for vid in video_ids:
+                    rag.delete_video(vid)
+                    video_path = config.video_dir / f"{vid}.mp4"
+                    if video_path.exists():
+                        video_path.unlink()
+                    for fname in [f"{vid}_sprite.json", f"{vid}_sprite.jpg"]:
+                        fpath = config.thumbnails_dir / fname
+                        if fpath.exists():
+                            fpath.unlink()
+                html = '<p style="color:var(--text-muted);padding:1rem;">Library cleared.</p>'
+                return (
+                    gr.update(value=html),
+                    '<p style="color:#34d399;">✅ All videos deleted.</p>',
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    "",
+                )
+            except Exception as e:
+                logger.error(f"Delete all error: {e}")
+                return (
+                    gr.update(),
+                    f'<p style="color:#ef4444;">❌ Error: {str(e)[:100]}</p>',
+                    gr.update(),
+                    gr.update(),
+                    "",
+                )
 
         # --- Batch Queue ---
         def do_add_to_queue(urls: str, files: list, queue: list):
@@ -701,22 +1072,32 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             }
                         )
 
-            return queue, queue_html(queue)
+            total = len(queue)
+            pending = sum(1 for q in queue if q["status"] == "pending")
+            progress_html_val = f'<p style="color:var(--text-muted);font-size:0.85rem;">{total} items in queue ({pending} pending)</p>'
+            return queue, queue_html(queue), progress_html_val
 
         def do_process_batch(queue: list):
             """Process all items in the batch queue sequentially."""
             if not queue:
-                return queue, queue_html([]), status
+                return (
+                    queue,
+                    queue_html([]),
+                    '<p style="color:var(--text-muted);font-size:0.85rem;">Queue is empty.</p>',
+                    status,
+                )
 
             busy.value = True
             status.value = '<span class="badge busy">● Batch processing...</span>'
 
-            for item in queue:
+            total = len(queue)
+            for idx, item in enumerate(queue):
                 if item["status"] != "pending":
                     continue
 
                 item["status"] = "active"
-                yield queue, queue_html(queue), status
+                progress_str = f'<p style="color:var(--text-muted);font-size:0.85rem;">Processing {idx+1}/{total}...</p>'
+                yield queue, queue_html(queue), progress_str, status
 
                 try:
                     filepath = item.get("filepath")
@@ -727,7 +1108,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                         downloaded = pipeline.download_from_url(url, config.video_dir)
                         if downloaded is None:
                             item["status"] = "error"
-                            yield queue, queue_html(queue), status
+                            yield queue, queue_html(queue), progress_str, status
                             continue
                         filepath = str(downloaded)
                     elif filepath:
@@ -740,7 +1121,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                     if not filepath:
                         item["status"] = "error"
-                        yield queue, queue_html(queue), status
+                        yield queue, queue_html(queue), progress_str, status
                         continue
 
                     # Process
@@ -752,14 +1133,19 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     logger.error(f"Batch item error: {e}")
                     item["status"] = "error"
 
-                yield queue, queue_html(queue), status
+                yield queue, queue_html(queue), progress_str, status
 
             busy.value = False
             status.value = '<span class="badge ready">● Batch complete</span>'
-            yield queue, queue_html(queue), status
+            final_progress = f'<p style="color:#34d399;font-size:0.85rem;">✅ Batch complete — {total} items processed.</p>'
+            yield queue, queue_html(queue), final_progress, status
 
         def do_clear_batch():
-            return [], queue_html([])
+            return (
+                [],
+                queue_html([]),
+                '<p style="color:var(--text-muted);font-size:0.85rem;">Queue cleared.</p>',
+            )
 
         # Wire events
         evt = process_btn.click(
@@ -798,6 +1184,30 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             ],
         )
 
+        # Import tab events
+        import_download_btn.click(
+            fn=do_import_tab_download,
+            inputs=[import_url_input],
+            outputs=[
+                import_video_player,
+                import_progress_html,
+                import_video_id,
+                import_video_path,
+                status,
+            ],
+        )
+
+        import_clear_btn.click(
+            fn=clear_import_tab,
+            outputs=[
+                import_url_input,
+                import_video_player,
+                import_progress_html,
+                import_video_id,
+                import_video_path,
+            ],
+        )
+
         send_btn.click(
             do_send,
             [chat_input, chatbot, vid, show_sources],
@@ -833,22 +1243,52 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 clip_output,
             ],
         )
-        refresh_lib_btn.click(refresh_library, outputs=[library_list])
+        refresh_lib_btn.click(refresh_library, outputs=[library_list, delete_status])
+
+        # Library search
+        lib_search.change(
+            fn=search_library,
+            inputs=[lib_search],
+            outputs=[library_list],
+        )
+
+        # Library delete video
+        def do_delete_video_js(video_id: str, lib_state: str):
+            """Called from JS bridge when delete button clicked."""
+            result_html, msg = delete_library_video(video_id)
+            return (
+                result_html,
+                msg,
+                gr.update(visible=False),
+                gr.update(visible=False),
+                "",
+            )
+
+        delete_all_lib_btn.click(
+            fn=delete_all_library,
+            outputs=[
+                library_list,
+                delete_status,
+                lib_video_player,
+                lib_info,
+                lib_video_id,
+            ],
+        )
 
         # Batch events
         add_batch_btn.click(
             do_add_to_queue,
             inputs=[batch_urls, batch_files, batch_queue],
-            outputs=[batch_queue, batch_status],
+            outputs=[batch_queue, batch_status, batch_overall_progress],
         )
         process_batch_btn.click(
             do_process_batch,
             inputs=[batch_queue],
-            outputs=[batch_queue, batch_status, status],
+            outputs=[batch_queue, batch_status, batch_overall_progress, status],
         )
         clear_batch_btn.click(
             do_clear_batch,
-            outputs=[batch_queue, batch_status],
+            outputs=[batch_queue, batch_status, batch_overall_progress],
         )
 
         # --- Library video selection ---
@@ -894,6 +1334,26 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 </script>""",
             visible=True,
         )
+
+        # JS bridge: delete video from library
+        lib_delete_js = gr.HTML(
+            """<script>
+(function() {
+  window.__deleteVideo = function(videoId) {
+    const el = document.querySelector('#lib-delete-input input, #lib-delete-input textarea');
+    if (el) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      ).set;
+      nativeInputValueSetter.call(el, videoId);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  };
+})();
+</script>""",
+            visible=True,
+        )
+
         lib_select_input = gr.Textbox(
             value="", visible=False, elem_id="lib-select-input"
         )
@@ -901,6 +1361,21 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             do_select_video,
             inputs=[lib_select_input],
             outputs=[lib_video_player, lib_info, lib_video_id],
+        )
+
+        lib_delete_input = gr.Textbox(
+            value="", visible=False, elem_id="lib-delete-input"
+        )
+        lib_delete_input.change(
+            fn=do_delete_video_js,
+            inputs=[lib_delete_input, lib_video_id],
+            outputs=[
+                library_list,
+                delete_status,
+                lib_video_player,
+                lib_info,
+                lib_video_id,
+            ],
         )
 
         # ==================== TIMELINE HOVER JAVASCRIPT ====================
@@ -932,7 +1407,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     previewEl = document.createElement('div');
     previewEl.className = 'timeline-preview';
     previewEl.innerHTML = '<div class="tp-img-wrap"><img alt="" style="width:160px;height:90px;" /></div><div class="tp-time" style="text-align:center;font-family:monospace;font-size:0.8rem;padding:2px 4px;">00:00:00.000</div>';
-    // Add CSS for the hover card
     previewEl.style.cssText = 'position:fixed;z-index:9999;background:#1e1b2e;border:1px solid #3d3a50;border-radius:8px;padding:4px;box-shadow:0 4px 20px rgba(0,0,0,0.6);pointer-events:none;display:none;';
     document.body.appendChild(previewEl);
   }
@@ -944,7 +1418,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
   function getThumbnailIndex(timestamp) {
     if (!spriteMeta || !spriteMeta.thumbnails || spriteMeta.thumbnails.length === 0) return -1;
     const thumbnails = spriteMeta.thumbnails;
-    // Binary search for closest
     let lo = 0, hi = thumbnails.length - 1;
     while (lo < hi) {
       const mid = (lo + hi + 1) >>> 1;
@@ -963,26 +1436,63 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     const img = previewEl.querySelector('img');
     const timeEl = previewEl.querySelector('.tp-time');
 
-    // Use sprite sheet as CSS background with offset
     img.style.background = `url(${spriteUrl}) no-repeat`;
     img.style.backgroundSize = `${spriteMeta.num_columns * spriteMeta.thumbnail_width}px ${spriteMeta.num_rows * spriteMeta.thumbnail_height}px`;
     img.style.backgroundPosition = `-${thumb.x}px -${thumb.y}px`;
     img.style.width = spriteMeta.thumbnail_width + 'px';
     img.style.height = spriteMeta.thumbnail_height + 'px';
-    img.src = ''; // clear src to show background
+    img.src = '';
     timeEl.textContent = formatTime(timestamp);
     previewEl.style.display = 'block';
+  }
+
+  // ── Shadow DOM penetration: find <video> inside any shadow root ──
+  function findVideoElements(root) {
+    const videos = [];
+    // Check this root
+    if (root.querySelectorAll) {
+      root.querySelectorAll('video').forEach(v => videos.push(v));
+    }
+    // Recurse into shadow roots
+    const allElements = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    allElements.forEach(el => {
+      if (el.shadowRoot) {
+        videos.push(...findVideoElements(el.shadowRoot));
+      }
+    });
+    // If root itself is a shadow root, check direct children too
+    if (root instanceof ShadowRoot) {
+      root.querySelectorAll('video').forEach(v => {
+        if (!videos.includes(v)) videos.push(v);
+      });
+    }
+    return videos;
+  }
+
+  // ── Observe for video elements with shadow DOM support ──
+  function scanForVideo() {
+    const videos = findVideoElements(document);
+    // Among all videos, find the one currently visible (in a video player tab)
+    for (const v of videos) {
+      const rect = v.getBoundingClientRect();
+      if (rect.width > 100 && rect.height > 50) {
+        attachToVideo(v);
+        return;
+      }
+    }
+    // Fallback: attach to first video found
+    if (videos.length > 0 && !videoEl) {
+      attachToVideo(videos[0]);
+    }
   }
 
   function attachToVideo(video) {
     if (!video || video === videoEl) return;
     videoEl = video;
 
-    // Clean previous listeners
     cleanupFns.forEach(fn => fn());
     cleanupFns = [];
 
-    // Find sprite metadata URL
     function loadSpriteData() {
       const src = video.querySelector('source')?.src || video.src;
       if (!src) return;
@@ -990,7 +1500,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
       const filename = segments[segments.length - 1];
       const videoId = filename.replace(/[.]mp4$/, '').replace(/[.]webm$/, '').replace(/[.]mov$/, '');
 
-      // Try multiple paths for the sprite data
       const attempts = [
         `/file=data/thumbnails/${videoId}_sprite.json`,
         `/file=/app/data/thumbnails/${videoId}_sprite.json`,
@@ -1014,13 +1523,12 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
       tryFetch(0);
     }
 
-    // Listen to source changes
+    // Listen to source changes on video
     const srcObserver = new MutationObserver(() => loadSpriteData());
     srcObserver.observe(video, { attributes: true, attributeFilter: ['src'] });
     srcObserver.observe(video.querySelector('source') || video, { childList: true, subtree: true });
     cleanupFns.push(() => srcObserver.disconnect());
 
-    // Initial load
     setTimeout(loadSpriteData, 500);
 
     // ── Timeline hover detection ──
@@ -1056,31 +1564,45 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
       if (previewEl) previewEl.style.display = 'none';
     }
 
-    // Attach to video container directly
-    const videoContainer = video.closest('gradio-video') || video.parentElement || video;
-    videoContainer.addEventListener('mousemove', onTimelineHover, { passive: true });
-    videoContainer.addEventListener('mouseleave', onTimelineLeave);
+    // Attach event listeners to the containing shadow DOM host or parent
+    let container = video;
+    // Walk up to find the Gradio video wrapper (could be shadow host or light DOM parent)
+    let el = video;
+    while (el && el !== document.body) {
+      if (el.tagName && el.tagName.toLowerCase().includes('video')) {
+        el = el.parentElement || el.getRootNode().host || document.body;
+        continue;
+      }
+      container = el;
+      break;
+    }
+
+    container.addEventListener('mousemove', onTimelineHover, { passive: true });
+    container.addEventListener('mouseleave', onTimelineLeave);
     cleanupFns.push(() => {
-      videoContainer.removeEventListener('mousemove', onTimelineHover);
-      videoContainer.removeEventListener('mouseleave', onTimelineLeave);
+      container.removeEventListener('mousemove', onTimelineHover);
+      container.removeEventListener('mouseleave', onTimelineLeave);
     });
   }
 
-  // ── Observe for video elements ──
+  // ── Initial scan ──
+  scanForVideo();
+
+  // ── Periodic scan for new video elements (handles Gradio tab switches) ──
   const observer = new MutationObserver(() => {
-    const videos = document.querySelectorAll('.gradio-video video');
-    if (videos.length > 0) {
-      attachToVideo(videos[0]);
+    const cv = videoEl;
+    const rect = cv ? cv.getBoundingClientRect() : { width: 0, height: 0 };
+    // Only re-scan if the current video disappeared or was resized to 0
+    if (!cv || rect.width === 0 || rect.height === 0) {
+      scanForVideo();
     }
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: false });
   cleanupFns.push(() => observer.disconnect());
 
-  // Also check immediately
-  setTimeout(() => {
-    const videos = document.querySelectorAll('.gradio-video video');
-    if (videos.length > 0) attachToVideo(videos[0]);
-  }, 1000);
+  // Also poll periodically for shadow DOM elements (Gradio lazy-renders tabs)
+  let pollTimer = setInterval(scanForVideo, 2000);
+  cleanupFns.push(() => clearInterval(pollTimer));
 
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
@@ -1096,17 +1618,52 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     return app
 
 
-def launch(config: Optional[Config] = None):
-    """Launch the Gradio UI."""
+def launch(
+    config: Optional[Config] = None,
+    *,
+    no_health: bool = False,
+):
+    """Launch the Gradio UI with FastAPI health/API endpoints.
+
+    Uses gr.mount_gradio_app() to mount the Gradio interface at ``/`` on a
+    FastAPI app, leaving ``/health`` and ``/api/*`` accessible directly.
+
+    Args:
+        config: Application configuration.
+        no_health: If True, fall back to plain Gradio ``.launch()`` without
+            the FastAPI wrapper.
+    """
     cfg = config or Config()
-    app = build(cfg)
-    logger.info(f"Starting UI on http://{cfg.ui_host}:{cfg.ui_port}")
-    app.launch(
-        server_name=cfg.ui_host,
-        server_port=cfg.ui_port,
-        share=cfg.ui_share,
-        show_error=True,
-        quiet=False,
+
+    if no_health:
+        logger.info(f"Starting UI (no-health) on http://{cfg.ui_host}:{cfg.ui_port}")
+        gradio_app = build(cfg)
+        gradio_app.launch(
+            server_name=cfg.ui_host,
+            server_port=cfg.ui_port,
+            share=cfg.ui_share,
+            show_error=True,
+            quiet=False,
+        )
+        return
+
+    from ui.health import create_health_app
+
+    gradio_app = build(cfg)
+    health_app = create_health_app(cfg)
+    app = gr.mount_gradio_app(health_app, gradio_app, path="/")
+
+    logger.info(
+        f"Starting UI on http://{cfg.ui_host}:{cfg.ui_port} " f"(health API at /health)"
+    )
+
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host=cfg.ui_host,
+        port=cfg.ui_port,
+        log_level="info",
     )
 
 

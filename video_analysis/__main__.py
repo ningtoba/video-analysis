@@ -12,6 +12,7 @@ Usage:
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from video_analysis.config import Config
 from video_analysis.pipeline import VideoPipeline
@@ -33,6 +34,19 @@ def cli_mode(args):
     config = Config()
     pipeline = VideoPipeline(config)
     rag = VideoRAG(config)
+
+    if args.url:
+        print(f"Downloading from URL: {args.url}")
+        path = VideoPipeline.download_from_url(args.url, config.video_dir)
+        if not path:
+            print("❌ Download failed")
+            return
+        print(f"Downloaded: {path}")
+        args.video = str(path)
+
+    if not args.video:
+        print("No video to process. Use --video or --url.")
+        return
 
     print(f"Processing: {args.video}")
     index = pipeline.process(args.video)
@@ -58,6 +72,47 @@ def cli_mode(args):
 
             for s in response.sources[:3]:
                 print(f"  [{format_timestamp(s.timestamp)}] {s.text[:100]}...")
+    elif args.batch_file:
+        batch_process(args.batch_file, config, pipeline, rag)
+
+
+def batch_process(
+    manifest: str, config: Config, pipeline: VideoPipeline, rag: VideoRAG
+):
+    """Process multiple videos from a manifest file."""
+    manifest_path = Path(manifest)
+    if not manifest_path.exists():
+        print(f"❌ Manifest not found: {manifest}")
+        return
+
+    urls = [
+        line.strip()
+        for line in manifest_path.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    print(f"Batch processing {len(urls)} videos...")
+
+    for i, url in enumerate(urls):
+        print(f"\n[{i+1}/{len(urls)}] {'URL' if '://' in url else 'File'}: {url}")
+        try:
+            if "://" in url:
+                path = VideoPipeline.download_from_url(url, config.video_dir)
+                if not path:
+                    print(f"  ❌ Download failed, skipping")
+                    continue
+            else:
+                path = Path(url)
+                if not path.exists():
+                    print(f"  ❌ File not found, skipping")
+                    continue
+
+            index = pipeline.process(str(path))
+            rag.index_video(index)
+            print(
+                f"  ✅ Processed: {index.video_id} ({index.duration:.0f}s, {len(index.scenes)} scenes)"
+            )
+        except Exception as e:
+            print(f"  ❌ Error: {e}")
 
 
 def url_mode(args):
@@ -129,6 +184,11 @@ def main():
     parser.add_argument("--host", type=str, default=None, help="UI host")
     parser.add_argument("--port", type=int, default=None, help="UI port")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
+    parser.add_argument(
+        "--no-health",
+        action="store_true",
+        help="Disable health API and run Gradio standalone",
+    )
 
     args = parser.parse_args()
 
@@ -153,7 +213,9 @@ def main():
     else:
         from ui.app import launch
 
-        launch()
+        launch(
+            no_health=args.no_health,
+        )
 
 
 if __name__ == "__main__":

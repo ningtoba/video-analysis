@@ -4,8 +4,8 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "video-analysis"
-version = "0.4.0"
-description = "Self-hosted video analysis platform with AI chatbot — scene understanding, RAG, clip export, YouTube import, batch processing"
+version = "0.6.0"
+description = "Self-hosted video analysis platform with AI chatbot — scene understanding, RAG, clip export, YouTube import, batch processing, health API"
 readme = "README.md"
 authors = [
     {name = "Hermes Agent"},

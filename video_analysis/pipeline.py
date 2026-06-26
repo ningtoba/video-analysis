@@ -219,12 +219,109 @@ class VideoPipeline:
 
     def _detect_scenes(self, video_path: Path, video_id: str) -> List[SceneInfo]:
         """
-        Detect scene boundaries using FFmpeg scene detection.
-        Falls back to FFmpeg scene filter if PySceneDetect is unavailable.
+        Detect scene boundaries using PySceneDetect or FFmpeg.
+
+        Uses the detector configured via ``config.scene_detector``:
+
+        - ``"adaptive"`` (default): :class:`scenedetect.AdaptiveDetector` — rolling
+          average of HSV differences; good for camera motion.
+        - ``"content"``: :class:`scenedetect.ContentDetector` — fixed-threshold
+          HSV-weighted pixel changes; classic fast-cut detection.
+        - ``"histogram"``: :class:`scenedetect.HistogramDetector` — Y-channel
+          histogram differences for fast cuts.
+        - ``"hash"``: :class:`scenedetect.HashDetector` — perceptual hashing
+          similarity comparison.
+        - ``"ffmpeg"``: legacy FFmpeg ``select='gt(scene,threshold)'`` approach.
+
+        Falls through gracefully:
+          1. PySceneDetect installed  →  use ``detect(video, detector)``.
+          2. PySceneDetect unavailable →  FFmpeg scene filter.
+          3. FFmpeg also fails         →  uniform 30 s chunks.
         """
-        scenes = []
+        scenes: List[SceneInfo] = []
+        duration = self._get_duration(video_path)
+
+        # ------------------------------------------------------------------
+        # 1. Try PySceneDetect (adaptive, content, histogram, or hash detector)
+        # ------------------------------------------------------------------
+        if self.config.scene_detector in ("adaptive", "content", "histogram", "hash"):
+            try:
+                from scenedetect import detect
+
+                if self.config.scene_detector == "adaptive":
+                    from scenedetect import AdaptiveDetector
+
+                    detector = AdaptiveDetector(
+                        adaptive_threshold=3.0,
+                        min_scene_len=15,
+                        min_content_val=15.0,
+                    )
+                elif self.config.scene_detector == "content":
+                    from scenedetect import ContentDetector
+
+                    detector = ContentDetector(
+                        threshold=self.config.scene_threshold,
+                        min_scene_len=15,
+                    )
+                elif self.config.scene_detector == "histogram":
+                    from scenedetect import HistogramDetector
+
+                    detector = HistogramDetector(
+                        threshold=self.config.scene_threshold,
+                        min_scene_len=15,
+                    )
+                else:  # hash
+                    from scenedetect import HashDetector
+
+                    detector = HashDetector(
+                        threshold=self.config.scene_threshold,
+                        min_scene_len=15,
+                    )
+
+                scene_list = detect(str(video_path), detector)
+                timestamps = [0.0]
+                for start_tc, end_tc in scene_list:
+                    timestamps.append(end_tc.get_seconds())
+
+            except ImportError:
+                logger.info(
+                    "scenedetect not installed; falling back to FFmpeg scene detection. "
+                    "Install with: pip install scenedetect>=0.7.0"
+                )
+                timestamps = self._detect_scenes_ffmpeg(video_path, duration)
+            except Exception as e:
+                logger.warning(f"PySceneDetect failed ({e}); falling back to FFmpeg.")
+                timestamps = self._detect_scenes_ffmpeg(video_path, duration)
+
+        # ------------------------------------------------------------------
+        # 2. FFmpeg mode (explicit or fallback)
+        # ------------------------------------------------------------------
+        else:
+            timestamps = self._detect_scenes_ffmpeg(video_path, duration)
+
+        # ------------------------------------------------------------------
+        # 3. Build SceneInfo list from timestamps
+        # ------------------------------------------------------------------
+        for i in range(len(timestamps)):
+            start = timestamps[i]
+            end = timestamps[i + 1] if i + 1 < len(timestamps) else duration
+            scenes.append(
+                SceneInfo(
+                    scene_id=i,
+                    start_time=start,
+                    end_time=end,
+                )
+            )
+        return scenes
+
+    def _detect_scenes_ffmpeg(self, video_path: Path, duration: float) -> List[float]:
+        """
+        Detect scene boundaries using FFmpeg's ``select='gt(scene,...)'`` filter.
+
+        Returns a list of boundary timestamps (starting with 0.0).  On failure,
+        falls back to uniform 30-second chunks.
+        """
         try:
-            # Try FFmpeg scene detection (always available)
             result = subprocess.run(
                 [
                     "ffmpeg",
@@ -242,7 +339,6 @@ class VideoPipeline:
                 text=True,
                 timeout=300,
             )
-            # Parse showinfo output for scene timestamps
             timestamps = [0.0]
             for line in result.stderr.split("\n"):
                 if "pts_time:" in line:
@@ -251,28 +347,11 @@ class VideoPipeline:
                             ts = float(part.split(":")[1])
                             if ts > timestamps[-1] + 0.5:  # min 0.5s gap
                                 timestamps.append(ts)
+            return timestamps
         except Exception as e:
-            logger.warning(f"Scene detection error: {e}")
+            logger.warning(f"FFmpeg scene detection error: {e}")
             # Fallback: uniform 30-second chunks
-            duration = self._get_duration(video_path)
-            timestamps = list(range(0, int(duration), 30))
-
-        # Build scenes from timestamps
-        for i in range(len(timestamps)):
-            start = timestamps[i]
-            end = (
-                timestamps[i + 1]
-                if i + 1 < len(timestamps)
-                else self._get_duration(video_path)
-            )
-            scenes.append(
-                SceneInfo(
-                    scene_id=i,
-                    start_time=start,
-                    end_time=end,
-                )
-            )
-        return scenes
+            return list(range(0, int(duration), 30))
 
     def _extract_key_frames(
         self, video_path: Path, video_id: str, scene: SceneInfo
@@ -466,14 +545,15 @@ class VideoPipeline:
         if self._clip_model is None:
             try:
                 logger.info(
-                    f"Loading OpenCLIP ViT-B-32 (laion2b_s34b_b79k) on {device}..."
+                    f"Loading OpenCLIP {self.config.clip_model} "
+                    f"({self.config.clip_pretrained_dataset}) on {device}..."
                 )
                 model, _, preprocess = open_clip.create_model_and_transforms(
-                    "ViT-B-32",
-                    pretrained="laion2b_s34b_b79k",
+                    self.config.clip_model,
+                    pretrained=self.config.clip_pretrained_dataset,
                     device=device,
                 )
-                tokenizer = open_clip.get_tokenizer("ViT-B-32")
+                tokenizer = open_clip.get_tokenizer(self.config.clip_model)
                 self._clip_model = model
                 self._clip_preprocess = preprocess
                 self._clip_tokenizer = tokenizer
@@ -912,7 +992,7 @@ class VideoPipeline:
 
     @staticmethod
     def download_from_url(
-        url: str, output_dir: Optional[Path] = None
+        url: str, output_dir: Optional[Path] = None, use_config: bool = True
     ) -> Optional[Path]:
         """
         Download a video from YouTube or other supported platforms using yt-dlp.
@@ -920,6 +1000,7 @@ class VideoPipeline:
         Args:
             url: Video URL (YouTube, Vimeo, etc.)
             output_dir: Directory to save the downloaded video. Defaults to config video_dir.
+            use_config: If True (default), uses a Config instance for output_dir.
 
         Returns:
             Path to the downloaded video file, or None on failure.

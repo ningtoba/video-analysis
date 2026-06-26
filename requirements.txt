@@ -18,6 +18,12 @@ open-clip-torch>=2.24.0
 # YouTube/URL video import
 yt-dlp>=2024.0.0
 
+# Scene detection
+scenedetect>=0.7.0
+
+# Optional — ColBERTv2 late-interaction re-ranking
+# ragatouille>=1.0.0
+
 # Optional — for higher accuracy:
 # ultralytics>=8.0.0  # YOLO object detection
 # paddlepaddle-gpu>=2.6.0  # PaddleOCR

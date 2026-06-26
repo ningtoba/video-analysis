@@ -1,14 +1,49 @@
-# Docker ignore file for video-analysis platform
+# ── .dockerignore for video-analysis platform ──
+# Excludes everything not needed in the container build context
+
+# Version control
 .git/
 .gitignore
+
+# Python cache / artifacts
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .pytest_cache/
 *.egg-info/
+dist/
+build/
+
+# OS junk
 .DS_Store
+Thumbs.db
+
+# Secrets (never ship these)
 .env
+.env.*
+*.key
+*.pem
+
+# Data (bind-mounted at runtime, not baked into image)
 data/
+
+# Tests and docs (not needed at runtime)
 tests/
-*.md
+docs/
+research_report.md
+ui-framework-research.md
+video-rag-architecture-research.md
+RESEARCH-2025.md
+RESEARCH_EMBEDDING_UPGRADES.md
+research_scenedetect.py
+.hermes/plans/
+
+# Keep README and CHANGELOG in Docker image (they ship as docs)
+!README.md
+!CHANGELOG.md
+
+# Keep the docker files
 !.dockerignore
+!Dockerfile
+!docker-compose.yml

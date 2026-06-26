@@ -5,7 +5,7 @@
 ```
 ┌──────────────┐    ┌─────────────────────────┐    ┌─────────────────────┐
 │  Upload Video│───▶│  Analysis Pipeline       │───▶│  RAG Vector Index   │
-│  (drag-drop) │    │  FFmpeg → Whisper        │    │  ChromaDB + BGE     │
+│  (drag-drop) │    │  PySceneDetect 0.7        │    │  ChromaDB + Nomic     │
 │  or YouTube  │    │  → Scene Detect          │    │  + Cross-Encoder    │
 │  URL Import  │    │  → YOLO → CLIP → Index  │    └─────────┬───────────┘
 └──────────────┘    │  → Sprite Sheet          │              │
@@ -85,7 +85,12 @@ Video File
 ├── FFmpeg ──→ Extract Audio (16kHz WAV)
 │              └── faster-whisper (large-v3) ──→ Timestamped Transcript
 │              └── PyAnnote Audio ──→ Speaker Diarization (SPEAKER_00/01)
-├── FFmpeg ──→ Scene Detection (scene filter)
+├── PySceneDetect 0.7 ──→ Scene Detection
+│   ├── AdaptiveDetector (default) — rolling HSV average
+│   ├── ContentDetector — fixed-threshold HSV changes
+│   ├── HistogramDetector — Y-channel histogram diffs
+│   ├── HashDetector — perceptual hashing for similarity
+│   └── FFmpeg fallback (gt(scene,...))
 │              └── Per Scene: keyframe extraction
 │                            ├── YOLO object detection
 │                            ├── PaddleOCR text extraction
@@ -100,7 +105,7 @@ Video File
 
 ```
 User Question
-├── BGE Embedding
+├── Nomic Embedding
 ├── ChromaDB Hybrid Search (dense + metadata)
 ├── Cross-Encoder Re-ranking (MS MARCO MiniLM)
 ├── Temporal Context Expansion (±1 neighbor scene)
@@ -129,13 +134,13 @@ User Question
 | **Transcription** | faster-whisper (large-v3) | ~12× realtime on RTX 4070, int8 quantized |
 | **Speaker Diarization** | PyAnnote Audio 3.1 | Gold-standard speaker labeling, optional fallback |
 | **OCR** | PaddleOCR | Best accuracy for natural scenes, CPU mode |
-| **Scene Detection** | FFmpeg scene filter | Always available, no extra deps |
+| **Scene Detection** | PySceneDetect 0.7+ (Adaptive/Content/Histogram/Hash) — or FFmpeg fallback |
 | **Object Detection** | YOLO (ultralytics) | State-of-the-art speed/accuracy |
-| **Scene Description** | OpenCLIP (ViT-B-32) | Zero-shot classification, rich semantic understanding |
+| **Scene Description** | OpenCLIP (ViT-B-32 / ViT-L-14) | Configurable model size, zero-shot classification |
 | **Timeline Preview** | FFmpeg + Pillow sprite sheets | 100-thumbnail visual timeline navigation |
 | **Vector Store** | ChromaDB | Persistent, local, no server needed |
-| **Embeddings** | BAAI/bge-small-en-v1.5 | Strong retrieval, light weight |
-| **Re-ranker** | cross-encoder/ms-marco-MiniLM | Boosts precision to ~95%+ |
+| **Embeddings** | nomic-ai/nomic-embed-text-v1.5 | 768-dim, MTEB ~64, Apache 2.0, self-hosted |
+| **Re-ranker** | cross-encoder/ms-marco-MiniLM (default) + optional ColBERTv2 (RAGatouille) | Dual re-ranking for precision |
 | **Video Import** | yt-dlp | Downloads from YouTube, Vimeo, Twitch, and 1000+ sites |
 | **LLM** | DeepSeek-V4-Flash (via Hermes) | Fast, capable, local provider |
 | **GPU** | RTX 4070 (CUDA 13.3) | All models run with GPU acceleration |
@@ -149,7 +154,11 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `VIDEO_ANALYSIS_DATA` | `data/` | Data directory for videos, frames, audio, chroma |
 | `WHISPER_MODEL` | `large-v3` | Whisper model size |
 | `WHISPER_DEVICE` | `cuda` | Device for transcription |
-| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model for RAG |
+| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Embedding model for RAG |
+| `CLIP_MODEL` | `ViT-B-32` | OpenCLIP model size (ViT-B-32 or ViT-L-14) |
+| `CLIP_PRETRAINED` | `laion2b_s34b_b79k` | OpenCLIP pretrained dataset |
+| `SCENE_DETECTOR` | `adaptive` | Scene detection mode (adaptive/content/histogram/hash/ffmpeg) |
+| `COLBERT_RERANKER_ENABLED` | `false` | Enable ColBERTv2 late-interaction re-ranking (requires ragatouille) |
 | `OCR_ENABLED` | `true` | Enable PaddleOCR text extraction |
 | `DIARIZE_ENABLED` | `true` | Enable PyAnnote speaker diarization |
 | `YT_DLP_ENABLED` | `true` | Enable YouTube/URL video import |
@@ -194,11 +203,16 @@ python tests/test_basic.py
 - [x] Docker deployment
 - [x] YouTube URL import (yt-dlp)
 - [x] Batch video processing queue
-- [ ] Frame preview on timeline hover (CSS sprite sheet overlay)
-- [ ] PySceneDetect for improved scene boundaries
-- [ ] OpenCLIP ViT-L-14 upgrade (richer scene descriptions)
-- [ ] ColBERTv2 late-interaction re-ranking
+- [x] PySceneDetect for improved scene boundaries (Adaptive + Content + Histogram + Hash)
+- [x] OpenCLIP ViT-L-14 upgrade (richer scene descriptions)
+- [x] FastAPI health endpoint and API
+- [x] Embedding model upgrade (Nomic Embed v1.5)
+- [x] Docker production hardening (CUDA 12.8, torch 2.6)
+- [x] Frame preview on timeline hover (CSS sprite sheet overlay)
+- [x] ColBERTv2 late-interaction re-ranking
 - [ ] Action recognition (VideoMAE/TimeSformer)
+- [ ] Gradio auth via env vars
+- [ ] Semantic video search (not just Q&A)
 
 ## 📝 License
 
