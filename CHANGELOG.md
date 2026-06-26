@@ -1,5 +1,79 @@
 # Changelog
 
+## 0.25.0 (2026-06-26) — MCP Tool Server, Pipeline Benchmarking & Sparse-Frame Optical Flow
+
+### 🎯 Major Features
+
+#### 🧩 MCP Tool Server — Expose Pipeline as Agentic Tools
+- **New module**: `video_analysis/mcp_server.py` — Full Model Context Protocol (MCP) server using
+  the Python `mcp` SDK (v1.28.1), exposing 7 pipeline tools for Hermes, Claude Code, and any MCP host.
+- **7 tools**: `process_video` (full pipeline + YouTube URL), `search_videos` (semantic cross-video search),
+  `ask_question` (Q&A with timestamp citations), `extract_scenes` (scene metadata), `detect_objects`
+  (YOLO per-scene), `list_library` (indexed video list), `delete_video` (remove from index).
+- **Dual transport**: stdio for Hermes integration (`--stdio`), HTTP SSE for remote access (`--port 8081`).
+- **Lazy service init**: Pipeline, RAG, and Chat modules are created on first tool call — no import-time
+  model loading. Processing mode overrideable per-call.
+- **Documentation**: Usage examples in module docstring.
+- **12 tests** covering module structure, tool signatures, parameter validation.
+
+#### ⏱️ Pipeline Benchmarking Infrastructure
+- **New module**: `video_analysis/benchmark.py` — `GPUProfiler` and `PipelineBenchmark` classes for
+  per-stage profiling.
+- **GPUProfiler context manager**: Captures start/peak/end VRAM (via `torch.cuda.max_memory_allocated`)
+  and wall-clock time around any code block. Graceful CPU fallback.
+- **PipelineBenchmark collector**: Collects per-stage `StageRecord` entries, produces human-readable
+  table reports and JSON-serialisable dicts. Context manager API (`with PipelineBenchmark("label") as bm:`).
+- **8 tests** for both classes covering profiling, stage recording, report formatting, dict export.
+
+#### 🏃 Sparse-Frame Optical Flow (FFmpeg Motion Vectors)
+- **New module**: `video_analysis/flow.py` — `FFmpegMotionExtractor` class for zero-GPU motion analysis.
+- **Primary path**: Exports H.264/H.265/VP9 block motion vectors via `ffprobe -show_frames` with
+  `side_data_list` parsing — <1ms per frame, zero GPU.
+- **Fallback path**: Frame-diff based motion estimation using packet size/intra-frame bitrate changes
+  (works on any codec, any FFmpeg build).
+- **Motion metrics per frame**: `mv_count`, `mv_magnitude_avg`, `mv_direction_entropy` (0-1),
+  `motion_score` (0-1), `pict_type`.
+- **Utilities**: `is_static()` threshold check, `scene_cut_candidates()` for detecting motion-velocity
+  boundaries (complements PySceneDetect).
+- **14 tests** covering MV parsing, side data extraction, direction entropy, scene cut detection,
+  fallback frame diff with real MP4, edge cases.
+
+#### 🔧 PaddleOCR v5 Compatibility
+- The existing `paddleocr` import path is forward-compatible with PaddleOCR v5 (`PP-OCRv5`).
+  The current `PaddleOCR(use_angle_cls=True, lang="en", ...)` constructor works unchanged.
+  No migration steps needed.
+
+### 📦 New Modules
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `mcp_server` | `video_analysis/mcp_server.py` | ~340 | MCP tool server (7 tools, stdio + SSE) |
+| `benchmark` | `video_analysis/benchmark.py` | ~160 | GPUProfiler + PipelineBenchmark profiling |
+| `flow` | `video_analysis/flow.py` | ~270 | FFmpeg motion vector extraction (zero GPU) |
+
+### 🧪 Tests
+- **34 new tests** (12 MCP server + 8 benchmark + 14 flow) — **248/272 passing** (0 failures)
+- 24 deselected (benchmarks without pytest-benchmark fixture — pre-existing)
+- New test files: `tests/test_mcp_server.py`, `tests/test_benchmark.py`, `tests/test_flow.py`
+
+### 📋 Roadmap Progress
+- [ ] Qwen3-VL-30B-A3B FP8 backend
+- [ ] Dependency modernization — update pyproject.toml bounds
+- [x] Pipeline benchmarking infra — GPUProfiler + PipelineBenchmark
+- [x] MCP tool server — 7 tools, stdio + SSE transport
+- [x] Sparse-frame optical flow — FFmpeg motion vectors, zero GPU
+- [ ] InsightFace face recognition
+- [ ] Gradio 6 Workflow integration
+- [ ] ColBERT-Att attention-weighted re-ranking
+- [ ] Agentic self-check + re-retrieval
+- [ ] Real-time streaming video analysis
+- [ ] Federated video search (MCP-based)
+- [ ] Prometheus metrics endpoint + Grafana
+
+### 📝 Dependencies
+- New dependency: `mcp>=1.0.0` (Python MCP SDK for tool server)
+
+---
+
 ## 0.24.0 (2026-06-26) — Pipeline Orchestrator & Content-Addressable Cache
 
 ### 🎯 Major Features

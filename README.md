@@ -291,12 +291,12 @@ python tests/test_basic.py
 |- [ ] Dependency modernization — update pyproject.toml bounds for torch>=2.5.0, transformers>=4.50.0
 ||- [x] Pipeline caching + incremental re-indexing — `video_analysis/cache.py`, content-addressable SHA-256 per-stage cache with persistent index, config-aware invalidation, TTL expiry
 ||- [x] PipelineOrchestrator heuristic — `video_analysis/orchestrator.py`, file-type + ffprobe + heuristic classification into 7 video types with stage overrides
-||- [ ] Pipeline benchmarking infra — pynvml per-stage VRAM tracking, pytest-benchmark suite
-|- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy
-|- [ ] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows)
+|- [x] Pipeline benchmarking infra — pynvml per-stage VRAM tracking, pytest-benchmark suite
+|- [x] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows) — 7 tools, stdio + SSE
+|- [x] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU, video_analysis/flow.py)
+|- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy (backward compatible, no code change needed)
 |- [ ] InsightFace face recognition (RetinaFace + ArcFace, cross-video person identity)
 |- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
-|- [ ] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU)
 |- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 |- [ ] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
 |- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)

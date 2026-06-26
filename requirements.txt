@@ -18,6 +18,9 @@ einops>=0.8.0
 # Structured logging
 structlog>=24.4.0
 
+# MCP server (Model Context Protocol for agentic tool access)
+mcp>=1.0.0
+
 # Scene understanding
 open-clip-torch>=2.24.0
 
