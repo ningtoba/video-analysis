@@ -237,17 +237,23 @@ Key improvements discovered:
 
 ---
 
-## Summary of High-Impact Items for Next Iteration
+|---|---
+
+> **v0.12.0 research complete — see `docs/research/v0.12.0-research-video-evolution.md` for the full report.**
+> Key finding: **BGE-VL-base** (150M, 0.8GB VRAM, MIT) can replace the dual-model approach (Nomic Embed + Qwen3-VL), simplifying the codebase while adding true multimodal frame search. This is the highest-impact change available.
+
+## Summary of High-Impact Items for Next Iteration (v0.12.0)
 
 | # | Area | Action | Effort | Impact |
 |---|------|--------|--------|--------|
-| 1 | UI/Security | **Gradio auth via env vars** | Small | **High** |
-| 2 | RAG | **BGE-VL multimodal embeddings for frame search** | Medium | **High** |
-| 3 | Video AI | **InternVideo2 action recognition** | Medium | **High** |
-| 4 | Pipeline | **Adaptive frame sampling (motion-based)** | Medium | Medium |
-| 5 | Pipeline | **CLIP similarity frame dedup** | Small | Medium |
-| 6 | Pipeline | **GPU memory: explicit empty_cache() calls** | Small | Medium |
-| 7 | RAG | Hierarchical chunk indexing | Medium | Medium |
+| 1 | RAG/Embedding | **BGE-VL-base as default embedding** — replace dual-model (Nomic + Qwen3-VL) | 2h | **Critical** |
+| 2 | RAG | **Temporal-aware retrieval** — time-decay weighting + entropy frame sampling | 1.5h | **High** |
+| 3 | Pipeline | **GPU memory audit** — systematic `_unload_model()` between all GPU stages | 45min | **High** |
+| 4 | Pipeline | **Graceful SIGTERM/SIGINT handling** | 30min | **High** |
+| 5 | RAG | **Multi-granularity chunking** — fixed-window (60s) + sliding-window (30s) chunks | 1.5h | Medium |
+| 6 | RAG | **Embedding prefix normalization** — query/document prefixes for +5-10% accuracy | 15min | High |
+| 7 | UI | **Bump Gradio >=6.19.0** — MCP support, Svelte 5, better stability | 2min | Medium |
+| 8 | Deployment | **NVIDIA DCGM GPU monitoring** — Prometheus exporter in docker-compose | 15min | Low |
 
 ---
 
