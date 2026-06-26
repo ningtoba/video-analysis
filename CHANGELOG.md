@@ -1,5 +1,107 @@
 # Changelog
 
+## 0.41.0 (2026-06-27) — Full REST API, Webcam UI & MLLM Streaming
+
+### 🌐 Full REST API Layer (`video_analysis/api.py`)
+
+A comprehensive HTTP API that makes the entire platform programmable via REST,
+with full auto-generated OpenAPI documentation at `/docs`.
+
+**New module**: `video_analysis/api.py` — `create_api_router()` returning a
+FastAPI APIRouter with Pydantic request/response schemas:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/videos/process` | POST | Upload a video file or submit a URL for processing through the pipeline |
+| `/api/videos` | GET | List all indexed videos in the library |
+| `/api/videos/{video_id}` | GET | Full video details — scenes, transcript, objects, metadata |
+| `/api/videos/{video_id}` | DELETE | Delete a video from the library and ChromaDB index |
+| `/api/videos/{video_id}/query` | POST | Ask a question, get an answer with source citations |
+| `/api/videos/{video_id}/query/stream` | POST | Same as query but returns SSE streaming token-by-token |
+| `/api/videos/search` | GET | Cross-video semantic search with relevance scores |
+| `/api/videos/{video_id}/transcript` | GET | Full transcript with speaker labels and timestamps |
+| `/api/videos/{video_id}/frames/{timestamp}` | GET | JPEG frame image at a specific timestamp |
+| `/api/videos/{video_id}/chapters` | GET | Auto-generated video chapters |
+
+**SSE Streaming**: The `/api/videos/{video_id}/query/stream` endpoint yields
+LLM response tokens in real-time using Server-Sent Events, enabling chat-like
+token-by-token streaming for web and CLI clients.
+
+**Pydantic schemas**: All request/response bodies use proper Pydantic models
+with field descriptions and validation — full OpenAPI docs auto-generated.
+
+**Error handling**: Consistent error responses — 503 for uninitialized RAG,
+404 for missing videos, 422 for validation errors.
+
+**Tests**: 28 new tests in `tests/test_api.py` — mock VideoRAG, VideoPipeline,
+and VideoChat to test all endpoints without real infrastructure.
+
+### 📷 Webcam & Live Camera Capture Tab (`ui/camera.py`)
+
+New Gradio 6 tab providing real-time webcam capture and on-the-fly frame analysis.
+
+- **Live camera feed** — `gr.Image(sources=['webcam'])` for browser-based webcam
+- **Camera source selector** — webcam 0, 1, or upload static image
+- **Capture & Analyze** — snap current frame and run YOLO detection + CLIP description
+- **Continuous mode** — auto-capture at configurable intervals (1-10s)
+- **Config toggle** — `CAMERA_ENABLED` env var (default: `false`)
+- **Graceful degradation** — works when webcam unavailable (file upload mode)
+
+### 🧠 MLLM Streaming Q&A (`video_analysis/stream_chat.py`)
+
+Token-by-token streaming for LLM responses across both provider backends.
+
+- **`stream_chat()` method** added to `LLMProvider` ABC — yields tokens via
+  async generator
+- **`HermesProvider.stream_chat()`** — reads subprocess stdout line-by-line
+- **`OpenAIProvider.stream_chat()`** — parses SSE `data:` events from API
+  using `httpx.AsyncClient` with `stream=True`
+- **`StreamChatManager`** — coordinates streaming sessions with history,
+  timeout, and session lifecycle management
+- **Gradio UI integration** — streaming responses update `gr.Chatbot` incrementally
+
+### 🔧 Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CAMERA_ENABLED` | `false` | Enable webcam/live camera capture tab in UI |
+
+### 📦 Files Changed
+
+- **New**: `video_analysis/api.py` — full REST API with 10+ endpoints (Pydantic + SSE)
+- **New**: `video_analysis/stream_chat.py` — token-by-token MLLM streaming (providers)
+- **New**: `ui/camera.py` — Gradio 6 webcam capture & analysis tab
+- **New**: `tests/test_api.py` — 28 REST API endpoint tests
+- **New**: `tests/test_camera.py` — 12 webcam UI tests
+- **Modified**: `ui/health.py` — registers `create_api_router()` in FastAPI app
+- **Modified**: `video_analysis/llm_provider.py` — `stream_chat()` on ABC + both providers
+- **Modified**: `ui/app.py` — injects camera tab + streaming chat integration
+- **Modified**: `video_analysis/config.py` — `camera_enabled` config field
+- **Modified**: `video_analysis/__init__.py` — v0.41.0, exports api module
+- **Modified**: `pyproject.toml` — v0.41.0
+- **Modified**: `tests/test_basic.py` — version check update
+- **Modified**: `tests/test_metrics.py` — version check update
+- **Modified**: `tests/test_federation.py` — version check update
+- **Modified**: `tests/test_qwen3_vl.py` — version check update
+- **Modified**: `tests/test_streaming.py` — version check update
+- **Modified**: `tests/test_llm_provider.py` — streaming tests
+- **Modified**: `Dockerfile` — updated version label to 0.41.0
+
+### 🧪 Tests
+
+- **28 new API tests** — all pass in <0.5s (mocked pipeline/RAG/chat)
+- **12 new camera tests** — all pass in <0.3s (mocked modules)
+- **8 new streaming LLM tests** — added to test_llm_provider.py
+- Total tests: ~554+
+
+### 📋 Roadmap
+
+- [x] **Full REST API Layer** — programmable HTTP API with OpenAPI docs and SSE streaming
+- [x] **Webcam/Live Camera Capture** — real-time frame analysis via Gradio UI
+- [x] **MLLM Streaming Q&A** — token-by-token SSE for Hermes and OpenAI providers
+
+---
+
 ## 0.40.0 (2026-06-27) — Live Stream Analysis
 
 ### 📡 Live RTMP/RTSP/HLS Stream Analysis

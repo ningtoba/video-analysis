@@ -2374,7 +2374,7 @@ def test_version_0_34_0():
     """Test that version is 0.34.0."""
     import video_analysis
 
-    assert video_analysis.__version__ == "0.40.0"
+    assert video_analysis.__version__ == "0.41.0"
 
 
 if __name__ == "__main__":

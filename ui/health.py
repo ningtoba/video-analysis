@@ -16,6 +16,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from video_analysis import __version__
+from video_analysis.api import create_api_router
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG
 
@@ -129,6 +130,9 @@ def _check_models() -> dict:
 
 def _setup_routes(app: FastAPI, config: Optional[Config] = None) -> None:
     """Register all routes on the FastAPI app."""
+
+    # Include the full REST API router from video_analysis.api
+    app.include_router(create_api_router(config))
 
     @app.get("/health", response_model=HealthResponse)
     async def health():
@@ -324,6 +328,17 @@ def create_health_app(config: Config) -> FastAPI:
     )
 
     _setup_routes(app, config)
+
+    # Mount the full REST API layer (v0.41.0)
+    try:
+        from video_analysis.api import create_api_router, set_rag_instance
+
+        set_rag_instance(_rag)
+        api_router = create_api_router(config)
+        app.include_router(api_router)
+        logger.info("Full REST API mounted at /api (OpenAPI docs at /docs)")
+    except ImportError as exc:
+        logger.warning("REST API module not available: %s", exc)
 
     # Apply auth middleware if configured
     _setup_auth_middleware(app, config)

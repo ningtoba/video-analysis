@@ -30,6 +30,7 @@ from video_analysis.chat import VideoChat
 from video_analysis.models import format_timestamp, VideoIndex
 from ui.utils import parse_yt_url, queue_html
 from ui.workflow import inject_workflow_tab
+from ui.camera import inject_camera_tab
 
 logger = logging.getLogger(__name__)
 
@@ -529,6 +530,9 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             if config.workflow_enabled:
                 inject_workflow_tab(app, config)
 
+            # ============ TAB 7: CAMERA (Webcam Live Capture) ============
+            inject_camera_tab(app, config)
+
         # ==================== EVENT HANDLERS ====================
 
         # --- Process Video ---
@@ -911,7 +915,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 "",
             )
 
-        # --- Send Chat Message ---
+        # --- Send Chat Message (with streaming support) ---
         def do_send(msg: str, history: list, video_id: str, show_src: bool):
             if not msg or not video_id:
                 history = history or []

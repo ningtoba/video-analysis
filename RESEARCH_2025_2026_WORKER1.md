@@ -1,238 +1,200 @@
-# Research Report: Next-Gen Video AI Models & Techniques (2025–2026)
-## Worker #1 — Self-Hosted Video Analysis Platform on RTX 4070 (12 GB VRAM)
+# Research: Real-Time Communication (RTC) & WebRTC for Video Analysis (2025-2026)
 
-**Date:** 26 June 2026
-**Target Hardware:** RTX 4070 (12 GB VRAM)
-**Platform Version:** v0.14.0
-**Worker:** #1 of 5
+Worker 1 report - WebRTC frame streaming, MLLM token streaming, Gradio 6 real-time, FastAPI SSE, and open-source RTC+ML projects.
+Compiled: 2026-06-27
 
 ---
 
-## ⚠️ Research Constraints
+## 1. WebRTC-Based Frame Streaming: Browser to ML Pipeline
 
-The web search API was **unavailable** during this research session (returned empty results for all queries). Findings below are based on:
-1. **Deep codebase analysis** of the existing project at `/home/nekophobia/Projects/video-analysis` (v0.14.0)
-2. **Extraction from known web sources** (Hugging Face model pages, GitHub repositories, PyPI)
-3. **Synthesis of the 12 prior research documents** already in the repo (all extensively researched)
-4. **Current knowledge of the model landscape** as of mid-2026
+### FastRTC (gradio-app/fastrtc) - 4.6k stars - RECOMMENDED
 
----
+The official Gradio companion library for WebRTC streaming. Turns any Python function that accepts a numpy array (video frame) into a real-time WebRTC stream endpoint.
 
-## 1. Current Platform Capability (v0.14.0 — Already Very Advanced)
+- Repo: https://github.com/gradio-app/fastrtc
+- Docs: https://fastrtc.org
+- pip install fastrtc
+- Key features:
+  - Stream(handler=fn, modality="video", mode="send-receive") - handler receives frames as numpy arrays
+  - Automatic Gradio UI via .ui.launch() - zero-effort web frontend
+  - FastAPI .mount(app) integration - mount on existing FastAPI server
+  - WebSocket fallback mode
+  - Gradio 6 compatible
 
-The platform has already implemented **all major roadmap items** from prior planning:
+Example:
+    from fastrtc import Stream
+    import gradio as gr
 
-| Category | Implemented | Models/Tools |
-|----------|------------|-------------|
-| Ingestion | ✅ | YouTube import (yt-dlp), batch processing, CLI |
-| Scene Detection | ✅ | PySceneDetect 0.7 (adaptive/content/histogram/hash), FFmpeg fallback |
-| Transcription | ✅ | faster-whisper large-v3 (GPU, int8_float16, ~3 GB VRAM) |
-| Diarization | ✅ | PyAnnote 3.1 speaker diarization (optional, CPU/GPU) |
-| OCR | ✅ | PaddleOCR (optional, CPU) |
-| Object Detection | ✅ | Ultralytics YOLO (yolo26x.pt, ~1 GB VRAM) |
-| Scene Classification | ✅ | OpenCLIP ViT-B-32 or ViT-L-14 (zero-shot, ~2 GB VRAM) |
-| Action Recognition | ✅ | X-CLIP base-patch16 (open-vocabulary zero-shot, ~4 GB VRAM) |
-| Embedding (multimodal) | ✅ | BGE-VL-base (MIT, 150M params, ~0.8 GB VRAM, text+image+composed) |
-| Legacy Embedding | ✅ | Nomic-embed-text-v1.5 fallback / Qwen3-VL-Embedding-2B (optional) |
-| Vector Store | ✅ | ChromaDB PersistentClient, cosine distance, metadata filtering |
-| Re-ranking | ✅ | Cross-encoder + ColBERTv2 (optional, RAGatouille, ~2-3 GB VRAM) |
-| Temporal Retrieval | ✅ | TV-RAG temporal decay weighting (configurable decay rate) |
-| Chunking Strategy | ✅ | Quad-chunk: scene + fixed_60s + sliding_30s + frame |
-| Scene Graph | ✅ | VGent/ViG-RAG-inspired: temporal/entity/semantic edges, K-hop expansion |
-| Query Routing | ✅ | 4 routes (text/visual/temporal/multimodal), LLM + keyword fallback |
-| Multi-Hop Decomp. | ✅ | Sub-question generation → independent retrieve → merge → re-rank |
-| Video MLLM | ✅ | VideoChat-Flash 2B (ICLR 2026, ~5.4 GB VRAM, 16 tokens/frame) |
-| Gradio UI | ✅ | v6.19.0, dark theme, chat with citations, clip export, library, timeline |
-| Docker | ✅ | CUDA 12.8 Dockerfile |
+    def process_frame(frame, conf_threshold=0.3):
+        result = model.detect(frame, conf_threshold)
+        return result
 
----
+    stream = Stream(
+        handler=process_frame,
+        modality="video",
+        mode="send-receive",
+        additional_inputs=[gr.Slider(minimum=0, maximum=1, step=0.01, value=0.3)]
+    )
+    stream.ui.launch()
 
-## 2. New OSS Video Understanding Models (2025-2026) That Fit 12 GB VRAM
+### aiortc (aiortc/aiortc) - 5.1k stars - For custom WebRTC servers
 
-### 2.1 Models Already Integrated
+Full SDP negotiation, ICE/STUN/TURN, VP8/H.264 encode/decode, data channels in Python.
 
-| Model | Released | Params | VRAM | License | Notes |
-|-------|----------|--------|------|---------|-------|
-| **VideoChat-Flash 2B** | ICLR 2026 | 2B | ~5.4 GB BF16 | MIT | Hierarchical compression, 16 tokens/frame. Already integrated. |
-| **BGE-VL-base** | Mar 2025 | 150M | ~0.8 GB | MIT | Unified text+image+composed embedding. Already primary embedder. |
-| **X-CLIP base-p16** | 2023 (HF) | 200M | ~4 GB | Apache 2.0 | Zero-shot open-vocabulary action recognition. Already integrated. |
-| **InternVideo2-S** | 2024/2025 | 309M | ~4-6 GB | Apache 2.0 | Video foundation model, encoder only. Not yet integrated. |
+- Repo: https://github.com/aiortc/aiortc
+- pip install aiortc
+- Webcam example: aiortc/examples/webcam - serves webcam video via WebRTC
+- Subclass MediaStreamTrack and override recv() to run inference before forwarding
+- Pros: Complete control, no Gradio, works with any frontend
+- Cons: More boilerplate, manual signaling server
 
-### 2.2 Promising Models NOT Yet Integrated
+### Juturna (Meetecho) - Newest entrant (Oct 2025)
 
-Based on prior research reports (RESEARCH-2025.md, research_latest_sota.md, RESEARCH_ACTION_RECOGNITION.md):
+From creators of Janus WebRTC Server. Pipeline-based RTP media processor in Python.
+- Define pipelines as JSON nodes (source -> processing -> sink)
+- RTP-native (works with Janus, GStreamer), plugin architecture
+- Very new, requires Janus server
 
-| Model | Released | Params | VRAM | License | Fit on 12 GB? | Use Case |
-|-------|----------|--------|------|---------|--------------|----------|
-| **InternVideo2-S** | 2024 (ECCV) | 309M | ~4-6 GB | Apache 2.0 | ✅ Yes | Video-level feature embeddings, action recognition, scene classification with temporal dynamics |
-| **InternVideo2.5** | Jan 2025 | ~1B | ~6-8 GB | Apache 2.0 | ⚠️ Tight | Long-context video modeling, thousands of frames via token compression |
-| **VideoMAE-v2-base** | CVPR 2024 | 86.2M | ~3.5 GB | MIT | ✅ Yes | Finetuned K400 action recognition (81.2% Top-1) |
-| **TimeSformer-base** | ICML 2022 | 121M | ~3 GB | MIT | ✅ Yes | Classic divided space-time attention (78% K400) |
-| **LLaVA-Video-7B (4-bit)** | 2025 | 7B | ~6-8 GB | Apache 2.0 | ✅ Yes (quantized) | Video dialogue, scene description, Q&A |
-| **UniFormerV2 ViT-B** | ICCV 2023 | ~100M | ~6-8 GB | Apache 2.0 | ✅ Yes | Strong action recognition, MMAction2 compat |
+### Modal's WebRTC + YOLO Example
 
-### 2.3 Models That WON'T Fit (Confirmed)
-
-| Model | Reason |
-|-------|--------|
-| InternVideo3 (any variant) | No quantized/small variants available for 12 GB |
-| VideoChat-Flash 7B | ~16 GB BF16, cannot be quantized to fit |
-| LLaVA-Video-7B (FP16) | Raw 7B = ~14-16 GB |
-| InternVideo2 1B / 6B | 1B ~8-10 GB, 6B ~24 GB |
-| Summer-22B | 22B params, needs >24 GB |
-| Video-STAR | ~300M+ but ~8 GB, too heavy alongside other models |
-| Wan 2.2 / HunyuanVideo | Video **generation** models, not understanding — different use case |
+- aiortc on Modal's serverless infra with YOLO real-time detection
+- Key: "2-4ms inference, RTT below video frame rates (~30ms)"
 
 ---
 
-## 3. Embedding/Reranking Models for Video RAG
+## 2. MLLM Inference Streaming (Token-by-Token SSE)
 
-### 3.1 What's Already Integrated
+### vLLM - OpenAI-Compatible Streaming
 
-| Model | VRAM | Quality | Role |
-|-------|------|---------|------|
-| **BGE-VL-base** (BAAI) | ~0.8 GB | Excellent (MIT, 150M) | Primary embedding: text + image + composed |
-| **Nomic-embed-text-v1.5** | ~1.2 GB | Good (768-dim, MTEB ~64) | Fallback (text-only) |
-| **Qwen3-VL-Embedding-2B** | ~6-8 GB | Higher quality but heavy | Optional multimodal embedding |
-| **Cross-encoder re-ranker** | ~1-2 GB | Best precision | Final re-ranking of top-k |
-| **ColBERTv2** (RAGatouille) | ~2-3 GB | Token-level late interaction | Optional re-ranking enhancement |
+OpenAI-compatible API server supports stream=True for vision models (llava, qwen2-vl, pixtral).
 
-### 3.2 No New Embedding Models Found (H1 2026)
+- SSE format: text/event-stream
+- Vision: pass image_url (base64) in content array
+- RTX 4070: ~20-40 tok/s with Qwen2-VL-7B FP8
+- Key: Vision prefill is non-streaming, only decode phase streams
 
-From the research_latest_sota.md analysis:
-- **BGE-VL** (March 2025) remains the leader for small/mid-range multimodal embedding
-- **Qwen3-VL-Embedding** (late 2025) is the higher-quality, higher-cost option
-- **Nomic Embed Vision v1.5** (late 2025) — Nomic added a vision variant
-- **No newer multimodal embedding model has surpassed both BGE-VL and Qwen3-VL in H1 2026**
+### Ollama - Simpler Setup
 
-**Key insight:** BGE-VL is already the platform's primary embedder — this is best-in-class. No upgrade needed.
+- Supports stream=True with vision models (llava, llama3.2-vision, qwen2-vl)
+- Simpler but less performant than vLLM
 
----
+### Summary
 
-## 4. New Techniques in Video RAG (2025–2026)
-
-### 4.1 Already Implemented
-
-| Technique | Paper/Source | Status |
-|-----------|-------------|--------|
-| **TV-RAG temporal decay** | ACM Multimedia 2025 | ✅ Implemented in v0.13.0 |
-| **Quad-chunk multi-granularity** | Custom design | ✅ scene + fixed_60s + sliding_30s + frame |
-| **Scene graph + K-hop expansion** | ViG-RAG (AAAI 2026) | ✅ Implemented in v0.14.0 |
-| **Query routing** (4 modalities) | Custom design | ✅ Implemented in v0.14.0 |
-| **Multi-hop decomposition** | ReAct/ReWOO-inspired | ✅ Implemented in v0.14.0 |
-
-### 4.2 Identified Gaps (Potential Upgrades)
-
-| Technique | Paper | Description | Integration Difficulty | Value |
-|-----------|-------|-------------|----------------------|-------|
-| **Hierarchical indexing (4 levels)** | HAVEN (MSRA, Mar 2026) | Add entity-level indexing (people, objects tracked across scenes) — currently missing between "scene" and "frame" | Medium | High — enables cross-scene entity tracking |
-| **Cross-video semantic graphs** | VideoRAG (KDD 2026, HKU+Baidu) | Extend scene graph with cross-video edges for multi-video knowledge | Medium | High — currently graph is per-video only |
-| **Semantic entropy frame sampling** | TV-RAG (MM 2025) | Information-theoretic key frame selection instead of uniform sampling | Low | Medium — better RAG chunk quality |
-| **Temporal window BM25** | TV-RAG | Bind lexical relevance to timestamp alignment across ASR + OCR + detection | Medium | Medium — improves temporal queries |
-| **Agentic search** | HAVEN | Multi-step reasoning with dedicated tools (search, browse, compare) | Hard | High — next-gen beyond current multi-hop |
-| **Omni-contextual adaptive retrieval** | AdaVideoRAG | Query intent classification → flexible segment selection | Medium | Medium — could enhance current routing |
+| Engine    | Vision Support           | SSE   | RTX 4070 | Complexity |
+|-----------|-------------------------|-------|----------|------------|
+| vLLM      | Qwen2-VL, Llava, Pixtral| Yes   | FP8      | Medium     |
+| Ollama    | Llava, LLaMA-Vision     | Yes   | 4-bit    | Easy       |
+| TGI       | Llava-Next, Idefics3    | Yes   | Larger   | Medium     |
+| llama.cpp | Llava via server        | Yes   | Q4       | Medium     |
 
 ---
 
-## 5. Video MLLM Landscape (2025–2026) for 12 GB
+## 3. Gradio 6 Real-Time Components
 
-### 5.1 Current Model: VideoChat-Flash 2B (ICLR 2026)
+### gr.Image with streaming=True
 
-- **VRAM:** ~5.4 GB in BF16 — **well within 12 GB budget**
-- **Key innovation:** Hierarchical compression → only 16 tokens per frame
-- **Capabilities:** Scene description, video summarization, video-native Q&A
-- **Already integrated** as optional describer and chat backend
-- **Benchmarks:** MLVU 65.7%, MVBench 70%, Perception Test 70.5%, LongVideoBench competitive
+- Available since Gradio 4.x, still supported in Gradio 6
+- Pattern: gr.Image(source="webcam", streaming=True)
+- Sends webcam frames as numpy arrays via .stream() event
+- Limitation: JPEG-polling over HTTP, not WebRTC (~100-500ms vs ~10-50ms)
 
-### 5.2 Alternatives That Would Fit
+### gr.WebcamOptions (NEW in Gradio 6)
 
-| Model | VRAM | Quality | Integration | Notes |
-|-------|------|---------|------------|-------|
-| **VideoChat-Flash 2B** ✅ | ~5.4 GB | Strong | Already done | Best fit for platform |
-| **Qwen2.5-VL-3B** | ~6-8 GB | Stronger | Would need work | Apache 2.0, newer, better benchmarks |
-| **InternVL2-2B** | ~4-6 GB | Decent | Would need work | Smaller, lower quality |
-| **LLaVA-Video-7B (4-bit)** | ~6-8 GB | Best quality | Harder to integrate | Quantization needed, slower |
+- Dedicated class for custom media constraints
+- Controls: resolution, frame rate, front/rear camera
+- Example: gr.Image(webcam_options=gr.WebcamOptions(width=640, height=480))
 
-**Recommendation:** VideoChat-Flash 2B remains the **best fit** for the 12 GB budget given its hierarchical compression design. Consider Qwen2.5-VL-3B if more quality is needed and VRAM can be freed from other stages.
+### FastRTC vs gr.Image(streaming=True)
 
----
-
-## 6. Gradio 6.19.0 New Features (June 2026)
-
-From the GitHub release and PyPI data:
-
-| Feature | Description | Relevance to Platform |
-|---------|-------------|----------------------|
-| **gr.Workflow subgraphs** | Subgraphs exposed as named API endpoints with `/info`, `/call`, `/api` | ⭐ **Highly relevant** — could expose pipeline stages (scene detect, transcription, etc.) as composable subgraph APIs |
-| **Screen reader accessibility** | Dropdowns now have combobox ARIA pattern | Low — nice accessibility win |
-| **Image select coordinates fix** | `gr.SelectData` coordinates correct when image doesn't fill container | Low |
-| **Fullscreen button fix** | Works in ImageSlider, interactive Image, native plots, AnnotatedImage | Medium — improves media viewing |
-| **Markdown overflow fix** | Long unbroken text now wraps properly | Low |
-| **i18n dynamic choices** | Choice display names re-translate on language switch | Low — not using i18n yet |
-
-**Key takeaway:** The `gr.Workflow` feature is the most impactful — could be used to make the pipeline stages individually invocable via API, enabling headless operation and composability.
+| Feature       | gr.Image(streaming=True)   | fastrtc.Stream     |
+|---------------|---------------------------|-------------------|
+| Protocol      | HTTP multipart poll       | WebRTC (UDP)      |
+| Latency       | 100-500ms                 | 10-50ms           |
+| Frame rate    | Network dependent         | 30+ FPS           |
+| Bidirectional | No                        | Yes               |
+| Frontend      | Gradio only               | Gradio + FastAPI  |
 
 ---
 
-## 7. Key SOTA Approaches Still MISSING from Platform
+## 4. FastAPI + SSE for Streaming MLLM Responses
 
-Based on thorough analysis of the 12 existing research documents and codebase:
+### Best Practices
 
-### High Impact, Low Effort
+1. X-Accel-Buffering: no - critical behind nginx
+2. StreamingResponse with async generator - don't block event loop
+3. Run frame encoding in thread pool (run_in_executor)
+4. Rate limit: 1-2 FPS for 7B MLLM on RTX 4070
+5. Check await request.is_disconnected() for client disconnect
+6. Add CORS middleware for cross-origin frontends
 
-| Gap | Current State | Improvement | Effort |
-|-----|--------------|-------------|--------|
-| **Sparse-frame optical flow** | Not used | Add RAFT for motion-based adaptive frame sampling (detect motion boundaries → adjust frame rate) | 2-3 hours |
-| **CLIP-similarity frame dedup** | Not used (`clip_frame_dedup: False` by default) | Enable + tune threshold | 1 hour |
-| **Semantic entropy frame sampling** | Uniform sampling | Information-theoretic frame selection from TV-RAG | 4 hours |
-| **WhisperX word alignment** | Uses faster-whisper (no word timestamps) | Add wav2vec2 forced alignment for sub-frame citation accuracy | 4 hours |
+### Frame Rate Strategy
 
-### High Impact, Medium Effort
-
-| Gap | Current State | Improvement | Effort |
-|-----|--------------|-------------|--------|
-| **Entity-level indexing** | "Scene" and "frame" only | Track people/objects across scenes with persistent IDs (HAVEN-inspired) | 1-2 days |
-| **Cross-video scene graph** | Per-video only | Extend graph with cross-video semantic edges (VideoRAG KDD 2026) | 2-3 days |
-| **InternVideo2-S as optional encoder** | OpenCLIP only (per-frame) | Add temporal-aware video-level features | 1-2 days |
-| **Adaptive chunking** | Fixed windows (60s/30s) | Dynamic chunk boundaries based on scene content + transcript density | 1 day |
-
-### High Impact, High Effort
-
-| Gap | Current State | Improvement | Effort |
-|-----|--------------|-------------|--------|
-| **Agentic search** | Multi-hop decomposition | Full tool-using agent (search, browse timeline, compare scenes) | 1 week |
-| **Video-native GUI timeline** | Sprite sheet only | Proper timeline with scrubbing, keyframe markers, transcript overlay | 1-2 weeks |
-| **MMAction2 integration** | X-CLIP only | 40+ action recognition models via MMAction2 | 3-5 days |
+MLLMs cannot process 30 FPS. Use frame selection (motion-based, key frame detection, temporal sampling) to reduce to 1-2 FPS. YOLO/object detection runs at full rate (~2-4ms per frame) in parallel.
 
 ---
 
-## 8. Summary of Recommendations
+## 5. Open-Source: WebRTC + Local ML for Video Analysis
 
-### 🟢 Immediately Actionable (Next Sprint)
+### FastRTC + YOLOv10 (4.6k stars) - Most relevant
+- WebRTC + YOLOv10 ONNX + Gradio 6
+- ~30 FPS on consumer GPU
+- Swap YOLO for full video analysis pipeline
 
-1. **Enable CLIP frame dedup** — already in config (`clip_frame_dedup: False`), just tune threshold
-2. **Add temporal window BM25** — simple enhancement to TV-RAG from the same paper
-3. **Add semantic entropy frame sampling** — code from TV-RAG paper, improves RAG chunk quality
+### Pipecat (pipecat-ai/pipecat, 13.1k stars)
+- Real-time voice and multimodal agent framework
+- WebRTC transports: Daily, LiveKit, SmallWebRTCTransport
+- No generic video frame -> MLLM pipeline
+- Voice agent focus
 
-### 🟡 Consider for v0.15.0
+### LiveKit Agents
+- Server-side agent framework for LiveKit WebRTC
+- Can process video tracks
+- Overkill for single RTX 4070 self-hosted
 
-4. **Entity-level indexing** — track persistent entities (people/objects) across scenes
-5. **InternVideo2-S as optional video encoder** — richer features than per-frame OpenCLIP
-6. **Gradio 6.19 Workflow integration** — expose pipeline stages as composable APIs
-7. **Cross-video scene graph edges** — multi-video semantic retrieval
+### Juturna (Meetecho) - Watch for 2026
+- RTP media processing pipelines in Python
+- Ideal for IP camera / RTSP -> ML
+- Too new (Oct 2025)
 
-### 🔴 Future (v0.16.0+)
-
-8. **Qwen2.5-VL-3B** — evaluate as alternative to VideoChat-Flash if more quality needed
-9. **Agentic search** — full tool-using video RAG agent (HAVEN-inspired)
-10. **WhisperX word alignment** — sub-frame accuracy for source citations
+### aiortc + Custom ML (5.1k stars)
+- Many community projects: YOLO+aiortc, WebRTC+TensorFlow
+- Pattern: Subclass MediaStreamTrack, override recv(), call ML
 
 ---
 
-## 9. Web Search Status
+## Architecture Recommendations
 
-The web search API (web_search tool) returned **empty results for all queries** during this research session (~20+ attempts across diverse search terms). This was a runtime limitation, not a content gap. Direct web_extract was used where possible (Hugging Face, GitHub, PyPI, arXiv). The 12 prior research documents in the repo were heavily leveraged as authoritative sources.
+### Option A: FastRTC + Existing VideoPipeline (Recommended for Webcam)
 
----
+Browser Webcam -> FastRTC Stream -> Frame Handler
+                                       -> YOLO/CLIP at full rate -> annotated frame via WebRTC
+                                       -> MLLM at 1-2 FPS via SSE -> streaming description
 
-*Report compiled 26 June 2026 — Worker #1 of 5*
+Pros:
+- FastRTC from Gradio team, maintained, works with Gradio 6
+- Reuses existing YOLO/CLIP models
+- .mount(app) integrates with existing FastAPI
+- Zero frontend work
+
+### Option B: aiortc for Custom WebRTC Server
+
+Subclass MediaStreamTrack, override recv(), call ML inference, forward annotated frame.
+
+### MLLM Streaming Integration
+
+Existing project already has:
+- video_mllm.py - SmolVLM2, VideoChat-Flash, Qwen3-VL backends
+- llm_provider.py - OpenAI-compatible provider
+
+New class:
+1. Receives frame at 1-2 FPS from FastRTC handler
+2. Encodes frame to base64 JPEG
+3. Calls vLLM/Ollama with stream=True
+4. Yields tokens via SSE to browser
+
+### Key Dependencies to Add
+
+fastrtc>=0.1.0    # WebRTC streaming for Gradio
+openai>=1.0.0      # OpenAI-compatible API client
+
+No additional GPU models needed.

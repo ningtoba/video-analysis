@@ -17,13 +17,14 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,30 @@ class LLMProvider(ABC):
         The prompt should instruct the model to respond in JSON. Returns
         the parsed dict, or None on failure.
         """
-        ...
+
+    @abstractmethod
+    async def stream_chat(
+        self,
+        prompt: str,
+        system: str = "",
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Send a chat prompt and yield response tokens as they arrive.
+
+        Args:
+            prompt: The user message / prompt text.
+            system: Optional system prompt.
+            temperature: Temperature override (None = config default).
+            max_tokens: Max tokens override (None = config default).
+            timeout: Timeout override in seconds (None = config default).
+
+        Yields:
+            Individual tokens from the response as they become available.
+        """
+        if False:
+            yield  # pragma: no cover (required to make this an async generator)
 
     @property
     @abstractmethod
@@ -230,6 +254,124 @@ class HermesProvider(LLMProvider):
         if not raw:
             return None
         return self._parse_json(raw)
+
+    async def stream_chat(
+        self,
+        prompt: str,
+        system: str = "",
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream response tokens from Hermes CLI via subprocess.
+
+        Reads stdout line by line and yields each non-empty line as a token.
+        Falls back to single-shot chat if streaming is not supported.
+        """
+        try:
+            cmd = [
+                "hermes",
+                "chat",
+                "-q",
+                "-m",
+                self._config.hermes_model,
+                "-t",
+                str(
+                    temperature if temperature is not None else self._config.temperature
+                ),
+                "--max-tokens",
+                str(
+                    max_tokens
+                    if max_tokens is not None
+                    else self._config.hermes_max_tokens
+                ),
+            ]
+            if system:
+                cmd += ["-s", system]
+
+            # Try with stream mode first
+            stream_cmd = cmd + ["--stream"]
+
+            proc = await asyncio.create_subprocess_exec(
+                *stream_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=prompt.encode("utf-8")),
+                timeout=timeout if timeout is not None else self._config.timeout,
+            )
+
+            if proc.returncode != 0:
+                logger.warning(
+                    "Hermes CLI stream call failed (rc=%d): %s",
+                    proc.returncode,
+                    stderr.decode("utf-8")[:200],
+                )
+                # Fall back to non-streaming
+                async for token in self._fallback_stream(
+                    prompt=prompt,
+                    system=system,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=timeout,
+                ):
+                    yield token
+                return
+
+            output = stdout.decode("utf-8")
+            # Yield whitespace-separated tokens for a natural streaming feel
+            for line in output.splitlines():
+                line = line.strip()
+                if line:
+                    yield line + "\n"
+                    await asyncio.sleep(0)
+
+        except (FileNotFoundError, asyncio.TimeoutError) as e:
+            logger.warning("Hermes CLI stream error: %s", e)
+            # Fall back to non-streaming
+            async for token in self._fallback_stream(
+                prompt=prompt,
+                system=system,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout,
+            ):
+                yield token
+        except Exception as e:
+            logger.error("Hermes CLI stream error: %s", e)
+            async for token in self._fallback_stream(
+                prompt=prompt,
+                system=system,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout,
+            ):
+                yield token
+
+    async def _fallback_stream(
+        self,
+        prompt: str,
+        system: str = "",
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Fallback: run synchronous chat and yield tokens word-by-word."""
+        result = self.chat(
+            prompt=prompt,
+            system=system,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+        )
+        for token in result.split():
+            yield token + " "
+            await asyncio.sleep(0)
+        if result:
+            yield "\n"
 
     @staticmethod
     def _parse_json(raw: str) -> Optional[Dict[str, Any]]:
@@ -383,6 +525,83 @@ class OpenAIProvider(LLMProvider):
             pass
 
         return None
+
+    async def stream_chat(
+        self,
+        prompt: str,
+        system: str = "",
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream response tokens from an OpenAI-compatible API via SSE.
+
+        Uses ``stream=True`` in the request and parses ``data: ...`` SSE
+        lines to extract ``delta.content`` tokens as they arrive.
+        """
+        import httpx
+
+        messages = self._build_messages(prompt, system)
+        base = self._config.api_base.rstrip("/")
+        if not base.endswith("/chat/completions"):
+            base = base.rstrip("/") + "/chat/completions"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._config.api_key}",
+        }
+        payload = {
+            "model": self._config.model,
+            "messages": messages,
+            "temperature": (
+                temperature if temperature is not None else self._config.temperature
+            ),
+            "max_tokens": (
+                max_tokens if max_tokens is not None else self._config.max_tokens
+            ),
+            "stream": True,
+        }
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(
+                    timeout if timeout is not None else self._config.timeout
+                )
+            ) as client:
+                async with client.stream(
+                    "POST", base, json=payload, headers=headers
+                ) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                                choices = chunk.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    content = delta.get("content", "")
+                                    if content:
+                                        yield content
+                            except json.JSONDecodeError:
+                                continue
+        except Exception as e:
+            logger.warning("OpenAI stream API call failed: %s", e)
+            # Fall back: yield the full response from the synchronous call
+            result = self.chat(
+                prompt=prompt,
+                system=system,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout,
+            )
+            if result:
+                yield result
 
     # ------------------------------------------------------------------
     # Internal helpers

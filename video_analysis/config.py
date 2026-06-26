@@ -289,6 +289,9 @@ class Config:
     agent_enabled: bool = False  # overridden by AGENT_ENABLED env var
     agent_max_tools: int = 5  # max tool invocations per query
 
+    # Camera Tab (v0.41.0 — webcam/live camera capture & analysis)
+    camera_enabled: bool = False  # overridden by CAMERA_ENABLED env var
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -435,6 +438,10 @@ class Config:
         agent_env = os.environ.get("AGENT_ENABLED", "").lower()
         if agent_env in ("true", "1", "yes"):
             self.agent_enabled = True
+        # Override camera_enabled from env var (v0.41.0)
+        camera_env = os.environ.get("CAMERA_ENABLED", "").lower()
+        if camera_env in ("true", "1", "yes"):
+            self.camera_enabled = True
         # Override live stream config from env vars (v0.40.0)
         ls_env = os.environ.get("LIVE_STREAM_ENABLED", "").lower()
         if ls_env in ("true", "1", "yes"):

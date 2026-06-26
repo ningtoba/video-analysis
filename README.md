@@ -20,7 +20,10 @@
 
 ## ✨ Features
 
-- **📡 Live Stream Analysis** (v0.40.0) — capture and analyze live RTMP/RTSP/HLS streams in real-time with auto-reconnect, sliding window context, and incremental indexing; connect OBS, IP cameras, and streaming platforms directly to the analysis pipeline
+- **🌐 Full REST API** (v0.41.0) — comprehensive HTTP API with 10+ endpoints for video processing, Q&A with SSE streaming, transcript/chapter retrieval, frame extraction, and cross-video search; auto-generated OpenAPI docs at `/docs`
+|- **📷 Webcam Capture** (v0.41.0) — real-time webcam capture and frame analysis tab in the Gradio UI; supports live preview, capture & analyze, and continuous monitoring mode
+|- **🧠 MLLM Streaming Q&A** (v0.41.0) — token-by-token SSE streaming for LLM responses from both Hermes CLI and OpenAI-compatible backends; enables real-time chat updates in the Gradio UI and REST API
+|- **📡 Live Stream Analysis** (v0.40.0) — capture and analyze live RTMP/RTSP/HLS streams in real-time with auto-reconnect, sliding window context, and incremental indexing; connect OBS, IP cameras, and streaming platforms directly to the analysis pipeline
 |- **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
 |- **🤖 Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent with 7 specialized tools (analyze_frames, detect_objects, OCR, search_transcript, search_rag, temporal_grounding, summarize_video) that dynamically routes questions to the right tools
 |- **📖 Video Chaptering** (v0.37.0) — automatic topic segmentation of transcripts into chapters using NLTK TextTiling, with LLM-generated chapter titles and summaries; generates structured chapter reports and agent-chapter context

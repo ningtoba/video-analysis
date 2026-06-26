@@ -7,9 +7,12 @@ Modules:
 - chat: LLM-powered Q&A over video context
 - config: Configuration management
 - llm_provider: Self-contained LLM provider abstraction (Hermes CLI / OpenAI-compatible API)
+- stream_chat: MLLM streaming Q&A — token-by-token LLM response streaming (v0.41.0)
 - self_check: LLM-based self-check verification + re-retrieval (v0.27.0)
 - agent: Agentic Video Understanding Agent with multi-tool dispatch (v0.36.0)
 - chapters: Video content chaptering — auto topic segmentation & chapter generation (v0.37.0)
+- api: Full REST API layer with OpenAPI docs (v0.41.0)
+- stream_chat: Token-by-token MLLM streaming (SSE) for both providers (v0.41.0)
 """
 
 from video_analysis import (
@@ -27,6 +30,7 @@ from video_analysis import (
     streaming,
     federation,
     llm_provider,
+    stream_chat,
 )
 
 # face module is optional (requires insightface) — import on demand only
@@ -35,7 +39,9 @@ from video_analysis import (
 
 # Qwen3-VL backend (requires vLLM or transformers — optional, heavy model)
 
-__version__ = "0.40.0"
+# api and stream_chat modules are imported on demand
+
+__version__ = "0.41.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

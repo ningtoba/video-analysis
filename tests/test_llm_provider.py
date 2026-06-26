@@ -9,10 +9,11 @@ Tests are structured to be fast and not require actual LLM endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,6 +25,20 @@ from video_analysis.llm_provider import (
     get_llm_provider,
     reset_provider_cache,
 )
+
+
+class _AsyncStreamCM:
+    """Async context manager for mocking httpx client.stream()."""
+
+    def __init__(self, mock_response):
+        self._response = mock_response
+
+    async def __aenter__(self):
+        return self._response
+
+    async def __aexit__(self, *args):
+        return None
+
 
 # =========================================================================
 # Fixtures
@@ -223,6 +238,89 @@ class TestHermesProvider:
             result = provider.structured_chat("Answer")
             assert result is None
 
+    # ------------------------------------------------------------------
+    # stream_chat tests
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_success(self, default_config):
+        """stream_chat should yield tokens from subprocess stdout."""
+        provider = HermesProvider(default_config)
+
+        # Use a simpler approach: patch create_subprocess_exec to return
+        # a mock process whose communicate returns our test output.
+        mock_process = AsyncMock()
+        mock_process.returncode = 0
+        mock_process.communicate = AsyncMock(
+            return_value=(b"Hello world\nHow are you?\n", b"")
+        )
+
+        with patch.object(asyncio, "create_subprocess_exec", return_value=mock_process):
+            tokens = []
+            async for token in provider.stream_chat("Hello"):
+                tokens.append(token)
+
+            full = "".join(tokens)
+            assert "Hello world" in full or "Hello" in full
+            assert len(tokens) >= 1
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_fallback_on_failure(self, default_config):
+        """When the subprocess fails, stream_chat should fall back to
+        word-by-word emission from the synchronous chat result."""
+        provider = HermesProvider(default_config)
+
+        # Make the async subprocess fail
+        mock_process = AsyncMock()
+        mock_process.returncode = 1
+        mock_process.communicate = AsyncMock(return_value=(b"", b"error message"))
+
+        with patch.object(asyncio, "create_subprocess_exec", return_value=mock_process):
+            # Patch synchronous chat to return a known result
+            with patch.object(provider, "chat", return_value="Fallback answer."):
+                tokens = []
+                async for token in provider.stream_chat("Hello"):
+                    tokens.append(token)
+
+                full = "".join(tokens).strip()
+                assert "Fallback" in full
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_fallback_on_timeout(self, default_config):
+        """Timeout should trigger the word-by-word fallback."""
+        provider = HermesProvider(default_config)
+
+        with patch.object(
+            asyncio,
+            "create_subprocess_exec",
+            side_effect=asyncio.TimeoutError(),
+        ):
+            with patch.object(provider, "chat", return_value="Timed out answer."):
+                tokens = []
+                async for token in provider.stream_chat("Hello"):
+                    tokens.append(token)
+
+                full = "".join(tokens).strip()
+                assert "Timed out" in full
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_fallback_on_not_found(self, default_config):
+        """FileNotFoundError should trigger the word-by-word fallback."""
+        provider = HermesProvider(default_config)
+
+        with patch.object(
+            asyncio,
+            "create_subprocess_exec",
+            side_effect=FileNotFoundError(),
+        ):
+            with patch.object(provider, "chat", return_value="Not found answer."):
+                tokens = []
+                async for token in provider.stream_chat("Hello"):
+                    tokens.append(token)
+
+                full = "".join(tokens).strip()
+                assert "Not found" in full
+
 
 # =========================================================================
 # OpenAIProvider
@@ -394,6 +492,129 @@ class TestOpenAIProvider:
             call_args = mock_session.post.call_args[0]
             url = call_args[0]
             assert url == "http://localhost:8000/chat/completions"
+
+    # ------------------------------------------------------------------
+    # stream_chat tests
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_success(self, openai_config):
+        """Should yield tokens from SSE data events."""
+        import httpx
+
+        provider = OpenAIProvider(openai_config)
+
+        # Simulate SSE data events
+        sse_lines = [
+            'data: {"choices":[{"delta":{"content":"Hello"}}]}',
+            'data: {"choices":[{"delta":{"content":" world"}}]}',
+            'data: {"choices":[{"delta":{"content":"!"}}]}',
+            "data: [DONE]",
+        ]
+
+        async def _mock_lines():
+            for line in sse_lines:
+                yield line
+
+        mock_stream_response = MagicMock()
+        mock_stream_response.aiter_lines = _mock_lines
+        mock_stream_response.raise_for_status = MagicMock()
+
+        mock_stream_cm = _AsyncStreamCM(mock_stream_response)
+
+        with patch.object(httpx.AsyncClient, "stream", return_value=mock_stream_cm):
+            tokens = []
+            async for token in provider.stream_chat("Hello"):
+                tokens.append(token)
+
+            full = "".join(tokens)
+            assert full == "Hello world!"
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_empty_choices(self, openai_config):
+        """Empty choices should be skipped."""
+        import httpx
+
+        provider = OpenAIProvider(openai_config)
+
+        sse_lines = [
+            'data: {"choices":[]}',
+            'data: {"choices":[{"delta":{}}]}',
+            'data: {"choices":[{"delta":{"content":"only"}}]}',
+            "data: [DONE]",
+        ]
+
+        async def _mock_lines():
+            for line in sse_lines:
+                yield line
+
+        mock_stream_response = MagicMock()
+        mock_stream_response.aiter_lines = _mock_lines
+        mock_stream_response.raise_for_status = MagicMock()
+
+        mock_stream_cm = _AsyncStreamCM(mock_stream_response)
+
+        with patch.object(httpx.AsyncClient, "stream", return_value=mock_stream_cm):
+            tokens = []
+            async for token in provider.stream_chat("Hello"):
+                tokens.append(token)
+
+            full = "".join(tokens)
+            assert full == "only"
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_fallback_on_failure(self, openai_config):
+        """When the stream API call fails, fall back to synchronous."""
+        import httpx
+
+        provider = OpenAIProvider(openai_config)
+
+        mock_stream_cm = _AsyncStreamCM(None)
+        # Make __aenter__ raise
+        mock_stream_cm.__aenter__ = AsyncMock(side_effect=Exception("API unreachable"))
+
+        with patch.object(httpx.AsyncClient, "stream", return_value=mock_stream_cm):
+            # Patch the synchronous chat method
+            with patch.object(provider, "chat", return_value="Fallback response"):
+                tokens = []
+                async for token in provider.stream_chat("Hello"):
+                    tokens.append(token)
+
+                full = "".join(tokens)
+                assert "Fallback response" in full
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_handles_done_signal(self, openai_config):
+        """Stream should stop cleanly on [DONE] signal."""
+        import httpx
+
+        provider = OpenAIProvider(openai_config)
+
+        sse_lines = [
+            'data: {"choices":[{"delta":{"content":"first "}}]}',
+            "data: [DONE]",
+            # This should never be reached
+            'data: {"choices":[{"delta":{"content":"EXTRA"}}]}',
+        ]
+
+        async def _mock_lines():
+            for line in sse_lines:
+                yield line
+
+        mock_stream_response = MagicMock()
+        mock_stream_response.aiter_lines = _mock_lines
+        mock_stream_response.raise_for_status = MagicMock()
+
+        mock_stream_cm = _AsyncStreamCM(mock_stream_response)
+
+        with patch.object(httpx.AsyncClient, "stream", return_value=mock_stream_cm):
+            tokens = []
+            async for token in provider.stream_chat("Hello"):
+                tokens.append(token)
+
+            full = "".join(tokens)
+            assert full == "first "
+            assert "EXTRA" not in full
 
 
 # =========================================================================
