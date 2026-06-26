@@ -28,6 +28,8 @@ from typing import Dict, List, Optional, Set, Tuple
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG, RetrievedChunk
 
+import json  # noqa: E402 — module-level import after package imports
+
 logger = logging.getLogger(__name__)
 
 
@@ -179,6 +181,39 @@ class SceneGraph:
                             action_part = action_part.split(" (")[0]
                         if action_part:
                             entities.add(f"action:{action_part.lower()}")
+            # Extract face identities from metadata (InsightFace, v0.26.0+)
+            # Faces are stored per-frame; scene-level metadata may include
+            # a 'face_ids' field (comma-separated unique face IDs detected
+            # in this scene).
+            face_ids_raw = meta.get("face_ids", "")
+            if face_ids_raw:
+                if isinstance(face_ids_raw, str):
+                    for fid in face_ids_raw.split(","):
+                        fid = fid.strip()
+                        if fid:
+                            entities.add(f"face:{fid}")
+                elif isinstance(face_ids_raw, (list, tuple)):
+                    for fid in face_ids_raw:
+                        entities.add(f"face:{str(fid)}")
+            # Also check the metadata 'faces' field for backward compatibility
+            meta_faces = meta.get("faces", "")
+            if meta_faces and not face_ids_raw:
+                if isinstance(meta_faces, str):
+                    try:
+                        face_list = json.loads(meta_faces)
+                        if isinstance(face_list, list):
+                            for face in face_list:
+                                fid = face.get("face_id", "")
+                                if fid:
+                                    entities.add(f"face:{fid.lower()}")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                elif isinstance(meta_faces, list):
+                    for face in meta_faces:
+                        if isinstance(face, dict):
+                            fid = face.get("face_id", "")
+                            if fid:
+                                entities.add(f"face:{fid.lower()}")
             scene_entities[key] = entities
 
         # Connect scenes sharing entities

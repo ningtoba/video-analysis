@@ -766,6 +766,11 @@ class VideoRAG:
         if self.config.colbert_att_reranker_enabled:
             chunks = self._rerank_colbert_att(query, chunks, top_k)
 
+        # Optional MMR diversity re-ranking (v0.34.0)
+        # Applies after relevance-based re-ranking to improve diversity.
+        if self.config.mmr_diversity_enabled and len(chunks) > 1:
+            chunks = self._rerank_mmr(query, chunks, top_k)
+
         return chunks
 
     def _rerank(
@@ -886,6 +891,93 @@ class VideoRAG:
         except Exception as e:
             logger.error(f"ColBERT-Att re-ranking failed: {e}")
             return chunks[:top_k]
+
+    def _rerank_mmr(
+        self, query: str, chunks: List[RetrievedChunk], top_k: int
+    ) -> List[RetrievedChunk]:
+        """Re-rank chunks using Maximal Marginal Relevance (MMR) diversity.
+
+        MMR balances relevance (query similarity) with diversity (novelty
+        relative to already-selected items). This reduces redundancy in
+        retrieved context when multiple chunks cover similar content.
+
+        The original MMR formula (Carbonell & Goldstein, SIGIR'98):
+            MMR = argmax [λ · rel(D_i, Q) - (1-λ) · max sim(D_i, D_j)]
+
+        Args:
+            query: The user's question.
+            chunks: List of RetrievedChunk (already relevance-scored).
+            top_k: Max chunks to return after MMR re-ranking.
+
+        Returns:
+            List of RetrievedChunk re-ranked for diversity, limited to top_k.
+        """
+        if not chunks or len(chunks) <= 1:
+            return chunks[:top_k]
+
+        mmr_lambda = self.config.mmr_lambda
+        k = min(top_k, len(chunks))
+
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            # Lazy-load embedding model for computing chunk-chunk similarity
+            sim_model = SentenceTransformer(
+                "all-MiniLM-L6-v2",  # small, fast, good for pairwise sim
+                device="cpu",  # MMR runs on CPU — lightweight
+            )
+            # Encode query once
+            query_vec = sim_model.encode(query, normalize_embeddings=True)
+            chunk_texts = [c.text[:512] for c in chunks]
+            chunk_vecs = sim_model.encode(chunk_texts, normalize_embeddings=True)
+            del sim_model  # free memory immediately
+        except ImportError:
+            logger.warning(
+                "SentenceTransformer not available for MMR — "
+                "falling back to relevance-only ordering"
+            )
+            return chunks[:top_k]
+
+        # Pre-compute query relevance scores (normalised 0-1)
+        import numpy as np
+
+        relevance = np.dot(chunk_vecs, query_vec).tolist()
+        # Compute pairwise chunk-chunk similarity matrix
+        sim_matrix = np.dot(chunk_vecs, chunk_vecs.T)
+
+        # MMR selection loop
+        selected_indices: List[int] = []
+        candidate_indices = list(range(len(chunks)))
+
+        for _ in range(k):
+            if not candidate_indices:
+                break
+            best_idx = -1
+            best_score = -float("inf")
+            for i in candidate_indices:
+                # Relevance term
+                mmr_rel = mmr_lambda * relevance[i]
+                # Diversity term — max similarity to any selected item
+                if selected_indices:
+                    max_sim = max(sim_matrix[i][j] for j in selected_indices)
+                else:
+                    max_sim = 0.0
+                mmr_diversity = (1.0 - mmr_lambda) * max_sim
+                mmr_score = mmr_rel - mmr_diversity
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = i
+            if best_idx >= 0:
+                selected_indices.append(best_idx)
+                candidate_indices.remove(best_idx)
+
+        # Build result in MMR order
+        result = [chunks[i] for i in selected_indices]
+        logger.info(
+            f"MMR diversity re-ranking: {len(chunks)} → {len(result)} chunks "
+            f"(λ={mmr_lambda})"
+        )
+        return result
 
     def expand_temporal_context(
         self, chunks: List[RetrievedChunk], video_id: str

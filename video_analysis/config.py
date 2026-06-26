@@ -75,6 +75,13 @@ class Config:
         False  # ColBERT-Att attention-weighted (arXiv:2603.25248)
     )
 
+    # MMR (Maximal Marginal Relevance) Diversity Re-Ranking (v0.34.0)
+    # Reduces redundancy in retrieved context by balancing relevance and diversity.
+    # See Carbonell & Goldstein (SIGIR'98) for the original MMR formulation.
+    mmr_diversity_enabled: bool = False  # overridden by MMR_DIVERSITY_ENABLED env var
+    mmr_lambda: float = 0.5  # MMR lambda [0,1]; 0 = pure diversity, 1 = pure relevance
+    mmr_top_k: int = 15  # number of chunks to re-rank with MMR
+
     # Tiered Frame Storage (v0.21.0)
     frame_storage_mode: str = "tiered"  # full, tiered, compressed
     frame_analysis_size: int = 960  # longest edge for analysis/CLIP frames
@@ -102,6 +109,8 @@ class Config:
     # OCR (PaddleOCR)
     ocr_enabled: bool = True
     ocr_confidence: float = 0.3
+    ocr_model_version: str = "PP-OCRv6"  # "PP-OCRv6" or "PP-OCRv5"
+    ocr_model_tier: str = "medium"  # "tiny", "small", "medium" (PP-OCRv6 tiers)
 
     # Diarization (PyAnnote)
     diarize_enabled: bool = True
@@ -392,6 +401,36 @@ class Config:
         fed_local = os.environ.get("FEDERATION_INCLUDE_LOCAL", "").lower()
         if fed_local in ("false", "0", "no"):
             self.federation_include_local = False
+        # Override OCR model version from env var
+        ocr_ver_env = os.environ.get("OCR_MODEL_VERSION", "").lower()
+        if ocr_ver_env in ("pp-ocrv6", "pp-ocrv5"):
+            # Preserve the canonical casing: PP-OCRv6 or PP-OCRv5
+            self.ocr_model_version = (
+                "PP-OCRv5" if ocr_ver_env == "pp-ocrv5" else "PP-OCRv6"
+            )
+        ocr_tier_env = os.environ.get("OCR_MODEL_TIER", "").lower()
+        if ocr_tier_env in ("tiny", "small", "medium"):
+            self.ocr_model_tier = ocr_tier_env
+        # Override MMR diversity config from env vars
+        mmr_env = os.environ.get("MMR_DIVERSITY_ENABLED", "").lower()
+        if mmr_env in ("true", "1", "yes"):
+            self.mmr_diversity_enabled = True
+        mmr_lambda_env = os.environ.get("MMR_LAMBDA", "")
+        if mmr_lambda_env:
+            try:
+                val = float(mmr_lambda_env)
+                if 0.0 <= val <= 1.0:
+                    self.mmr_lambda = val
+            except ValueError:
+                pass
+        mmr_topk_env = os.environ.get("MMR_TOP_K", "")
+        if mmr_topk_env:
+            try:
+                val = int(mmr_topk_env)
+                if val > 0:
+                    self.mmr_top_k = val
+            except ValueError:
+                pass
         for d in [
             self.data_dir,
             self.video_dir,

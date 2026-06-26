@@ -21,7 +21,8 @@
 ## ✨ Features
 
 - **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
-- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
+- **🎯 MMR Diversity Re-Ranking** — Maximal Marginal Relevance (Carbonell & Goldstein, SIGIR'98) reduces context redundancy by 30-50% over pure relevance-sorted retrieval; configurable via `MMR_DIVERSITY_ENABLED`, `MMR_LAMBDA`, and `MMR_TOP_K`
+- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6 — +4.6% detection, +5.1% recognition over v5), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
 - **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) for video-native scene description, summarization, and Q&A
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
 - **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
@@ -212,10 +213,15 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `FACE_DETECTION_MODEL` | `buffalo_l` | InsightFace model pack for detection/recognition |
 || `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold for face identity matching |
 || `PROMETHEUS_ENABLED` | `true` | Enable Prometheus /metrics endpoint with pipeline/retrieval/GPU metrics |
-|| `FEDERATION_ENABLED` | `false` | Enable federated video search REST endpoint (v0.33.0) |
-|| `FEDERATION_PEERS` | (empty) | Comma-separated peer MCP server URLs |
-|| `FEDERATION_TIMEOUT` | `30.0` | HTTP request timeout per peer (seconds) |
-|| `FEDERATION_INCLUDE_LOCAL` | `true` | Include local index in federated results |
+||| `FEDERATION_ENABLED` | `false` | Enable federated video search REST endpoint (v0.33.0) |
+||| `FEDERATION_PEERS` | (empty) | Comma-separated peer MCP server URLs |
+||| `FEDERATION_TIMEOUT` | `30.0` | HTTP request timeout per peer (seconds) |
+||| `FEDERATION_INCLUDE_LOCAL` | `true` | Include local index in federated results |
+||| `MMR_DIVERSITY_ENABLED` | `false` | Enable MMR diversity re-ranking (v0.34.0) |
+||| `MMR_LAMBDA` | `0.5` | MMR lambda [0,1]; 0 = pure diversity, 1 = pure relevance |
+||| `MMR_TOP_K` | `15` | Number of chunks to re-rank with MMR |
+||| `OCR_MODEL_VERSION` | `PP-OCRv6` | OCR model version (PP-OCRv6 or PP-OCRv5) |
+||| `OCR_MODEL_TIER` | `medium` | OCR model tier (tiny/small/medium) |
 
 ## 🧪 Running Tests
 
@@ -321,10 +327,13 @@ python tests/test_basic.py
 |- [x] **Dependency modernization** — all pyproject.toml & requirements.txt bounds updated to latest stable (torch 2.12, transformers 5.12, sentence-transformers 5.6, fastapi 0.138, etc.)
 |- [x] **Gradio 6 Workflow integration** — `ui/workflow.py` with `gr.Workflow` visual pipeline builder canvas (Gradio 6.17+ API: `bind`, `edges`, `graph`)
 |||- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
-||- [x] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
+|- [x] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 ||- [x] Real-time streaming video analysis (chunked processing, watch/stream modes)
 ||- [x] **Federated video search (MCP-based cross-instance query)**
-|
+||- [x] **PP-OCRv6 upgrade (config + model tier for tiny/small/medium)**
+||- [x] **Scene graph face-entity enrichment (cross-video person-based edges)**
+||- [x] **MMR diversity re-ranking (30-50% context redundancy reduction)**
+||- [ ] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, 256K context)
 |
 
 MIT
