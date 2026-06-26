@@ -16,6 +16,14 @@ from pathlib import Path
 
 import pytest
 
+HAVE_BENCHMARK = False
+try:
+    import pytest_benchmark  # type: ignore  # noqa: F401
+
+    HAVE_BENCHMARK = True
+except ImportError:
+    pass
+
 from tests.benchmarks.conftest import GPUProfiler
 
 logger = logging.getLogger(__name__)
@@ -61,6 +69,7 @@ def test_rag_harness_init(rag_config: object) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_rag_import_time(benchmark: object, rag_config: object) -> None:
@@ -74,6 +83,7 @@ def test_rag_import_time(benchmark: object, rag_config: object) -> None:
     benchmark(_init)
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_rag_search_videos_empty(benchmark: object, rag_config: object) -> None:
@@ -88,6 +98,7 @@ def test_rag_search_videos_empty(benchmark: object, rag_config: object) -> None:
     benchmark(_search)
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_rag_get_library_info(benchmark: object, rag_config: object) -> None:
@@ -125,6 +136,7 @@ def test_rag_gpu_memory(rag_config: object) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_query_router_import(benchmark: object, rag_config: object) -> None:
@@ -137,6 +149,7 @@ def test_query_router_import(benchmark: object, rag_config: object) -> None:
     benchmark(_init)
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_query_route_basic(benchmark: object, rag_config: object) -> None:

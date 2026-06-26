@@ -18,6 +18,14 @@ from pathlib import Path
 
 import pytest
 
+HAVE_BENCHMARK = False
+try:
+    import pytest_benchmark  # type: ignore  # noqa: F401
+
+    HAVE_BENCHMARK = True
+except ImportError:
+    pass
+
 from tests.benchmarks.conftest import GPUProfiler
 
 logger = logging.getLogger(__name__)
@@ -96,6 +104,7 @@ def test_harness_can_init_pipeline() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_pipeline_import(benchmark: object) -> None:
@@ -112,6 +121,7 @@ def test_pipeline_import(benchmark: object) -> None:
     benchmark(_init)
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_frame_generation_from_video(benchmark: object, short_video: Path) -> None:
@@ -133,6 +143,7 @@ def test_frame_generation_from_video(benchmark: object, short_video: Path) -> No
     shutil.rmtree("/tmp/va_bench_frames", ignore_errors=True)
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_scene_detection(benchmark: object, short_video: Path) -> None:
@@ -150,6 +161,7 @@ def test_scene_detection(benchmark: object, short_video: Path) -> None:
     shutil.rmtree("/tmp/va_bench_scenes", ignore_errors=True)
 
 
+@pytest.mark.skipif(not HAVE_BENCHMARK, reason="pytest-benchmark not installed")
 @pytest.mark.benchmark(min_rounds=3, warmup=True)
 @pytest.mark.slow
 def test_audio_transcription(benchmark: object, short_video: Path) -> None:

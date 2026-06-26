@@ -1,5 +1,5 @@
 """
-Tests for the Autonomous Video Curator (v0.46.0).
+Tests for the Autonomous Video Curator (v0.47.0).
 """
 
 import json
@@ -581,4 +581,4 @@ class TestCuratorModule:
         """Check that test source references the current version."""
         import video_analysis
 
-        assert video_analysis.__version__ == "0.46.0"
+        assert video_analysis.__version__ == "0.47.0"

@@ -62,7 +62,7 @@ class EvalTaskResult:
 
     task_name: str
     task_description: str
-    status: str  # "pass", "fail", "error", "skipped"
+    status: str = "pass"  # "pass", "fail", "error", "skipped"
     metrics: List[EvalMetric] = field(default_factory=list)
     error: Optional[str] = None
     duration_ms: float = 0.0
@@ -83,7 +83,7 @@ class EvalReport:
 
     run_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     timestamp: float = field(default_factory=time.time)
-    version: str = "0.46.0"
+    version: str = "0.47.0"
     config_snapshot: Dict[str, Any] = field(default_factory=dict)
     results: List[EvalTaskResult] = field(default_factory=list)
     total_duration_ms: float = 0.0
