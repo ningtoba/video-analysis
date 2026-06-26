@@ -73,7 +73,7 @@ def _check_models() -> dict:
 
     # faster-whisper (lazy import so we don't force load at startup)
     try:
-        import whisper
+        import faster_whisper  # noqa: F401
 
         models["faster-whisper"] = "loaded"
     except ImportError:

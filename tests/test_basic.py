@@ -448,9 +448,9 @@ def test_config_clip_pretrained_dataset():
 
 
 def test_config_scene_detector_options():
-    """Test scene_detector supports the new options."""
+    """Test scene_detector supports all available options."""
     cfg = Config(data_dir="/tmp/va_test_scene_opt")
-    assert cfg.scene_detector in ("adaptive", "content", "ffmpeg")
+    assert cfg.scene_detector in ("adaptive", "content", "ffmpeg", "histogram", "hash")
     # Verify the options are handled in pipeline
     from video_analysis.pipeline import VideoPipeline
 
@@ -472,13 +472,19 @@ def test_config_embedding_model():
 
 
 def test_health_check_module():
-    """Test health module can be imported."""
-    try:
-        from ui.health import create_health_app
+    """Test health module can be imported and has expected structure."""
+    from ui.health import (
+        create_health_app,
+        HealthResponse,
+        LibraryResponse,
+        VideoInfoResponse,
+    )
 
-        assert callable(create_health_app)
-    except ImportError:
-        pass  # module may not exist yet — test is best-effort
+    assert callable(create_health_app)
+    # Verify the module is importable and classes exist
+    assert HealthResponse.__name__ == "HealthResponse"
+    assert LibraryResponse.__name__ == "LibraryResponse"
+    assert VideoInfoResponse.__name__ == "VideoInfoResponse"
 
 
 def test_is_video_file():
