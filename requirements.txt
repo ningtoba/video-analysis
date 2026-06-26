@@ -1,34 +1,34 @@
-fastapi>=0.110.0
-uvicorn[standard]>=0.29.0
-gradio>=6.0.0
-faster-whisper>=1.0.0
-opencv-python>=4.9.0
-pillow>=10.0.0
+fastapi>=0.138.0
+uvicorn[standard]>=0.49.0
+gradio>=6.19.0
+faster-whisper>=1.2.0
+opencv-python>=4.13.0
+pillow>=12.0.0
 chromadb>=1.5.0
-sentence-transformers>=2.5.0
-transformers>=4.40.0
-torch>=2.1.0
-torchvision>=0.16.0
-numpy>=1.24.0
-langchain-text-splitters>=0.1.0
+sentence-transformers>=5.6.0
+transformers>=5.12.0
+torch>=2.12.0
+torchvision>=0.27.0
+numpy>=2.5.0
+langchain-text-splitters>=1.1.0
 
 # BGE-VL / BGE embedding models
 einops>=0.8.0
 
 # Structured logging
-structlog>=24.4.0
+structlog>=26.0.0
 
 # MCP server (Model Context Protocol for agentic tool access)
-mcp>=1.0.0
+mcp>=1.28.0
 
 # Prometheus metrics / production monitoring
-prometheus-client>=0.21.0
+prometheus-client>=0.25.0
 
 # Scene understanding
-open-clip-torch>=2.24.0
+open-clip-torch>=2.30.0
 
 # YouTube/URL video import
-yt-dlp>=2024.0.0
+yt-dlp>=2026.6.0
 
 # Scene detection
 scenedetect>=0.7.0
@@ -40,10 +40,10 @@ scenedetect>=0.7.0
 # decord>=0.6.0
 
 # Optional — for higher accuracy:
-# ultralytics>=8.0.0  # YOLO object detection
-# paddlepaddle-gpu>=2.6.0  # PaddleOCR
-# paddleocr>=2.8.0         # OCR text extraction
-# pyannote.audio>=3.1.0    # Speaker diarization
+# ultralytics>=8.4.0  # YOLO object detection
+# paddlepaddle-gpu>=3.0.0  # PaddleOCR (v3.7.0+)
+# paddleocr>=3.7.0         # OCR text extraction (v3.7.0 — PP-OCRv5 equivalent)
+# pyannote.audio>=4.0.0    # Speaker diarization
 
 # Optional — benchmark / test infrastructure:
 # pytest-timeout>=2.3.0

@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.29.0 (2026-06-26) — Dependency Modernization & Gradio 6 Workflow Integration
+
+### 📦 Dependency Modernization — Updated All Lower Bounds to Latest Stable
+
+All core dependency bounds updated to match the actual installed versions, ensuring fresh installs get the latest stable releases:
+
+| Dependency | Old Bound | New Bound | Installed |
+|---|---|---|---|
+| torch | >=2.1.0 | >=2.12.0 | 2.12.1 |
+| torchvision | >=0.16.0 | >=0.27.0 | 0.27.1 |
+| transformers | >=4.45.2 | >=5.12.0 | 5.12.1 |
+| sentence-transformers | >=2.5.0 | >=5.6.0 | 5.6.0 |
+| fastapi | >=0.110.0 | >=0.138.0 | 0.138.1 |
+| uvicorn | >=0.29.0 | >=0.49.0 | 0.49.0 |
+| opencv-python | >=4.9.0 | >=4.13.0 | 4.13.0.92 |
+| pillow | >=10.0.0 | >=12.0.0 | 12.2.0 |
+| numpy | >=1.24.0 | >=2.5.0 | 2.5.0 |
+| open-clip-torch | >=2.24.0 | >=2.30.0 | — |
+| structlog | >=24.4.0 | >=26.0.0 | 26.1.0 |
+| mcp | >=1.0.0 | >=1.28.0 | 1.28.1 |
+| prometheus-client | >=0.21.0 | >=0.25.0 | 0.25.0 |
+| yt-dlp | >=2024.0.0 | >=2026.6.0 | 2026.6.9 |
+| faster-whisper | >=1.0.0 | >=1.2.0 | 1.2.1 |
+| langchain-text-splitters | >=0.1.0 | >=1.1.0 | 1.1.2 |
+
+- **Optional deps updated**: ultralytics >=8.4.0, PaddleOCR >=3.7.0, PyAnnote >=4.0.0
+- **Dockerfile**: LABEL version updated to 0.29.0, torch reference updated to 2.12+
+- No breaking changes detected — all existing tests pass with the updated bounds.
+
+### 🧩 New Module: Gradio 6 Workflow Integration (`ui/workflow.py`)
+
+- **New module**: `ui/workflow.py` — Gradio 6 Workflow visual pipeline builder integration
+- **Uses `gr.Workflow`** (introduced in Gradio 6.17.0) for a drag-and-drop visual canvas where users can connect pipeline stages as nodes
+- **4 pipeline nodes** mapped as Workflow bind functions:
+  - `Download URL` — download a video from YouTube/URL
+  - `Process Video` — run the full analysis pipeline (transcription, scene detection, OCR, YOLO, CLIP)
+  - `Index Video` — index processed results into ChromaDB for Q&A
+  - `Ask Question` — ask natural language questions about indexed video content
+- **Default edges** connect stages in a linear pipeline: Download → Process → Index → Ask
+- **Persistent graph** saved to `data/workflow.json` — edits within the canvas are auto-saved and reloaded
+- **Config toggle**: `WORKFLOW_ENABLED` env var (default: `true`) controls whether the Pipeline tab appears
+- **API access**: Each workflow output is exposed as a named REST endpoint via Gradio's built-in API layer
+
+### 📋 Roadmap Progress
+- [x] Dependency modernization — all pyproject.toml & requirements.txt bounds updated
+- [x] Gradio 6 Workflow integration — visual pipeline builder with `gr.Workflow`
+
+### 📦 New Modules
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `ui.workflow` | `ui/workflow.py` | ~165 | Gradio 6 Workflow visual pipeline builder |
+
+---
+
 ## 0.28.0 (2026-06-26) — Prometheus Metrics & Production Monitoring
 
 ### 📊 Production Monitoring — Prometheus /metrics Endpoint

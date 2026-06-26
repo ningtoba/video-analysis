@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ── Multi-stage build for video-analysis platform ──
-# GPU-enabled: CUDA 12.8 runtime with torch 2.6+ wheels (cu128)
+# GPU-enabled: CUDA 12.8 runtime with torch 2.12+ wheels (cu128)
 #   Host driver: NVIDIA 610.43.02  |  nvidia-container-toolkit required
 #   VRAM budget (12 GB RTX 4070): models loaded sequentially in pipeline
 #
@@ -47,7 +47,7 @@ FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
 LABEL org.opencontainers.image.title="Video Analysis Platform"
 LABEL org.opencontainers.image.description="Self-hosted video analysis with AI chatbot — scene understanding, RAG, clip export, YouTube import, batch processing"
-LABEL org.opencontainers.image.version="0.15.0"
+LABEL org.opencontainers.image.version="0.28.0"
 LABEL org.opencontainers.image.vendor="Nous Research"
 LABEL org.opencontainers.image.documentation="https://github.com/.../video-analysis"
 

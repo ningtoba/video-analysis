@@ -29,6 +29,7 @@ from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
 from video_analysis.models import format_timestamp, VideoIndex
 from ui.utils import parse_yt_url, queue_html
+from ui.workflow import inject_workflow_tab
 
 logger = logging.getLogger(__name__)
 
@@ -523,6 +524,10 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             label="Selected Video", visible=False
                         )
                         lib_info = gr.JSON(label="Video Info", visible=False)
+
+            # ============ TAB 6: PIPELINE WORKFLOW (Gradio 6 Workflow) ============
+            if config.workflow_enabled:
+                inject_workflow_tab(app, config)
 
         # ==================== EVENT HANDLERS ====================
 

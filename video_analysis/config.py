@@ -214,8 +214,8 @@ class Config:
     face_max_faces: int = 0  # 0 = unlimited
     face_recognition_providers: str = "CUDAExecutionProvider,CPUExecutionProvider"
 
-    # Gradio Workflow (v0.26.0)
-    workflow_enabled: bool = True  # enable Gradio Workflow visual pipeline builder UI
+    # Gradio Workflow (v0.29.0 — ui/workflow.py, gr.Workflow visual pipeline builder)
+    workflow_enabled: bool = True  # enable Gradio Workflow visual pipeline builder tab
 
     # Prometheus Metrics (v0.28.0)
     prometheus_enabled: bool = True  # overridden by PROMETHEUS_ENABLED env var

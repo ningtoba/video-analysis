@@ -133,6 +133,7 @@ User Question
 | `face_recognition` | `video_analysis/face.py` | InsightFace face detection & recognition — DetectedFace, FaceRecognizer, clustering |
 | `ui/app` | `ui/app.py` | Gradio web interface with dark theme, tabs, library, clip export, batch queue, URL import |
 | `ui/utils` | `ui/utils.py` | Shared UI utility functions (importable without gradio) |
+| `ui/workflow` | `ui/workflow.py` | Gradio 6 Workflow visual pipeline builder (gr.Workflow canvas) |
 
 ## 💻 Tech Stack
 
@@ -306,10 +307,11 @@ python tests/test_basic.py
 |- [x] InsightFace face recognition (SCRFD-10G + ArcFace, cross-video person identity)
 |- [x] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
 |- [x] **Prometheus metrics endpoint + Grafana dashboards** — 20+ counters/histograms/gauges for pipeline runs, retrieval, GPU memory, ChromaDB size, and question answering; graceful fallback when prometheus_client absent; config toggle via `PROMETHEUS_ENABLED`
-|- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
+|- [x] **Dependency modernization** — all pyproject.toml & requirements.txt bounds updated to latest stable (torch 2.12, transformers 5.12, sentence-transformers 5.6, fastapi 0.138, etc.)
+|- [x] **Gradio 6 Workflow integration** — `ui/workflow.py` with `gr.Workflow` visual pipeline builder canvas (Gradio 6.17+ API: `bind`, `edges`, `graph`)
 |||- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
-|- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)
-|- [ ] Federated video search (MCP-based cross-instance query)
+||- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)
+||- [ ] Federated video search (MCP-based cross-instance query)
 |
 |
 
