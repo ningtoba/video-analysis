@@ -150,6 +150,28 @@ class VideoPipeline:
         gc.collect()
         logger.info("Pipeline GPU models cleaned up")
 
+    def _get_active_stages(self) -> set:
+        """Return the set of stage names that should be SKIPPED based on processing_mode.
+
+        In ``audio_only`` mode, all visual processing stages are skipped.
+        In ``video_full`` mode (default), no stages are skipped.
+        """
+        if self.config.processing_mode == "audio_only":
+            logger.info("Audio-only mode: skipping all visual stages")
+            return {
+                "scene_detection",
+                "frame_extraction",
+                "quality_screening",
+                "object_detection",
+                "ocr",
+                "clip_classification",
+                "video_mllm",
+                "action_recognition",
+                "sprite_sheet",
+                "rag_indexing",
+            }
+        return set()
+
     def process(self, video_path: str) -> VideoIndex:
         """
         Process a video file end-to-end:
@@ -170,6 +192,13 @@ class VideoPipeline:
         video_id = video_path.stem
         logger.info(f"Processing video: {video_path.name}")
 
+        # Determine which stages to skip based on processing_mode
+        skipped_stages = self._get_active_stages()
+        logger.info(
+            f"Processing mode: {self.config.processing_mode} "
+            f"(skipped stages: {skipped_stages if skipped_stages else 'none'})"
+        )
+
         # Step 1: Get duration
         duration = self._get_duration(video_path)
         logger.info(f"Duration: {duration:.1f}s")
@@ -179,31 +208,43 @@ class VideoPipeline:
         logger.info(f"Audio extracted: {audio_path}")
 
         # Step 3: Detect scenes
-        scenes = self._detect_scenes(video_path, video_id)
-        logger.info(f"Detected {len(scenes)} scenes")
+        if "scene_detection" not in skipped_stages:
+            scenes = self._detect_scenes(video_path, video_id)
+            logger.info(f"Detected {len(scenes)} scenes")
+        else:
+            scenes = []
+            logger.info("Scene detection skipped (audio-only mode)")
 
         # Step 4: Extract key frames per scene
-        for scene in scenes:
-            frames = self._extract_key_frames(
-                video_path,
-                video_id,
-                scene,
-            )
-            scene.key_frames = frames
-        logger.info("Key frames extracted")
-
-        # Step 4.5: Video quality pre-screening (zero VRAM, CPU-only)
-        if self.config.quality_screening_enabled:
-            quality_results = self._screen_frame_quality(scenes)
-            poor_count = sum(
-                1 for r in quality_results if r.get("is_blurry") or r.get("is_static")
-            )
-            if poor_count:
-                logger.info(
-                    f"Quality screening flagged {poor_count}/{len(quality_results)} "
-                    f"frames as low-quality"
+        if "frame_extraction" not in skipped_stages:
+            for scene in scenes:
+                frames = self._extract_key_frames(
+                    video_path,
+                    video_id,
+                    scene,
                 )
-        logger.info("Quality screening complete")
+                scene.key_frames = frames
+            logger.info("Key frames extracted")
+
+            # Step 4.5: Video quality pre-screening (zero VRAM, CPU-only)
+            if (
+                self.config.quality_screening_enabled
+                and "quality_screening" not in skipped_stages
+            ):
+                quality_results = self._screen_frame_quality(scenes)
+                poor_count = sum(
+                    1
+                    for r in quality_results
+                    if r.get("is_blurry") or r.get("is_static")
+                )
+                if poor_count:
+                    logger.info(
+                        f"Quality screening flagged {poor_count}/{len(quality_results)} "
+                        f"frames as low-quality"
+                    )
+            logger.info("Quality screening complete")
+        else:
+            logger.info("Frame extraction skipped (audio-only mode)")
 
         # Step 5: Transcribe (GPU — faster-whisper large-v3, ~4 GB VRAM)
         transcript_segments, full_transcript = self._transcribe(
@@ -229,51 +270,70 @@ class VideoPipeline:
             logger.info("Speaker diarization disabled by config")
 
         # Step 7: Run object detection on frames (GPU — YOLO, ~1 GB VRAM)
-        self._detect_objects_on_frames(scenes)
-        logger.info("Object detection complete")
+        if "object_detection" not in skipped_stages:
+            self._detect_objects_on_frames(scenes)
+            logger.info("Object detection complete")
+        else:
+            logger.info("Object detection skipped (audio-only mode)")
         # Unload YOLO to free ~1 GB VRAM
         self._unload_model("_yolo_model")
 
         # Step 8: Run OCR text extraction on frames (PaddleOCR — CPU)
-        if self.config.ocr_enabled:
-            self._extract_ocr(scenes)
-            logger.info("OCR text extraction complete")
+        if "ocr" not in skipped_stages:
+            if self.config.ocr_enabled:
+                self._extract_ocr(scenes)
+                logger.info("OCR text extraction complete")
+            else:
+                logger.info("OCR text extraction disabled by config")
         else:
-            logger.info("OCR text extraction disabled by config")
+            logger.info("OCR text extraction skipped (audio-only mode)")
 
         # Step 9: Run OpenCLIP zero-shot scene classification on frames (GPU, ~2 GB VRAM)
-        self._describe_scenes_clip(scenes)
-        logger.info("OpenCLIP scene classification complete")
+        if "clip_classification" not in skipped_stages:
+            self._describe_scenes_clip(scenes)
+            logger.info("OpenCLIP scene classification complete")
+        else:
+            logger.info("OpenCLIP scene classification skipped (audio-only mode)")
         # Unload CLIP model to free ~2 GB VRAM
         self._unload_model("_clip_model")
         self._unload_model("_clip_preprocess")
         self._unload_model("_clip_tokenizer")
 
         # Step 10: Optional Video MLLM scene description (VideoChat-Flash 2B, GPU, ~5.4 GB VRAM)
-        if self.config.video_mllm_enabled and self.config.video_mllm_as_describer:
-            self._describe_scenes_mllm(scenes)
-            logger.info("Video MLLM scene description complete")
-            self._unload_model("_video_mllm")
+        if "video_mllm" not in skipped_stages:
+            if self.config.video_mllm_enabled and self.config.video_mllm_as_describer:
+                self._describe_scenes_mllm(scenes)
+                logger.info("Video MLLM scene description complete")
+                self._unload_model("_video_mllm")
+            else:
+                logger.info("Video MLLM scene description disabled by config")
         else:
-            logger.info("Video MLLM scene description disabled by config")
+            logger.info("Video MLLM scene description skipped (audio-only mode)")
 
         # Step 11: Action recognition (optional X-CLIP, GPU, ~4 GB VRAM)
-        if self.config.action_recognition_enabled:
-            self._classify_actions(scenes)
-            logger.info("Action recognition complete")
-            # Action recognizer already unloads itself; explicit safety call
-            self._unload_model("_action_recognizer")
+        if "action_recognition" not in skipped_stages:
+            if self.config.action_recognition_enabled:
+                self._classify_actions(scenes)
+                logger.info("Action recognition complete")
+                # Action recognizer already unloads itself; explicit safety call
+                self._unload_model("_action_recognizer")
+            else:
+                logger.info("Action recognition disabled by config")
         else:
-            logger.info("Action recognition disabled by config")
+            logger.info("Action recognition skipped (audio-only mode)")
 
         # Step 11: Assign transcript to scenes
         self._assign_transcript_to_scenes(scenes, transcript_segments)
 
         # Step 12: Generate sprite sheet for timeline preview
-        sprite_path, sprite_meta = self._generate_sprite_sheet(
-            video_path, video_id, num_thumbnails=100
-        )
-        logger.info(f"Sprite sheet generated: {sprite_path}")
+        if "sprite_sheet" not in skipped_stages:
+            sprite_path, sprite_meta = self._generate_sprite_sheet(
+                video_path, video_id, num_thumbnails=100
+            )
+            logger.info(f"Sprite sheet generated: {sprite_path}")
+        else:
+            sprite_path, sprite_meta = None, None
+            logger.info("Sprite sheet generation skipped (audio-only mode)")
 
         # Step 13: Build index
         index = VideoIndex(

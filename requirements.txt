@@ -15,6 +15,9 @@ langchain-text-splitters>=0.1.0
 # BGE-VL / BGE embedding models
 einops>=0.8.0
 
+# Structured logging
+structlog>=24.4.0
+
 # Scene understanding
 open-clip-torch>=2.24.0
 

@@ -103,6 +103,13 @@ class Config:
     # Diarization (PyAnnote)
     diarize_enabled: bool = True
 
+    # Structured JSON Logging (v0.22.0)
+    structured_logging_enabled: bool = True  # overridden by STRUCTURED_LOGGING_ENABLED
+    structured_logging_format: str = (
+        "auto"  # "console", "json", or "auto" — overridden by STRUCTURED_LOGGING_FORMAT
+    )
+    structured_logging_level: str = "INFO"  # overridden by STRUCTURED_LOGGING_LEVEL
+
     # UI
     ui_host: str = "0.0.0.0"
     ui_port: int = 7860
@@ -112,6 +119,9 @@ class Config:
     ui_auth_password: str = os.environ.get("GRADIO_PASSWORD", "")
     # Library
     library_max_videos: int = 50
+
+    # Processing mode (v0.22.0)
+    processing_mode: str = "video_full"  # "video_full" or "audio_only"
 
     # Frame sampling
     adaptive_frame_sampling: bool = False  # motion-based adaptive sampling
@@ -152,6 +162,17 @@ class Config:
         False  # use MLLM as video-native Q&A backend instead of Hermes CLI
     )
 
+    # Conversation Memory (ChromaDB-backed Q&A memory, v0.22.0)
+    conversation_memory_enabled: bool = bool(
+        os.environ.get("CONVERSATION_MEMORY_ENABLED", "true").lower() == "true"
+    )
+    conversation_memory_max_entries: int = int(
+        os.environ.get("CONVERSATION_MEMORY_MAX_ENTRIES", "50")
+    )
+    conversation_memory_ttl_days: int = int(
+        os.environ.get("CONVERSATION_MEMORY_TTL_DAYS", "30")
+    )
+
     # Scene Graph (VGent/ViG-RAG inspired — graph-based video retrieval)
     scene_graph_enabled: bool = True  # enable scene-graph retrieval layer
     scene_graph_k_hop: int = 2  # K-hop graph expansion (0 = disabled)
@@ -176,6 +197,16 @@ class Config:
     agentic_retrieval_enabled: bool = True  # enable iterative agentic retrieval loop
     agentic_max_rounds: int = 3  # max iterative rounds (default: 3)
     agentic_min_confidence: float = 0.5  # min avg top-3 score to stop early
+    # Audio-Only Processing Mode (v0.23.0)
+    processing_mode: str = "video_full"  # "video_full" or "audio_only"
+    # Conversation Memory (v0.23.0)
+    conversation_memory_enabled: bool = True
+    conversation_memory_max_entries: int = 50
+    conversation_memory_ttl_days: int = 30
+    # Structured JSON Logging (v0.23.0)
+    structured_logging_enabled: bool = True
+    structured_logging_format: str = "auto"  # "auto", "console", "json"
+    structured_logging_level: str = "INFO"
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
@@ -219,10 +250,26 @@ class Config:
         quality_env = os.environ.get("QUALITY_SCREENING_ENABLED", "").lower()
         if quality_env in ("false", "0", "no"):
             self.quality_screening_enabled = False
+        # Override structured_logging_enabled from env var
+        sl_env = os.environ.get("STRUCTURED_LOGGING_ENABLED", "").lower()
+        if sl_env in ("false", "0", "no"):
+            self.structured_logging_enabled = False
+        # Override structured_logging_format from env var
+        fmt_env = os.environ.get("STRUCTURED_LOGGING_FORMAT", "").lower()
+        if fmt_env in ("console", "json", "auto"):
+            self.structured_logging_format = fmt_env
+        # Override structured_logging_level from env var
+        lvl_env = os.environ.get("STRUCTURED_LOGGING_LEVEL", "").upper()
+        if lvl_env in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+            self.structured_logging_level = lvl_env
         # Override frame_storage_mode from env var
         storage_env = os.environ.get("FRAME_STORAGE_MODE", "").lower()
         if storage_env in ("full", "tiered", "compressed"):
             self.frame_storage_mode = storage_env
+        # Override processing_mode from env var
+        processing_env = os.environ.get("PROCESSING_MODE", "").lower()
+        if processing_env in ("video_full", "audio_only"):
+            self.processing_mode = processing_env
         for d in [
             self.data_dir,
             self.video_dir,

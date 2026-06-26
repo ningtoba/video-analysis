@@ -14,6 +14,7 @@ from typing import List, Optional
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG, RetrievedChunk
 from video_analysis.models import ChatMessage, ChatSource, format_timestamp
+from video_analysis.memory import ConversationMemory
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,17 @@ class VideoChat:
         self.config = config or Config()
         self.history: List[ChatMessage] = []
         self._mllm = None  # lazy-loaded Video MLLM
+        # Conversation memory (optional, ChromaDB-backed)
+        self.memory: Optional[ConversationMemory] = None
+        if self.config.conversation_memory_enabled:
+            try:
+                self.memory = ConversationMemory(self.config)
+                logger.info("Conversation memory initialised")
+            except Exception as exc:
+                logger.warning(
+                    "Failed to initialise conversation memory: %s — proceeding without it",
+                    exc,
+                )
 
     def _get_mllm(self):
         """Lazy-load Video MLLM for video-native Q&A."""
@@ -148,8 +160,14 @@ class VideoChat:
         # Build context string
         context = self.rag.build_context(chunks)
 
-        # Build prompt
-        prompt = self._build_prompt(query, context)
+        # Retrieve relevant conversation memories and prepend to context
+        memory_context = self._get_memory_context(query)
+
+        # Build prompt (with memory context if available)
+        if memory_context:
+            prompt = self._build_prompt_with_memory(query, context, memory_context)
+        else:
+            prompt = self._build_prompt(query, context)
 
         # Ask LLM
         answer = self._call_llm(prompt)
@@ -165,6 +183,13 @@ class VideoChat:
 
         self.history.append(ChatMessage(role="user", content=query))
         self.history.append(message)
+
+        # Store Q&A pair in conversation memory
+        if self.memory is not None:
+            try:
+                self.memory.add_entry(question=query, answer=answer, video_id=video_id)
+            except Exception as exc:
+                logger.debug("Failed to store conversation memory entry: %s", exc)
 
         return message
 
@@ -216,7 +241,13 @@ class VideoChat:
                 parts.append(f"{role}: {msg.content[:300]}")
             history_text = "\n".join(parts)
 
-        prompt = self._build_prompt_with_history(query, context, history_text)
+        # Retrieve conversation memory context
+        memory_context = self._get_memory_context(query)
+
+        # Build prompt with relevant memories prepended to context
+        prompt = self._build_prompt_with_history_and_memory(
+            query, context, history_text, memory_context
+        )
 
         answer = self._call_llm(prompt)
 
@@ -228,6 +259,13 @@ class VideoChat:
 
         self.history.append(ChatMessage(role="user", content=query))
         self.history.append(message)
+
+        # Store Q&A pair in conversation memory
+        if self.memory is not None:
+            try:
+                self.memory.add_entry(question=query, answer=answer, video_id=video_id)
+            except Exception as exc:
+                logger.debug("Failed to store conversation memory entry: %s", exc)
 
         return message
 
@@ -274,6 +312,94 @@ Rules:
 
 Previous conversation:
 {history}
+
+Current context:
+{context}
+
+Question: {query}
+
+Answer with timestamp citations where relevant:"""
+
+    # ------------------------------------------------------------------
+    # Conversation Memory helpers
+    # ------------------------------------------------------------------
+
+    def _get_memory_context(self, query: str) -> str:
+        """Retrieve relevant conversation memories for context.
+
+        Returns a formatted string of past Q&A pairs, or empty string if
+        memory is not available or no relevant memories found.
+        """
+        if self.memory is None:
+            return ""
+
+        try:
+            memories = self.memory.get_relevant(query, top_k=3)
+        except Exception as exc:
+            logger.debug("Failed to retrieve conversation memories: %s", exc)
+            return ""
+
+        if not memories:
+            return ""
+
+        parts = ["Previous relevant conversations:"]
+        for i, mem in enumerate(memories, 1):
+            vid = f" (video: {mem.video_id})" if mem.video_id else ""
+            parts.append(f"{i}. Q: {mem.question}{vid}\n   A: {mem.answer[:300]}")
+        return "\n".join(parts)
+
+    def _build_prompt_with_memory(
+        self, query: str, context: str, memory_context: str
+    ) -> str:
+        """Build a prompt that includes conversation memory context."""
+        return f"""You are a video analysis assistant. You answer questions about video content based on the provided context.
+
+The context includes:
+- Timestamped transcript excerpts
+- Scene descriptions and summaries
+- Detected objects in frames
+- OCR text visible in frames
+
+Rules:
+1. Answer based ONLY on the provided context
+2. When you reference specific moments, include the timestamp in HH:MM:SS format
+3. If the context doesn't have enough information, say so
+4. Be concise and factual
+
+{memory_context}
+
+Current context:
+{context}
+
+Question: {query}
+
+Answer with timestamp citations where relevant:"""
+
+    def _build_prompt_with_history_and_memory(
+        self, query: str, context: str, history: str, memory_context: str
+    ) -> str:
+        """Build a prompt that includes both conversation history and memory context."""
+        parts = (
+            [memory_context, f"Previous conversation:\n{history}"]
+            if memory_context
+            else [f"Previous conversation:\n{history}"]
+        )
+        combined_memory = "\n\n".join(parts)
+        return f"""You are a video analysis assistant. You answer questions about video content based on the provided context.
+
+The context includes:
+- Timestamped transcript excerpts
+- Scene descriptions and summaries
+- Detected objects in frames
+- OCR text visible in frames
+
+Rules:
+1. Answer based ONLY on the provided context
+2. When you reference specific moments, include the timestamp in HH:MM:SS format
+3. If the context doesn't have enough information, say so
+4. Be concise and factual
+
+{combined_memory}
 
 Current context:
 {context}

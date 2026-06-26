@@ -1017,6 +1017,69 @@ def test_chat_video_mllm_backend_disabled():
 
 
 # ====================================================================
+# v0.22.0 — Audio-Only Processing Mode
+# ====================================================================
+
+
+def test_config_processing_mode_default():
+    """Test that processing_mode defaults to 'video_full'."""
+    cfg = Config(data_dir="/tmp/va_test_proc_mode")
+    assert cfg.processing_mode == "video_full"
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_proc_mode", ignore_errors=True)
+
+
+def test_config_processing_mode_env_var(monkeypatch):
+    """Test that PROCESSING_MODE env var can set audio_only."""
+    monkeypatch.setenv("PROCESSING_MODE", "audio_only")
+    cfg = Config(data_dir="/tmp/va_test_proc_mode_env")
+    assert cfg.processing_mode == "audio_only"
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_proc_mode_env", ignore_errors=True)
+
+
+def test_pipeline_get_active_stages_audio_only():
+    """Test _get_active_stages returns all visual stages in audio_only mode."""
+    from video_analysis.pipeline import VideoPipeline
+
+    # In-memory config (no disk writes)
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cfg = Config(data_dir=tmpdir, processing_mode="audio_only")
+        pipeline = VideoPipeline(cfg)
+        stages = pipeline._get_active_stages()
+        expected = {
+            "scene_detection",
+            "frame_extraction",
+            "quality_screening",
+            "object_detection",
+            "ocr",
+            "clip_classification",
+            "video_mllm",
+            "action_recognition",
+            "sprite_sheet",
+            "rag_indexing",
+        }
+        assert stages == expected
+
+
+def test_pipeline_get_active_stages_video_full():
+    """Test _get_active_stages returns empty set in video_full mode."""
+    from video_analysis.pipeline import VideoPipeline
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cfg = Config(data_dir=tmpdir, processing_mode="video_full")
+        pipeline = VideoPipeline(cfg)
+        stages = pipeline._get_active_stages()
+        assert stages == set()
+
+
+# ====================================================================
 # v0.15.0 — SmolVLM2 Backend Integration
 # ====================================================================
 
@@ -1399,10 +1462,10 @@ def test_rag_multi_hop_no_subqueries():
 
 
 def test_version_0_15_0():
-    """Test version is now 0.22.0."""
+    """Test version is now 0.23.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.22")
+    assert __version__.startswith("0.23")
 
 
 # ====================================================================
@@ -1824,10 +1887,10 @@ def test_scene_graph_track_id_entity_matching():
 
 
 def test_version_0_20_0():
-    """Test that version is now 0.22.0."""
+    """Test that version is now 0.23.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.22")
+    assert __version__.startswith("0.23")
 
 
 if __name__ == "__main__":
@@ -1897,4 +1960,9 @@ if __name__ == "__main__":
     test_detect_objects_fallback_no_ultralytics()
     test_rag_index_track_ids_in_metadata()
     test_scene_graph_track_id_entity_matching()
+    # v0.22.0 — audio-only processing mode
+    test_config_processing_mode_default()
+    test_config_processing_mode_env_var()
+    test_pipeline_get_active_stages_audio_only()
+    test_pipeline_get_active_stages_video_full()
     print("All tests passed! ✅")

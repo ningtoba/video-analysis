@@ -187,9 +187,16 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `VIDEO_MLLM_MODEL_SIZE` | `2.2B` | SmolVLM2 model size (2.2B/500M/256M) |
 | `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions (replaces OpenCLIP) |
 | `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
-| `AGENTIC_RETRIEVAL_ENABLED` | `false` | Enable agentic iterative retrieval loop |
-| `AGENTIC_MAX_ROUNDS` | `3` | Max retrieval rounds in agentic loop |
-| `AGENTIC_MIN_CONFIDENCE` | `0.5` | Min avg score of top-3 chunks to stop early |
+|| `AGENTIC_RETRIEVAL_ENABLED` | `false` | Enable agentic iterative retrieval loop |
+|| `AGENTIC_MAX_ROUNDS` | `3` | Max retrieval rounds in agentic loop |
+|| `AGENTIC_MIN_CONFIDENCE` | `0.5` | Min avg score of top-3 chunks to stop early |
+|| `PROCESSING_MODE` | `video_full` | Processing mode: video_full or audio_only |
+|| `CONVERSATION_MEMORY_ENABLED` | `true` | Enable ChromaDB-backed conversation memory |
+|| `CONVERSATION_MEMORY_MAX_ENTRIES` | `50` | Max conversation memory entries |
+|| `CONVERSATION_MEMORY_TTL_DAYS` | `30` | Entry TTL in days |
+|| `STRUCTURED_LOGGING_ENABLED` | `true` | Enable structlog-based structured logging |
+|| `STRUCTURED_LOGGING_FORMAT` | `auto` | Output format: auto, console, json |
+|| `STRUCTURED_LOGGING_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 
 ## 🧪 Running Tests
 
@@ -278,9 +285,9 @@ python tests/test_basic.py
 ||- [x] [RESEARCH v0.22] Dependency modernization — transformers 5.12.1, torch 2.12+, sentence-transformers 5.6+
 ||- [x] [RESEARCH v0.22] Pipeline caching blueprint — SHA-256 content-addressable per-stage cache design
 ||- [x] [RESEARCH v0.22] PipelineOrchestrator blueprint — file-type heuristic + optional MLLM classifier design
-|- [ ] Audio-only processing mode — `processing_mode` config, stage filtering in pipeline.py
-|- [ ] Conversation memory — `video_analysis/memory.py`, ChromaDB-backed persistent chat history
-|- [ ] Structured JSON logging — structlog integration across pipeline stages
+|- [x] Audio-only processing mode — `processing_mode` config, stage filtering in pipeline.py
+|- [x] Conversation memory — `video_analysis/memory.py`, ChromaDB-backed persistent chat history
+|- [x] Structured JSON logging — structlog integration across pipeline stages
 |- [ ] Dependency modernization — update pyproject.toml bounds for torch>=2.5.0, transformers>=4.50.0
 |- [ ] Pipeline caching + incremental re-indexing (content-addressable per-stage cache)
 |- [ ] PipelineOrchestrator heuristic — file-type based stage selection

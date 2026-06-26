@@ -17,6 +17,7 @@ import threading
 from pathlib import Path
 
 from video_analysis.config import Config
+from video_analysis.logging_setup import setup_logging as setup_structlog
 from video_analysis.pipeline import VideoPipeline
 from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
@@ -35,12 +36,22 @@ def _signal_handler(signum, frame):
 
 
 def setup_logging(verbose: bool = False):
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    """Configure logging for the application.
+
+    Uses structlog-based structured logging by default, with fallback to
+    stdlib logging if structured logging is disabled in config.
+    """
+    config = Config()
+    if config.structured_logging_enabled:
+        level = "DEBUG" if verbose else config.structured_logging_level
+        setup_structlog(level=level, fmt=config.structured_logging_format)
+    else:
+        level = logging.DEBUG if verbose else logging.INFO
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%H:%M:%S",
+        )
 
 
 def cli_mode(args):
