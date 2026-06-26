@@ -69,6 +69,77 @@ class VideoPipeline:
         self._clip_preprocess = None
         self._clip_tokenizer = None
         self._action_recognizer = None
+        self._ocr_model = None
+
+        # Graceful shutdown support
+        self._shutdown_requested = False
+        try:
+            import signal
+
+            signal.signal(signal.SIGTERM, self._handle_signal)
+            signal.signal(signal.SIGINT, self._handle_signal)
+        except (ValueError, RuntimeError):
+            # Not in main thread — signal registration fails silently
+            pass
+
+    def _handle_signal(self, signum, frame):
+        """Handle SIGTERM/SIGINT for graceful shutdown."""
+        import signal as _signal
+
+        sig_name = _signal.Signals(signum).name
+        logger.warning(f"Signal {sig_name} received — finishing current operation...")
+        self._shutdown_requested = True
+
+    def _unload_model(self, model_attr: str):
+        """Safely unload a model from GPU memory.
+
+        Args:
+            model_attr: Name of the instance attribute holding the model
+                (e.g. ``\"_whisper_model\"``, ``\"_yolo_model\"``).
+        """
+        import gc
+        import torch as _torch
+
+        model = getattr(self, model_attr, None)
+        if model is not None:
+            setattr(self, model_attr, None)
+            del model
+        gc.collect()
+        if _torch.cuda.is_available():
+            _torch.cuda.empty_cache()
+            _torch.cuda.synchronize()
+            logger.debug(f"Model {model_attr} unloaded from GPU memory")
+
+    def cleanup(self):
+        """Unload all GPU models and free memory.
+
+        Call this after processing completes to ensure no residual GPU
+        memory usage from the pipeline.
+        """
+        if self._whisper_model is not None:
+            del self._whisper_model
+            self._whisper_model = None
+        if self._yolo_model is not None:
+            del self._yolo_model
+            self._yolo_model = None
+        if self._clip_model is not None:
+            del self._clip_model
+            self._clip_model = None
+            self._clip_preprocess = None
+            self._clip_tokenizer = None
+        if self._action_recognizer is not None:
+            try:
+                self._action_recognizer.unload()
+            except Exception:
+                pass
+            self._action_recognizer = None
+        import torch
+
+        torch.cuda.empty_cache()
+        import gc
+
+        gc.collect()
+        logger.info("Pipeline GPU models cleaned up")
 
     def process(self, video_path: str) -> VideoIndex:
         """
@@ -111,14 +182,16 @@ class VideoPipeline:
             scene.key_frames = frames
         logger.info("Key frames extracted")
 
-        # Step 5: Transcribe
+        # Step 5: Transcribe (GPU — faster-whisper large-v3, ~4 GB VRAM)
         transcript_segments, full_transcript = self._transcribe(
             audio_path,
             video_id,
         )
         logger.info(f"Transcription: {len(transcript_segments)} segments")
+        # Unload whisper model to free ~4 GB VRAM
+        self._unload_model("_whisper_model")
 
-        # Step 6: Speaker diarization (PyAnnote)
+        # Step 6: Speaker diarization (PyAnnote — CPU)
         if self.config.diarize_enabled:
             transcript_segments = self._diarize(
                 audio_path, transcript_segments, video_id
@@ -132,25 +205,33 @@ class VideoPipeline:
         else:
             logger.info("Speaker diarization disabled by config")
 
-        # Step 7: Run object detection on frames
+        # Step 7: Run object detection on frames (GPU — YOLO, ~1 GB VRAM)
         self._detect_objects_on_frames(scenes)
         logger.info("Object detection complete")
+        # Unload YOLO to free ~1 GB VRAM
+        self._unload_model("_yolo_model")
 
-        # Step 8: Run OCR text extraction on frames (PaddleOCR)
+        # Step 8: Run OCR text extraction on frames (PaddleOCR — CPU)
         if self.config.ocr_enabled:
             self._extract_ocr(scenes)
             logger.info("OCR text extraction complete")
         else:
             logger.info("OCR text extraction disabled by config")
 
-        # Step 9: Run OpenCLIP zero-shot scene classification on frames
+        # Step 9: Run OpenCLIP zero-shot scene classification on frames (GPU, ~2 GB VRAM)
         self._describe_scenes_clip(scenes)
         logger.info("OpenCLIP scene classification complete")
+        # Unload CLIP model to free ~2 GB VRAM
+        self._unload_model("_clip_model")
+        self._unload_model("_clip_preprocess")
+        self._unload_model("_clip_tokenizer")
 
-        # Step 10: Action recognition (optional X-CLIP)
+        # Step 10: Action recognition (optional X-CLIP, GPU, ~4 GB VRAM)
         if self.config.action_recognition_enabled:
             self._classify_actions(scenes)
             logger.info("Action recognition complete")
+            # Action recognizer already unloads itself; explicit safety call
+            self._unload_model("_action_recognizer")
         else:
             logger.info("Action recognition disabled by config")
 

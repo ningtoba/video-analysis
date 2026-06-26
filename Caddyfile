@@ -1,0 +1,33 @@
+# Caddyfile for Video Analysis Platform
+# Set DOMAIN env var in docker-compose.prod.yml or .env
+# https://caddyserver.com/docs/caddyfile
+
+{$DOMAIN:localhost} {
+    # Reverse proxy to the Gradio/FastAPI app
+    # Gradio uses WebSocket for streaming chatbot output;
+    # Caddy handles WebSocket transparently — no special config needed
+    reverse_proxy video-analysis:7860 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Security headers
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    # Compression
+    encode gzip
+
+    # Logs
+    log {
+        output file /data/caddy/logs/access.log
+        format json
+    }
+}

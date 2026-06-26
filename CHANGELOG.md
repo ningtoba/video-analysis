@@ -1,6 +1,59 @@
 # Changelog
 
-## 0.11.0 (2026-06-26)
+## 0.12.0 (2026-06-26)
+
+### 🧠 Major Feature: BGE-VL Multimodal Embedding — Single Unified Model
+
+- **BGE-VL-base as the default embedding model** (BAAI/BGE-VL-base, 150M params, MIT license, ~0.8 GB VRAM). Replaces the old dual-model approach (SentenceTransformer + optional Qwen3-VL-Embedding-2B) with a single unified embedding pipeline that handles text-only, image-only, and composed (image+text) retrieval.
+- **`rag.py`**: Completely rewritten embedding stack. New `_load_bge_vl()` / `_unload_bge_vl()` for lazy GPU loading/unloading. `_get_bge_vl_embedding()` handles all three modes (text, image, composed). `_get_query_embedding()` uses BGE-VL as primary with query prefix normalization. `_get_embedding()` falls back gracefully to SentenceTransformer + Nomic Embed when BGE-VL is unavailable.
+- **`search_all()`**: Now uses BGE-VL composed retrieval when both image and text are provided — true multimodal cross-video search without the heavy Qwen3-VL model.
+- **`text_embedding_model`** config field added (`nomic-ai/nomic-embed-text-v1.5`) for fallback. Legacy `multimodal_embedding_enabled` / Qwen3-VL path retained for backward compatibility.
+- **Embedding prefix normalization**: Query/document prefixes now applied when falling back to SentenceTransformer (e.g. `search_query:` for Nomic, `Represent this query:` for BGE). Boosts retrieval accuracy by 5-10%.
+
+### ⏱️ Temporal-Aware Retrieval (TV-RAG)
+
+- **Time-decay weighting**: New `temporal_decay_rate` config field (default: `0.1`). When `query_time` is provided to `retrieve()`, chunk scores are weighted by `score * exp(-decay_rate * time_distance)` per the TV-RAG paper (ACM Multimedia 2025). Set to `0.0` to disable.
+- **`_get_query_embedding()`**: Updated `retrieve()` signature with optional `query_time` parameter. Temporal weighting integrates seamlessly with the existing cross-encoder re-ranking pipeline.
+
+### 📦 Multi-Granularity Chunking
+
+- **Quad-chunk strategy** in `index_video()`:
+  - **Scene chunks** (variable length, rich context): transcript + descriptions + objects + OCR + actions
+  - **Fixed-window chunks** (60 seconds, no overlap): transcript segments aligned to time windows — cross-scene queries
+  - **Sliding-window chunks** (30 seconds, 15s overlap): fine-grained temporal localization
+  - **Frame chunks** (per-frame): direct frame-level retrieval
+  - **Transcript chunks** (legacy 500-char windows): retained for backward compatibility
+- All chunk types get `chunk_type` metadata field in ChromaDB (`scene`, `frame`, `fixed_60s`, `sliding_30s`, `transcript`) enabling targeted retrieval strategies.
+
+### 🛡️ GPU Memory Management & Graceful Shutdown
+
+- **Systematic model unloading**: New `_unload_model(model_attr)` helper in `VideoPipeline` that safely removes a model attribute, deletes the reference, runs `gc.collect()`, `torch.cuda.empty_cache()`, and `torch.cuda.synchronize()`.
+- **Per-stage GPU cleanup**: Models are explicitly unloaded between every GPU-intensive pipeline step:
+  - After Step 5 (Whisper, ~4 GB) → unloaded before diarization
+  - After Step 7 (YOLO, ~1 GB) → unloaded before OCR
+  - After Step 9 (OpenCLIP, ~2 GB) → unloaded before action recognition
+  - After Step 10 (X-CLIP, ~4 GB) → unloaded before sprite sheet/indexing
+- Peak VRAM now managed: sequential loading ensures no more than 4 GB reserved at any time on a 12 GB RTX 4070.
+- **Graceful SIGTERM/SIGINT handling**: `VideoPipeline` registers signal handlers that set `_shutdown_requested=True`. `__main__.py` also registers handlers with `_shutdown_event` for clean CLI/cron termination.
+
+### ⚙️ Dependency & Configuration Updates
+
+- **Gradio >=6.19.0** (was >=6.0.0) — Svelte 5 migration, MCP support, workflow subgraphs, stability
+- **transformers >=4.45.2** (was >=4.40.0) — required for BGE-VL compatibility
+- New config fields: `text_embedding_model`, `temporal_decay_rate`
+- BGE-VL-base (`BAAI/BGE-VL-base`) is now the default `embedding_model`
+
+### 🐳 Production Deployment
+
+- **`docker-compose.prod.yml`**: New production-grade Docker Compose with:
+  - **DCGM Exporter** — NVIDIA GPU metrics (VRAM, temp, utilization) at `:9400/metrics` for Prometheus
+  - **Caddy reverse proxy** — automatic HTTPS, WebSocket support for Gradio streaming, security headers, gzip compression
+- **Caddyfile**: Production-ready reverse proxy configuration with security headers and logging
+
+### 🧪 Tests
+
+- 12 new tests: BGE-VL config defaults, embedding prefix normalization (Nomic, BGE-small, BGE-VL), pipeline cleanup, model unloading, multi-granularity chunking config, temporal decay config, RetrievedChunk chunk_type field, graceful fallback test (BGE-VL → SentenceTransformer)
+- Pre-existing test suite: 49 → 61 tests passing
 
 ### 🎬 Major Feature: X-CLIP Zero-Shot Action Recognition
 

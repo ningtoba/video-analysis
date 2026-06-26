@@ -3,19 +3,19 @@
 **Self-hosted video analysis with an AI chatbot.** Upload any video, paste a YouTube URL, or batch-process files — let the AI pipeline extract and analyze every detail (transcription, scene detection, object recognition, semantic description, OCR, speaker diarization), then ask natural language questions about the content with precise timestamp citations.
 
 ```
-┌──────────────┐    ┌─────────────────────────┐    ┌─────────────────────┐
-│  Upload Video│───▶│  Analysis Pipeline       │───▶│  RAG Vector Index   │
-│  (drag-drop) │    │  PySceneDetect 0.7        │    │  ChromaDB + Nomic     │
-│  or YouTube  │    │  → Scene Detect          │    │  + Cross-Encoder    │
-│  URL Import  │    │  → YOLO → CLIP → Index  │    └─────────┬───────────┘
-└──────────────┘    │  → Sprite Sheet          │              │
+┌──────────────┐    ┌─────────────────────────┐    ┌──────────────────────────┐
+│  Upload Video│───▶│  Analysis Pipeline       │───▶│  RAG Vector Index        │
+│  (drag-drop) │    │  PySceneDetect 0.7        │    │  ChromaDB + BGE-VL       │
+│  or YouTube  │    │  → Scene Detect          │    │  + Multi-Granularity     │
+│  URL Import  │    │  → YOLO → CLIP → Index  │    │  + Temporal Weighting    │
+└──────────────┘    │  → Sprite Sheet          │    └─────────┬───────────────┘
                     │  → OCR → Diarization     │              │
                     └─────────────────────────┘              │
-┌──────────────┐    ┌─────────────────────┐                  │
-│  Ask Q&A     │◀───│  Context Retrieval   │◀─────────────────┘
-│  + Citations │    │  Hybrid Search +     │
-│  + Clip Export│   │  Temporal Context    │
-└──────────────┘    └─────────────────────┘
+┌──────────────┐    ┌─────────────────────────────┐          │
+│  Ask Q&A     │◀───│  Context Retrieval           │◀─────────┘
+│  + Citations │    │  BGE-VL + Cross-Encoder      │
+│  + Clip Export│   │  + TV-RAG Temporal Decay     │
+└──────────────┘    └─────────────────────────────┘
 ```
 
 ## ✨ Features
@@ -24,7 +24,7 @@
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
 - **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
-- **🔍 RAG-Powered** — ChromaDB vector store + BGE embeddings + cross-encoder re-ranking for accurate retrieval
+- **🔍 RAG-Powered** — ChromaDB vector store + **BGE-VL-base multimodal embedding** (MIT, 150M params, ~0.8 GB VRAM) + embedding prefix normalization + cross-encoder re-ranking for state-of-the-art retrieval
 - **✂️ Clip Export** — Export precise video clips at any timestamp range from the UI
 - **📚 Video Library** — Multi-video management with searchable library tab
 - **🖼️ Timeline Preview** — Sprite sheet generation for visual timeline browsing (hover to preview frames)
@@ -106,9 +106,12 @@ Video File
 
 ```
 User Question
-├── Nomic Embedding
-├── ChromaDB Hybrid Search (dense + metadata)
+├── BGE-VL Multimodal Embedding (or SentenceTransformer fallback)
+│   └── Query prefix normalization for text-only models
+├── ChromaDB Hybrid Search (dense + metadata + chunk_type)
+│   └── TV-RAG Temporal Decay (optional, score × exp(-λ·Δt))
 ├── Cross-Encoder Re-ranking (MS MARCO MiniLM)
+├── Optional ColBERTv2 Late-Interaction Re-ranking
 ├── Temporal Context Expansion (±1 neighbor scene)
 ├── Sort Chronologically
 └── LLM (Hermes/DeepSeek) → Answer with timestamp citations
@@ -140,7 +143,7 @@ User Question
 | **Scene Description** | OpenCLIP (ViT-B-32 / ViT-L-14) | Configurable model size, zero-shot classification |
 | **Timeline Preview** | FFmpeg + Pillow sprite sheets | 100-thumbnail visual timeline navigation |
 | **Vector Store** | ChromaDB | Persistent, local, no server needed |
-| **Embeddings** | nomic-ai/nomic-embed-text-v1.5 | 768-dim, MTEB ~64, Apache 2.0, self-hosted |
+| **Embeddings** | **BAAI/BGE-VL-base** (default, 150M, MIT, multimodal) + Nomic Embed v1.5 (fallback, text-only) | Single unified model for text/image/composed, ~0.8 GB VRAM |
 | **Re-ranker** | cross-encoder/ms-marco-MiniLM (default) + optional ColBERTv2 (RAGatouille) | Dual re-ranking for precision |
 | **Video Import** | yt-dlp | Downloads from YouTube, Vimeo, Twitch, and 1000+ sites |
 | **LLM** | DeepSeek-V4-Flash (via Hermes) | Fast, capable, local provider |
@@ -155,7 +158,9 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `VIDEO_ANALYSIS_DATA` | `data/` | Data directory for videos, frames, audio, chroma |
 | `WHISPER_MODEL` | `large-v3` | Whisper model size |
 | `WHISPER_DEVICE` | `cuda` | Device for transcription |
-| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Embedding model for RAG |
+| `EMBEDDING_MODEL` | `BAAI/BGE-VL-base` | Primary embedding model (BGE-VL, MIT, multimodal) |
+| `TEXT_EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Fallback text-only embedding model |
+| `TEMPORAL_DECAY_RATE` | `0.1` | TV-RAG temporal decay rate (0 = disabled) |
 | `CLIP_MODEL` | `ViT-B-32` | OpenCLIP model size (ViT-B-32 or ViT-L-14) |
 | `CLIP_PRETRAINED` | `laion2b_s34b_b79k` | OpenCLIP pretrained dataset |
 | `SCENE_DETECTOR` | `adaptive` | Scene detection mode (adaptive/content/histogram/hash/ffmpeg) |
@@ -224,7 +229,13 @@ python tests/test_basic.py
 - [x] Gradio auth via env vars
 - [x] Motion-based adaptive frame sampling
 - [x] CLIP-similarity frame deduplication
-- [ ] Action recognition (X-CLIP — zero-shot open-vocabulary action detection, ~4GB VRAM)
+- [x] Action recognition (X-CLIP — zero-shot open-vocabulary action detection, ~4GB VRAM)
+- [x] **BGE-VL multimodal embedding** (replaces dual-model approach, MIT, ~0.8 GB VRAM)
+- [x] **TV-RAG temporal-aware retrieval** (time-decay weighting, ACM Multimedia 2025)
+- [x] **Multi-granularity chunking** (fixed-window 60s + sliding-window 30s + scene + frame)
+- [x] **Systematic GPU memory management** (per-stage model unloading, 12 GB VRAM friendly)
+- [x] **Graceful SIGTERM/SIGINT shutdown** (clean partial saves on termination)
+- [x] **Production deployment** (DCGM GPU monitoring, Caddy reverse proxy)
 - [ ] Video MLLM integration (VideoChat-Flash for long-context video understanding)
 
 ## 📝 License

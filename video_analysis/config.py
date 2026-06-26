@@ -44,8 +44,14 @@ class Config:
     yolo_model: str = "yolo26x.pt"  # Latest YOLO26
     yolo_confidence: float = 0.25
 
-    # RAG
-    embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
+    # RAG — Embedding
+    # BGE-VL-base as the primary embedding model (MIT, ~0.8 GB VRAM).
+    # Replaces the dual-model approach (SentenceTransformer + Qwen3-VL).
+    # Supports text-only, image-only, and composed (image+text) embeddings
+    # in a single unified model.
+    embedding_model: str = "BAAI/BGE-VL-base"  # 150M params, MIT license
+    # Legacy text-only embedding model (used only when BGE-VL is unavailable)
+    text_embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
     # Multimodal embedding (Qwen3-VL-Embedding — optional, Apache 2.0)
     multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-2B"
     multimodal_embedding_enabled: bool = bool(
@@ -55,6 +61,7 @@ class Config:
     top_k_retrieval: int = 20
     top_k_rerank: int = 5
     temporal_window: int = 1  # neighbors on each side
+    temporal_decay_rate: float = 0.1  # TV-RAG time-decay weighting (0 = disabled)
     colbert_reranker_enabled: bool = False  # optional ColBERTv2 late-interaction
 
     # LLM

@@ -781,6 +781,143 @@ def test_config_action_env_var(monkeypatch):
     shutil.rmtree("/tmp/va_test_action_env", ignore_errors=True)
 
 
+def test_config_temporal_decay():
+    """Test temporal_decay_rate config field."""
+    cfg = Config(data_dir="/tmp/va_test_temporal")
+    assert cfg.temporal_decay_rate == 0.1
+    assert isinstance(cfg.temporal_decay_rate, float)
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_temporal", ignore_errors=True)
+
+
+def test_config_text_embedding_model():
+    """Test text_embedding_model (fallback) config field."""
+    cfg = Config(data_dir="/tmp/va_test_text_emb")
+    assert cfg.text_embedding_model is not None
+    assert "nomic" in cfg.text_embedding_model
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_text_emb", ignore_errors=True)
+
+
+def test_config_embedding_model_bge_vl():
+    """Test BGE-VL is the default embedding model."""
+    cfg = Config(data_dir="/tmp/va_test_bge")
+    assert cfg.embedding_model == "BAAI/BGE-VL-base"
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_bge", ignore_errors=True)
+
+
+def test_embedding_prefix_nomic():
+    """Test embedding prefix normalization for Nomic models."""
+    from video_analysis.rag import _apply_embedding_prefix
+
+    prefixed = _apply_embedding_prefix(
+        "test query", "nomic-ai/nomic-embed-text-v1.5", "query"
+    )
+    assert prefixed == "search_query: test query"
+
+    prefixed_doc = _apply_embedding_prefix(
+        "test document", "nomic-ai/nomic-embed-text-v1.5", "document"
+    )
+    assert prefixed_doc == "search_document: test document"
+
+
+def test_embedding_prefix_bge_small():
+    """Test embedding prefix normalization for BGE-small models."""
+    from video_analysis.rag import _apply_embedding_prefix
+
+    prefixed = _apply_embedding_prefix("test query", "BAAI/bge-small-en-v1.5", "query")
+    assert "Represent this query" in prefixed
+
+
+def test_embedding_prefix_bge_vl():
+    """Test BGE-VL model returns text unchanged (no prefix needed)."""
+    from video_analysis.rag import _apply_embedding_prefix
+
+    prefixed = _apply_embedding_prefix("test query", "BAAI/BGE-VL-base", "query")
+    assert prefixed == "test query"
+
+
+def test_rag_query_embedding_no_bge_vl():
+    """Test _get_query_embedding falls back gracefully when BGE-VL is not loaded."""
+    from video_analysis.rag import VideoRAG
+
+    config = Config(data_dir="/tmp/va_test_qemb", embedding_model="BAAI/BGE-VL-base")
+    rag = VideoRAG(config)
+    # Should not crash — tries BGE-VL first, falls back to SentenceTransformer
+    emb = rag._get_query_embedding("test query")
+    assert len(emb) > 0
+    assert isinstance(emb, list)
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_qemb", ignore_errors=True)
+    # Clean up BGE-VL model if loaded
+    rag._unload_bge_vl()
+
+
+def test_multigranular_chunking_config():
+    """Test that multi-granularity config fields are present."""
+    cfg = Config(data_dir="/tmp/va_test_multi")
+    assert hasattr(cfg, "temporal_decay_rate")
+    assert cfg.temporal_decay_rate == 0.1
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_multi", ignore_errors=True)
+
+
+def test_pipeline_cleanup():
+    """Test that pipeline.cleanup() exists and doesn't crash."""
+    from video_analysis.pipeline import VideoPipeline
+
+    config = Config(data_dir="/tmp/va_test_cleanup")
+    pipeline = VideoPipeline(config)
+    # Should not crash even with no models loaded
+    pipeline.cleanup()
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_cleanup", ignore_errors=True)
+
+
+def test_pipeline_unload_model():
+    """Test _unload_model handles unknown attribute gracefully."""
+    from video_analysis.pipeline import VideoPipeline
+
+    config = Config(data_dir="/tmp/va_test_unload")
+    pipeline = VideoPipeline(config)
+    # Should not crash for non-existent attribute
+    pipeline._unload_model("_nonexistent_model")
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_unload", ignore_errors=True)
+
+
+def test_chunk_type_in_retrieved_chunk():
+    """Test that RetrievedChunk has chunk_type field."""
+    from video_analysis.rag import RetrievedChunk
+
+    chunk = RetrievedChunk(
+        chunk_id="test",
+        video_id="test",
+        text="test",
+        timestamp=0.0,
+        scene_id=0,
+        score=1.0,
+    )
+    assert chunk.chunk_type == "scene"  # default
+
+
+def test_config_temporal_decay_zero_disabled():
+    """Test that temporal_decay_rate=0 disables temporal weighting."""
+    cfg = Config(data_dir="/tmp/va_test_td0", temporal_decay_rate=0.0)
+    assert cfg.temporal_decay_rate == 0.0
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_td0", ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_scene_info()
@@ -804,4 +941,15 @@ if __name__ == "__main__":
     test_colbert_reranker_import()
     test_colbert_reranker_fallback_on_missing()
     test_config_colbert_reranker()
+    test_config_text_embedding_model()
+    test_config_embedding_model_bge_vl()
+    test_embedding_prefix_nomic()
+    test_embedding_prefix_bge_small()
+    test_embedding_prefix_bge_vl()
+    test_config_temporal_decay()
+    test_multigranular_chunking_config()
+    test_pipeline_cleanup()
+    test_pipeline_unload_model()
+    test_chunk_type_in_retrieved_chunk()
+    test_config_temporal_decay_zero_disabled()
     print("All tests passed! ✅")

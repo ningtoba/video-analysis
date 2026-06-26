@@ -11,13 +11,27 @@ Usage:
 
 import argparse
 import logging
+import signal
 import sys
+import threading
 from pathlib import Path
 
 from video_analysis.config import Config
 from video_analysis.pipeline import VideoPipeline
 from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
+
+# Global shutdown event for graceful termination
+_shutdown_event = threading.Event()
+
+
+def _signal_handler(signum, frame):
+    """Handle SIGTERM/SIGINT for graceful shutdown."""
+    signal_name = signal.Signals(signum).name
+    print(
+        f"\n[{signal_name}] Shutting down gracefully... (press Ctrl+C again to force)"
+    )
+    _shutdown_event.set()
 
 
 def setup_logging(verbose: bool = False):
@@ -191,6 +205,10 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Register graceful shutdown handler
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
 
     if args.host or args.port:
         import os

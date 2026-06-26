@@ -1,0 +1,83 @@
+version: "3.8"
+
+services:
+  # ============================================================
+  # DCGM Exporter — NVIDIA GPU metrics for Prometheus
+  # Exposes GPU metrics (VRAM, temp, utilization) at :9400/metrics
+  # ============================================================
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.8-3.6.0-ubuntu22.04
+    container_name: dcgm-exporter
+    runtime: nvidia
+    cap_add:
+      - SYS_ADMIN
+    ports:
+      - "9400:9400"
+    restart: unless-stopped
+    networks:
+      - video-analysis-net
+
+  # ============================================================
+  # Video Analysis — main application
+  # ============================================================
+  video-analysis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: video-analysis
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - GRADIO_PASSWORD=${GRADIO_PASSWORD:-}
+      - GRADIO_USER=${GRADIO_USER:-admin}
+      - ACTION_RECOGNITION_ENABLED=${ACTION_RECOGNITION_ENABLED:-false}
+      - MULTIMODAL_EMBEDDING=${MULTIMODAL_EMBEDDING:-false}
+    ports:
+      - "7860:7860"
+    volumes:
+      - video-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - video-analysis-net
+
+  # ============================================================
+  # Caddy — automatic HTTPS reverse proxy (optional)
+  # Requires DOMAIN env var to be set for production use
+  # ============================================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: video-analysis-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - video-analysis
+    restart: unless-stopped
+    networks:
+      - video-analysis-net
+
+volumes:
+  video-data:
+  caddy_data:
+
+networks:
+  video-analysis-net:
+    driver: bridge
