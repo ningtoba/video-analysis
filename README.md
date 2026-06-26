@@ -21,7 +21,8 @@
 ## ✨ Features
 
 - **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
-- **🤖 Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent with 7 specialized tools (analyze_frames, detect_objects, OCR, search_transcript, search_rag, temporal_grounding, summarize_video) that dynamically routes questions to the right tools
+|- **🤖 Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent with 7 specialized tools (analyze_frames, detect_objects, OCR, search_transcript, search_rag, temporal_grounding, summarize_video) that dynamically routes questions to the right tools
+|- **📖 Video Chaptering** (v0.37.0) — automatic topic segmentation of transcripts into chapters using NLTK TextTiling, with LLM-generated chapter titles and summaries; generates structured chapter reports and agent-chapter context
 - **🎯 MMR Diversity Re-Ranking** — Maximal Marginal Relevance (Carbonell & Goldstein, SIGIR'98) reduces context redundancy by 30-50% over pure relevance-sorted retrieval; configurable via `MMR_DIVERSITY_ENABLED`, `MMR_LAMBDA`, and `MMR_TOP_K`
 - **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6 — +4.6% detection, +5.1% recognition over v5), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
 |- **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) or **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)** for video-native scene description, summarization, and Q&A
@@ -140,6 +141,7 @@ User Question
 | `federation` | `video_analysis/federation.py` | Federated MCP-based cross-instance video search |
 | `backends` | `video_analysis/backends/` | MLLM backend implementations (Qwen3-VL-30B-A3B with vLLM + FP8) |
 | `agent` | `video_analysis/agent.py` | Agentic Video Understanding Agent — multi-tool video analysis agent |
+| `chapters` | `video_analysis/chapters.py` | Video content chaptering — topic segmentation & LLM chapter title generation |
 
 ## 💻 Tech Stack
 
@@ -338,7 +340,8 @@ python tests/test_basic.py
 ||- [x] **PP-OCRv6 upgrade (config + model tier for tiny/small/medium)**
 ||- [x] **Scene graph face-entity enrichment (cross-video person-based edges)**
 ||- [x] **MMR diversity re-ranking (30-50% context redundancy reduction)**
-|- [x] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, 256K context)
+||- [x] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, 256K context)
+||- [x] **Video Content Chaptering** — NLTK TextTiling-based topic segmentation with LLM/fallback title generation, chapter report generation, agent chapter context integration |
 |
 |
-|MIT
+MIT

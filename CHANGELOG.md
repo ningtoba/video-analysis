@@ -1,5 +1,79 @@
 # Changelog
 
+## 0.37.0 (2026-06-27) — Video Content Chaptering (Topic Segmentation)
+
+### 📖 New Module: Video Content Chaptering (`video_analysis/chapters.py`)
+
+Automatic topic segmentation and chapter generation for video transcripts,
+providing a structured table of contents for any analyzed video.
+
+- **`ChapterGenerator` class** — segments video transcripts into meaningful
+  topical chapters using three strategies:
+  - **NLTK TextTiling** (primary) — lexical score-based topic boundary detection
+    using `nltk.tokenize.TextTilingTokenizer` with tuned parameters for
+    transcript text (k=200 pseudo-sentence size, w=40 block comparison)
+  - **Scene boundary segmentation** (alternative) — uses PySceneDetect boundary
+    timestamps to split transcripts at known scene changes
+  - **Uniform time-based segmentation** (fallback) — divides the total duration
+    into equal-length buckets, always available with no extra dependencies
+- **LLM-powered chapter titles** — each chapter gets a descriptive title and
+  one-line summary generated via the Hermes CLI (`hermes chat -q`), with
+  heuristic fallback using first-sentence extraction
+- **Heuristic title generation** — fallback when LLM is unavailable, extracts
+  the first meaningful sentence as the chapter title
+- **Configurable limits** — `max_chapters` (default 12), `min_chapters` (default 2),
+  and `use_llm_titles` toggle
+- **Automatic merge** — overly fine-grained segments are merged by combining
+  the smallest adjacent groups until the chapter count is within limits
+- **Transcript extraction helper** — `extract_transcript_from_rag()` reads
+  timestamped transcript chunks from the ChromaDB RAG index, sorted and
+  speaker-annotated, ready for direct chaptering
+
+### 📊 Report Generation
+
+- **`generate_chapter_report()`** — produces a structured markdown report with
+  chapter numbers, titles, timestamps (formatted), durations, word counts,
+  summaries, and transcript previews — ideal for video overview docs
+- **`generate_agent_chapter_context()`** — compact chapter summary for agent
+  reasoning loops, enabling chapter-aware query routing in the
+  VideoUnderstandingAgent
+
+### 🔧 Data Types
+
+- **`ChapterSegment`** — single transcript segment with start/end time,
+  speaker label, and chapter assignment index
+- **`Chapter`** — full chapter metadata: title, time range, index, summary,
+  transcript preview, word count
+- **`ChapteringResult`** — complete segmentation result with video ID,
+  chapters list, method used, and serialization via `to_dict()`
+
+### 🧪 Tests
+
+- **43 new tests** (`tests/test_chapters.py`) — all pass in <0.5s
+- Covers: all dataclass constructors (6 tests), heuristic title generation
+  (4 tests), uniform segmentation (4 tests), scene-boundary segmentation
+  (3 tests), merge limits (2 tests), build transcript paragraph (4 tests),
+  full `segment_transcript()` pipeline (5 tests), chapter report generation
+  (2 tests), agent context (2 tests), RAG transcript extraction with mocking
+  (5 tests), end-to-end pipeline (4 tests), boundary contiguity (1 test),
+  limits enforcement (2 tests), timestamp sorting (2 tests), graceful
+  empty/error handling (4 tests)
+- No new hard dependencies — `nltk` is optional (TextTiling fallback to
+  uniform segmentation when unavailable)
+
+### 📝 Dependencies
+
+- No new hard dependencies — chapter generation gracefully degrades when
+  NLTK is not installed
+- Optional: `nltk>=3.9.0` for TextTiling-based topic segmentation
+  (recommended for best chapter quality, `pip install nltk`)
+
+### 📋 Roadmap Progress
+
+- [x] **Video Content Chaptering** (topic segmentation + LLM title generation)
+
+---
+
 ## 0.36.0 (2026-06-27) — Agentic Video Understanding Agent (Multi-Tool Agent)
 
 ### 🧠 Agentic Video Understanding Agent
