@@ -1,5 +1,111 @@
 # Changelog
 
+## 0.21.0 (2026-06-26) — Research Phase: Video Pipeline Infrastructure Evolution
+
+### 🔬 Beyond Model-Centric Research: Infrastructure & Operational Evolution
+
+The v0.3 through v0.20 research phases covered every model, architecture, and pipeline
+enhancement. This research phase shifts focus to what comes after the models are chosen:
+
+#### 💾 Tiered Frame Storage & Compression Optimization
+
+- **Problem**: Full-resolution frame storage consumes 60-150 MB per 10-min video. With
+  multi-video libraries, this grows to 10s of GB.
+- **Solution**: Three-tier storage — 960×540 analysis frames (JPEG 85%), original-res
+  OCR/YOLO frames (JPEG 90%), 320×180 timeline thumbnails (WebP 80%).
+- **Estimated savings**: 60-75% disk reduction. Config: `frame_storage_mode`,
+  `frame_analysis_size`, `frame_compression` (jpeg/webp/avif/jpegxl).
+- **Blueprint**: New `video_analysis/storage.py` module for compression profiles.
+- **Dependencies**: Pillow 11+ (done), optional `libjxl` for JPEG XL.
+
+#### 🎯 Video Quality Pre-Screening
+
+- **Problem**: Pipeline eagerly processes every frame regardless of quality — blurry,
+  dark, frozen, or corrupted frames waste GPU cycles.
+- **Solution**: Fast pre-screening stage (Step 1.5) using Laplacian variance (blur),
+  mean brightness (over/underexposure), SSIM consecutive-frame comparison (static
+  detection), and FFmpeg error checking (corruption).
+- **Zero VRAM** — all CPU-based, <1ms per frame.
+- **Config**: `quality_screening_enabled`, `quality_min_blur_threshold`,
+  `quality_skip_ocr_on_blurry`, `quality_skip_yolo_on_dark`.
+- **Blueprint**: New `video_analysis/quality.py` module.
+
+#### 🎧 Audio-Only Processing Mode
+
+- **Problem**: For podcasts, interviews, lectures, visual stages (YOLO, OCR, CLIP) waste
+  GPU cycles.
+- **Solution**: `processing_mode` option (`video_full`/`video_light`/`audio_only`/`auto`)
+  that filters pipeline stages.
+- **Impact**: 50-75% faster processing for audio-heavy content.
+- **Blueprint**: Stage filtering in pipeline.py based on `processing_mode`.
+
+#### 🧠 Multi-Modal Conversation Memory
+
+- **Problem**: Chat has no persistent cross-video memory — each query is independent.
+- **Solution**: ChromaDB-backed `conversation_memory` collection storing Q&A pairs
+  with video_id metadata. Relevant past conversations retrieved before new queries.
+- **Config**: `conversation_memory_enabled`, `conversation_memory_max_entries`,
+  `conversation_memory_ttl_days`.
+- **Blueprint**: New `video_analysis/memory.py` module.
+
+#### 📊 Structured JSON Logging (structlog)
+
+- **Problem**: Zero observability — terminal output only, no structured logs for
+  debugging or dashboards.
+- **Solution**: structlog integration for per-stage timing, VRAM tracking, error
+  capture in JSON format.
+- **Config**: `structured_logging_enabled`, `structured_logging_format`,
+  `structured_logging_level`.
+- **Dependency**: `pip install structlog` (lightweight, zero deps beyond Python stdlib).
+
+#### ⏱️ Pipeline Benchmarking Infrastructure
+
+- **Problem**: No systematic performance tracking across versions. "~3-4 min" is the
+  only metric.
+- **Solution**: `PipelineBenchmark` class with per-stage wall-clock + pynvml VRAM
+  tracking. CLI: `python -m video_analysis benchmark --video test.mp4`.
+- **Config**: `benchmark_tracking_enabled`, `benchmark_output_dir`.
+- **Dependency**: `pip install pynvml` (optional, NVIDIA-only).
+
+#### 🔴 Real-Time / Streaming Video Analysis
+
+- **Problem**: Batch-only processing. No live stream or directory watch support.
+- **Solution**: Chunked streaming mode — 30-second overlapping chunks processed
+  independently, merged at boundaries. New `watch` and `stream` CLI subcommands.
+- **Config**: `streaming_mode`, `streaming_chunk_duration`, `streaming_chunk_overlap`,
+  `streaming_watch_dir`.
+- **Blueprint**: New `video_analysis/streaming.py` module.
+- **FFmpeg**: `-f segment -segment_time 30` for RTMP capture.
+
+#### 🔗 Federated Video Search (MCP-Based)
+
+- **Problem**: Multiple video-analysis instances can't search each other's indexes.
+- **Solution**: MCP-based federation — each instance exposes search as MCP tool,
+  federation queries all known instances and re-ranks results.
+- **Dependency**: MCP server implementation (roadmap item, not yet built).
+
+#### 📈 Prometheus Metrics + Grafana Dashboards
+
+- **Problem**: No production monitoring — can't track pipeline health or performance
+  trends.
+- **Solution**: `/metrics` FastAPI endpoint exposing Prometheus-style counters
+  (pipeline runs, durations, GPU memory, indexed videos). Optional Grafana dashboard.
+- **Docker Compose**: Optional prometheus + grafana services in docker-compose.yml.
+
+### 🗺️ Roadmap Progress
+
+- [x] [RESEARCH v0.21] Tiered frame storage — JPEG WebP AVIF compression profiles, 60-75% disk savings
+- [x] [RESEARCH v0.21] Video quality pre-screening (Laplacian blur, BRISQUE, static frame detection)
+- [x] [RESEARCH v0.21] Audio-only processing mode (skip GPU visual stages for podcasts/lectures)
+- [x] [RESEARCH v0.21] Multi-modal conversation memory (ChromaDB-backed persistent chat history)
+- [x] [RESEARCH v0.21] Structured JSON logging (structlog for pipeline observability)
+- [x] [RESEARCH v0.21] Pipeline benchmarking infrastructure (pynvml per-stage VRAM tracking)
+- [x] [RESEARCH v0.21] Real-time streaming video analysis (chunked processing, watch/stream modes)
+- [x] [RESEARCH v0.21] Federated video search (MCP-based cross-instance query)
+- [x] [RESEARCH v0.21] Prometheus metrics endpoint + Grafana dashboards
+
+---
+
 ## 0.20.0 (2026-06-26) — Research Phase: Autonomous Video Agents & Pipeline Evolution
 
 ### 🔬 Autonomous Pipeline Architecture Research

@@ -282,6 +282,16 @@ python tests/test_basic.py
 - [ ] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU)
 - [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 - [ ] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
+|- [x] [RESEARCH v0.21] Tiered frame storage — JPEG WebP AVIF compression profiles, 60-75% disk savings
+||- [x] [RESEARCH v0.21] Video quality pre-screening (Laplacian blur, BRISQUE, static frame detection)
+||- [x] [RESEARCH v0.21] Audio-only processing mode (skip GPU visual stages for podcasts/lectures)
+||- [x] [RESEARCH v0.21] Multi-modal conversation memory (ChromaDB-backed persistent chat history)
+||- [x] [RESEARCH v0.21] Structured JSON logging (structlog for pipeline observability)
+||- [x] [RESEARCH v0.21] Pipeline benchmarking infrastructure (pynvml per-stage VRAM tracking)
+||- [x] [RESEARCH v0.21] Real-time streaming video analysis (chunked processing, watch/stream modes)
+||- [x] [RESEARCH v0.21] Federated video search (MCP-based cross-instance query)
+||- [x] [RESEARCH v0.21] Prometheus metrics endpoint + Grafana dashboards
+|
 
 ## 📝 License
 
