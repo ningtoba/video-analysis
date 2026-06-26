@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.17.0 (2026-06-26) — Research Phase: Beyond the Roadmap
+
+### 🔬 New Research: Next-Gen Capabilities (v0.17.0+)
+
+- **Autonomous Agentic Pipeline** — LLM-driven stage orchestration: quick scan (30s) classifies video type, then dynamically selects only relevant pipeline stages (save 30-50% processing time, 40-60% disk usage)
+- **Video Type Classification** — 7 video types (lecture, sports, screen recording, interview, movie, vlog, podcast) each with optimized frame rate, scene detection threshold, chunk strategy, and model selection
+- **Face Recognition System** — InsightFace (MIT, ~1.5 GB VRAM) for person identity across scenes: RetinaFace detection → ArcFace embedding → DBSCAN clustering → cross-video gallery
+- **Pipeline Caching & Incremental Re-Indexing** — Content-hash based stage caching (70-90% faster re-runs on partial changes) + incremental ChromaDB upsert
+- **MCP Tool Server** — Expose each pipeline stage (extract_frames, detect_scenes, transcribe_audio, detect_objects, search_video) as composable MCP tools for Hermes/agentic workflows
+- **Gradio Workflow Subgraph Integration** — 4-phase plan confirmed: refactor → FastAPI → Gradio Workflow → MCP tools
+- **UI Dashboard Enhancement** — Multi-resolution timeline with scene markers + entity timeline bars + transcript heatmap + export (SRT/CSV)
+- **Dependency Modernization** — Audit of all 25+ dependencies; recommendations to update torch>=2.5.0, add yt-dlp to requirements.txt, boxmot/insightface as optional deps
+- **Key Design Decision**: Use **Ultralytics built-in ByteTrack** (MIT) instead of BoxMOT (AGPL-3.0) for entity tracking
+- **Key Design Decision**: **FFmpeg motion vectors** (zero GPU, <1ms/frame) confirmed over deep flow models for 12GB VRAM budget
+- **Full research**: `docs/research/v0.17.0-research-beyond-roadmap.md`
+
+### 📦 Version Fix
+- Fixed `pyproject.toml` version mismatch: `0.15.0` → `0.16.0` (synced with `__init__.py`)
+
+---
+
 ## 0.16.0 (2026-06-26) — Research Phase
 
 ### 🔬 Entity Tracking Research — ByteTrack/BoxMOT for Persistent IDs
