@@ -265,6 +265,10 @@ class Config:
     federation_timeout: float = 30.0  # overridden by FEDERATION_TIMEOUT env var
     federation_include_local: bool = True  # include local index in federated results
 
+    # Agentic Video Understanding Agent (v0.36.0 — multi-tool agent)
+    agent_enabled: bool = False  # overridden by AGENT_ENABLED env var
+    agent_max_tools: int = 5  # max tool invocations per query
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -407,6 +411,10 @@ class Config:
         fed_local = os.environ.get("FEDERATION_INCLUDE_LOCAL", "").lower()
         if fed_local in ("false", "0", "no"):
             self.federation_include_local = False
+        # Override agent_enabled from env var
+        agent_env = os.environ.get("AGENT_ENABLED", "").lower()
+        if agent_env in ("true", "1", "yes"):
+            self.agent_enabled = True
         # Override OCR model version from env var
         ocr_ver_env = os.environ.get("OCR_MODEL_VERSION", "").lower()
         if ocr_ver_env in ("pp-ocrv6", "pp-ocrv5"):

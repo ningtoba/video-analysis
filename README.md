@@ -21,6 +21,7 @@
 ## ✨ Features
 
 - **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
+- **🤖 Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent with 7 specialized tools (analyze_frames, detect_objects, OCR, search_transcript, search_rag, temporal_grounding, summarize_video) that dynamically routes questions to the right tools
 - **🎯 MMR Diversity Re-Ranking** — Maximal Marginal Relevance (Carbonell & Goldstein, SIGIR'98) reduces context redundancy by 30-50% over pure relevance-sorted retrieval; configurable via `MMR_DIVERSITY_ENABLED`, `MMR_LAMBDA`, and `MMR_TOP_K`
 - **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6 — +4.6% detection, +5.1% recognition over v5), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
 |- **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) or **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)** for video-native scene description, summarization, and Q&A
@@ -138,6 +139,7 @@ User Question
 | `streaming` | `video_analysis/streaming.py` | Real-time streaming/chunked video analysis (StreamingVLM-inspired) |
 | `federation` | `video_analysis/federation.py` | Federated MCP-based cross-instance video search |
 | `backends` | `video_analysis/backends/` | MLLM backend implementations (Qwen3-VL-30B-A3B with vLLM + FP8) |
+| `agent` | `video_analysis/agent.py` | Agentic Video Understanding Agent — multi-tool video analysis agent |
 
 ## 💻 Tech Stack
 
@@ -221,8 +223,10 @@ Set via environment variables or edit `video_analysis/config.py`:
 ||| `MMR_DIVERSITY_ENABLED` | `false` | Enable MMR diversity re-ranking (v0.34.0) |
 ||| `MMR_LAMBDA` | `0.5` | MMR lambda [0,1]; 0 = pure diversity, 1 = pure relevance |
 ||| `MMR_TOP_K` | `15` | Number of chunks to re-rank with MMR |
-||| `OCR_MODEL_VERSION` | `PP-OCRv6` | OCR model version (PP-OCRv6 or PP-OCRv5) |
-||| `OCR_MODEL_TIER` | `medium` | OCR model tier (tiny/small/medium) |
+|||| `OCR_MODEL_VERSION` | `PP-OCRv6` | OCR model version (PP-OCRv6 or PP-OCRv5) |
+|||| `OCR_MODEL_TIER` | `medium` | OCR model tier (tiny/small/medium) |
+|||| `AGENT_ENABLED` | `false` | Enable Agentic Video Understanding Agent (v0.36.0) |
+|||| `AGENT_MAX_TOOLS` | `5` | Max tool invocations per agent query |
 
 ## 🧪 Running Tests
 

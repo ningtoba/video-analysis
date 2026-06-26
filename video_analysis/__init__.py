@@ -1,5 +1,4 @@
-"""
-Video Analysis Platform — Self-hosted video understanding with RAG chatbot.
+"""Video Analysis Platform — Self-hosted video understanding with RAG chatbot.
 
 Modules:
 - pipeline: Video ingestion and analysis (transcription, scene detection, OCR, object detection)
@@ -8,6 +7,7 @@ Modules:
 - chat: LLM-powered Q&A over video context
 - config: Configuration management
 - self_check: LLM-based self-check verification + re-retrieval (v0.27.0)
+- agent: Agentic Video Understanding Agent with multi-tool dispatch (v0.36.0)
 """
 
 from video_analysis import (
@@ -32,7 +32,7 @@ from video_analysis import (
 
 # Qwen3-VL backend (requires vLLM or transformers — optional, heavy model)
 
-__version__ = "0.35.0"
+__version__ = "0.36.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

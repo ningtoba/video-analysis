@@ -22,13 +22,18 @@ logger = logging.getLogger(__name__)
 class VideoChat:
     """Chat interface over indexed video content.
 
-    Supports two backends:
-    1. **Hermes CLI** (default) — text-only RAG with retrieved chunks + Hermes/DeepSeek LLM
-    2. **Video MLLM** (optional) — VideoChat-Flash video-native Q&A that sees frame images directly
+    Supports three backends:
+    1. **Agentic Video Agent** (optional, v0.36.0) — multi-tool agent that
+       dynamically selects tools (analyze_frames, search_rag, detect_objects,
+       extract_text, search_transcript, temporal_grounding, summarize_video)
+       based on the question type.
+    2. **Video MLLM** (optional) — Video MLLM video-native Q&A that sees frame images directly
+    3. **Hermes CLI** (default) — text-only RAG with retrieved chunks + Hermes/DeepSeek LLM
 
-    When ``video_mllm_as_chat_backend`` is enabled and frames are available,
-    the Video MLLM backend is used for more accurate visual understanding.
-    Falls back to the text-only RAG path when the MLLM is unavailable.
+    The agent backend (when ``agent_enabled`` is set) takes precedence over
+    the other backends because it can combine visual, textual, and object-level
+    understanding in a single query. Falls back through Video MLLM → RAG when
+    the agent is unavailable.
     """
 
     def __init__(self, rag: VideoRAG, config: Optional[Config] = None):
@@ -60,10 +65,16 @@ class VideoChat:
         """
         Ask a question about video content.
 
-        When ``video_mllm_as_chat_backend`` is enabled in config, this will
-        attempt to use VideoChat-Flash for video-native visual Q&A (using
-        frame images directly). Falls back to the text-only RAG + Hermes CLI
-        path when the MLLM is unavailable.
+        Three backends tried in priority order:
+
+        1. **Agentic Video Agent** (``agent_enabled``) — multi-tool agent
+           that dynamically selects tools based on question type. Requires
+           the video file path for frame-level tools (detection, OCR,
+           frame analysis).
+        2. **Video MLLM** (``video_mllm_as_chat_backend``) — video-native
+           visual Q&A using frame images directly.
+        3. **RAG + Hermes CLI** (default) — text-only retrieval with
+           Hermes/DeepSeek LLM.
 
         Args:
             query: Natural language question
@@ -72,7 +83,16 @@ class VideoChat:
         Returns:
             ChatMessage with answer and source citations
         """
-        # Try Video MLLM backend first (video-native Q&A with visual context)
+        # Try Agentic Video Agent first (if enabled — v0.36.0)
+        if self.config.agent_enabled:
+            result = self._ask_agent(query, video_id)
+            if result is not None:
+                return result
+            logger.info(
+                "Agentic Video Agent returned None — falling through to next backend"
+            )
+
+        # Try Video MLLM backend next (video-native Q&A with visual context)
         if self.config.video_mllm_enabled and self.config.video_mllm_as_chat_backend:
             mllm = self._get_mllm()
             if mllm is not None:
@@ -83,6 +103,121 @@ class VideoChat:
 
         # RAG-based retrieval + Hermes CLI (default path)
         return self._ask_rag(query, video_id)
+
+    def _get_agent_video_path(self, video_id: Optional[str]) -> Optional[str]:
+        """Resolve the video file path for a given video_id.
+
+        Searches the configured video directory and the RAG metadata.
+        """
+        if video_id is None:
+            return None
+
+        # Check video directory first
+        vid_dir = self.config.video_dir
+        for ext in (".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v"):
+            candidate = vid_dir / f"{video_id}{ext}"
+            if candidate.exists():
+                return str(candidate)
+
+        # Check via RAG metadata for the filename
+        if self.rag is not None:
+            try:
+                meta = self.rag.collection.get(
+                    where={"video_id": video_id},
+                    include=["metadatas"],
+                    limit=1,
+                )
+                if meta["metadatas"]:
+                    fname = meta["metadatas"][0].get("filename", "")
+                    if fname:
+                        for ext in (
+                            ".mp4",
+                            ".mkv",
+                            ".avi",
+                            ".mov",
+                            ".webm",
+                            ".flv",
+                            ".m4v",
+                        ):
+                            candidate = vid_dir / f"{fname}{ext}"
+                            if candidate.exists():
+                                return str(candidate)
+                            # Also try without extension if filename already has one
+                            candidate = vid_dir / fname
+                            if candidate.exists():
+                                return str(candidate)
+            except Exception:
+                pass
+
+        return None
+
+    def _ask_agent(self, query: str, video_id: Optional[str]) -> Optional[ChatMessage]:
+        """Ask using the Agentic Video Understanding Agent.
+
+        Requires the video file path for frame-level tools (detection,
+        OCR, frame analysis). Falls back gracefully when the video file
+        or agent dependencies are unavailable.
+        """
+        import time as _time
+
+        agent_start = _time.perf_counter()
+
+        # Resolve video path
+        video_path = self._get_agent_video_path(video_id)
+        if video_path is None:
+            logger.debug(
+                "Agentic agent requires video file path — video_id=%s not found",
+                video_id,
+            )
+            return None
+
+        try:
+            from video_analysis.agent import VideoUnderstandingAgent
+
+            agent = VideoUnderstandingAgent(
+                config=self.config,
+                rag=self.rag,
+                video_path=video_path,
+                video_id=video_id,
+            )
+
+            result = agent.query(
+                question=query,
+                max_tools=self.config.agent_max_tools,
+            )
+
+            agent_dur = _time.perf_counter() - agent_start
+
+            logger.info(
+                "Agentic agent: %d tools used in %.1fs, confidence=%.2f",
+                result.tools_used,
+                agent_dur,
+                result.confidence,
+            )
+
+            if not result.answer or len(result.answer.strip()) < 10:
+                logger.debug("Agent produced empty/short answer — falling through")
+                return None
+
+            message = ChatMessage(
+                role="assistant",
+                content=result.answer,
+                sources=[],  # Agent evidence is embedded in the answer text
+            )
+            self.history.append(ChatMessage(role="user", content=query))
+            self.history.append(message)
+            return message
+
+        except ImportError as exc:
+            logger.debug(
+                "Agentic agent dependencies not available: %s — falling through", exc
+            )
+            return None
+        except Exception as exc:
+            logger.warning(
+                "Agentic agent failed: %s — falling through to next backend", exc
+            )
+            return None
 
     def _ask_mllm(
         self, query: str, video_id: Optional[str], mllm

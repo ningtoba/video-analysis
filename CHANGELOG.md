@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.36.0 (2026-06-27) — Agentic Video Understanding Agent (Multi-Tool Agent)
+
+### 🧠 Agentic Video Understanding Agent
+
+Multi-tool video analysis agent that dynamically selects and invokes specialized
+tools based on question type — going beyond static RAG to actively interrogate
+video content through frame analysis, object detection, OCR, transcript search,
+and temporal grounding.
+
+- **New module**: `video_analysis/agent.py` — `VideoUnderstandingAgent` class with
+  dynamic question routing across 7 specialized tools:
+  - `analyze_frames` — sample frames at timestamps and analyze with Video MLLM
+  - `search_rag` — query the RAG vector index for text context
+  - `detect_objects` — run YOLO object detection on specific frame timestamps
+  - `extract_text` — PaddleOCR text extraction from frames at timestamps
+  - `search_transcript` — find spoken phrases with timestamps via RAG
+  - `temporal_grounding` — identify precise timestamps matching event descriptions
+  - `summarize_video` — structured multi-section summary (MLLM or RAG fallback)
+- **Intelligent question classification** — parses questions to route to the right
+  tool(s): summarization, temporal grounding, object detection, OCR/text, transcript,
+  people/faces, and general questions (RAG + optional frame analysis)
+- **Timestamp extraction** — parses MM:SS, H:MM:SS, "X seconds", "X minutes" from
+  natural language questions
+- **Multi-tool orchestration** — each question can invoke multiple tools, evidence
+  is gathered and synthesized into a comprehensive answer
+- **generate_report()** — produces a structured markdown video analysis report
+  combining overview, visual content, transcript highlights, and object data
+
+### 🔧 Integration
+
+- **Agent as chat backend** — `chat.py` `VideoChat.ask()` now tries three backends
+  in priority order: Agentic Agent → Video MLLM → RAG + Hermes CLI
+- **Video path resolution** — `_get_agent_video_path()` searches video directory
+  and RAG metadata for the video file
+- **Graceful fallback** — when agent dependencies are unavailable or the video
+  file isn't found, falls through to Video MLLM and then RAG backends
+- **Config toggle** — `AGENT_ENABLED=true` env var or `agent_enabled=True` in config
+- **Config field**: `agent_enabled` (default: False), `agent_max_tools` (default: 5)
+
+### 🧪 New Tests
+
+- **32 new tests** in `tests/test_agent.py` covering:
+  - `AgentToolResult` / `AgentQueryResult` dataclass tests
+  - Timestamp extraction from natural language (5 test cases)
+  - `AgentTools` graceful error handling without video/RAG (7 tests)
+  - `VideoUnderstandingAgent` query routing and classification (10 tests)
+  - `generate_report()` fallback behavior
+  - Config env var integration
+  - Chat integration (`_get_agent_video_path`)
+
 ## 0.35.0 (2026-06-27) — Qwen3-VL-30B-A3B MoE Backend (vLLM + FP8)
 
 ### 🧠 Qwen3-VL-30B-A3B Backend (vLLM + FP8)
