@@ -222,6 +222,11 @@ class VideoRAG:
 
             with torch.no_grad():
                 emb = model.encode(**kwargs)
+            # BGE-VL may return a 2D array for single inputs — flatten to 1D
+            if isinstance(emb, (list, tuple)) and len(emb) == 1:
+                emb = emb[0]
+            if hasattr(emb, "ndim") and emb.ndim == 2 and emb.shape[0] == 1:
+                emb = emb[0]
             return emb.tolist()
         except Exception as e:
             logger.warning(f"BGE-VL embedding failed: {e}")

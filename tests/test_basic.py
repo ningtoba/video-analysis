@@ -1402,7 +1402,7 @@ def test_version_0_15_0():
     """Test version is now 0.20.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.20.0"
+    assert __version__ == "0.21.0"
 
 
 # ====================================================================
@@ -1827,7 +1827,7 @@ def test_version_0_20_0():
     """Test that version is now 0.20.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.20.0"
+    assert __version__ == "0.21.0"
 
 
 if __name__ == "__main__":

@@ -283,6 +283,10 @@ python tests/test_basic.py
 - [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 - [ ] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
 |- [x] [RESEARCH v0.21] Tiered frame storage — JPEG WebP AVIF compression profiles, 60-75% disk savings
+|- [x] Tiered frame storage — `video_analysis/storage.py`, three-tier JPEG/WebP, configurable sizes
+|- [x] Video quality pre-screening — `video_analysis/quality.py`, Laplacian blur + brightness + static
+|- [x] [RESEARCH v0.21] Audio-only processing mode (skip GPU visual stages for podcasts/lectures)
+|- [x] [RESEARCH v0.21] Multi-modal conversation memory (ChromaDB-backed persistent chat history)
 ||- [x] [RESEARCH v0.21] Video quality pre-screening (Laplacian blur, BRISQUE, static frame detection)
 ||- [x] [RESEARCH v0.21] Audio-only processing mode (skip GPU visual stages for podcasts/lectures)
 ||- [x] [RESEARCH v0.21] Multi-modal conversation memory (ChromaDB-backed persistent chat history)

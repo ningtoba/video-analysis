@@ -72,6 +72,22 @@ class Config:
     temporal_decay_rate: float = 0.1  # TV-RAG time-decay weighting (0 = disabled)
     colbert_reranker_enabled: bool = False  # optional ColBERTv2 late-interaction
 
+    # Tiered Frame Storage (v0.21.0)
+    frame_storage_mode: str = "tiered"  # full, tiered, compressed
+    frame_analysis_size: int = 960  # longest edge for analysis/CLIP frames
+    frame_thumbnail_size: int = 320  # longest edge for timeline thumbnails
+    frame_compression: str = "jpeg"  # jpeg, webp
+    frame_compression_quality: int = 85  # 1-100
+
+    # Video Quality Pre-Screening (v0.21.0)
+    quality_screening_enabled: bool = True  # overridden by QUALITY_SCREENING_ENABLED
+    quality_min_blur_threshold: float = 100.0  # Laplacian variance threshold
+    quality_min_brightness: float = 30.0  # below this = too dark
+    quality_max_brightness: float = 225.0  # above this = too bright
+    quality_static_threshold: float = 0.98  # similarity threshold for static frames
+    quality_skip_ocr_on_blurry: bool = True  # skip OCR on blurry/static frames
+    quality_skip_yolo_on_dark: bool = True  # skip YOLO on too dark/bright frames
+
     # LLM
     llm_model: str = "deepseek-ai/DeepSeek-V4-Flash"
     llm_temperature: float = 0.3
@@ -199,6 +215,14 @@ class Config:
         tracker_env = os.environ.get("ENTITY_TRACKER_TYPE", "").lower()
         if tracker_env in ("bytetrack.yaml", "botsort.yaml"):
             self.entity_tracker_type = tracker_env
+        # Override quality_screening_enabled from env var
+        quality_env = os.environ.get("QUALITY_SCREENING_ENABLED", "").lower()
+        if quality_env in ("false", "0", "no"):
+            self.quality_screening_enabled = False
+        # Override frame_storage_mode from env var
+        storage_env = os.environ.get("FRAME_STORAGE_MODE", "").lower()
+        if storage_env in ("full", "tiered", "compressed"):
+            self.frame_storage_mode = storage_env
         for d in [
             self.data_dir,
             self.video_dir,

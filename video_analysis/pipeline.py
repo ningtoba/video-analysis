@@ -24,6 +24,8 @@ from video_analysis.models import (
     FrameInfo,
     TranscriptSegment,
 )
+from video_analysis.storage import save_frame_tiered
+from video_analysis.quality import screen_frame_quality, check_video_corruption
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +191,19 @@ class VideoPipeline:
             )
             scene.key_frames = frames
         logger.info("Key frames extracted")
+
+        # Step 4.5: Video quality pre-screening (zero VRAM, CPU-only)
+        if self.config.quality_screening_enabled:
+            quality_results = self._screen_frame_quality(scenes)
+            poor_count = sum(
+                1 for r in quality_results if r.get("is_blurry") or r.get("is_static")
+            )
+            if poor_count:
+                logger.info(
+                    f"Quality screening flagged {poor_count}/{len(quality_results)} "
+                    f"frames as low-quality"
+                )
+        logger.info("Quality screening complete")
 
         # Step 5: Transcribe (GPU — faster-whisper large-v3, ~4 GB VRAM)
         transcript_segments, full_transcript = self._transcribe(
@@ -472,6 +487,7 @@ class VideoPipeline:
         - Default: 1 frame every 2 seconds + mid-point of scene
         - Adaptive: more frames near scene boundaries (motion-based), fewer in static regions
         - CLIP dedup: removes near-duplicate frames after extraction
+        - Tiered storage: saves analysis-res, full-res, and thumbnail frames when enabled
         """
         frames = []
         scene_duration = scene.end_time - scene.start_time
@@ -490,7 +506,8 @@ class VideoPipeline:
         for ts in sorted(sample_times):
             if ts < scene.start_time or ts > scene.end_time:
                 continue
-            frame_path = scene_dir / f"frame_{ts:07.2f}.jpg"
+            frame_name = f"frame_{ts:07.2f}"
+            frame_path = scene_dir / f"{frame_name}.jpg"
             if not frame_path.exists():
                 subprocess.run(
                     [
@@ -510,13 +527,41 @@ class VideoPipeline:
                     timeout=60,
                     check=True,
                 )
-            frames.append(
-                FrameInfo(
+
+            # Apply tiered storage: re-save as analysis/thumbnail variants
+            if self.config.frame_storage_mode == "tiered":
+                try:
+                    from PIL import Image
+
+                    img = Image.open(frame_path).convert("RGB")
+                    analysis_path, full_path, thumb_path = save_frame_tiered(
+                        img, scene_dir, frame_name, self.config
+                    )
+                    # Don't delete the original — it's the full-res frame
+                    # Record the additional paths for later use
+                    frame_info = FrameInfo(
+                        timestamp=ts,
+                        filepath=str(full_path),
+                        scene_id=scene.scene_id,
+                        metadata={
+                            "analysis_path": analysis_path,
+                            "thumbnail_path": thumb_path,
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(f"Tiered storage failed for {frame_name}: {e}")
+                    frame_info = FrameInfo(
+                        timestamp=ts,
+                        filepath=str(frame_path),
+                        scene_id=scene.scene_id,
+                    )
+            else:
+                frame_info = FrameInfo(
                     timestamp=ts,
                     filepath=str(frame_path),
                     scene_id=scene.scene_id,
                 )
-            )
+            frames.append(frame_info)
 
         # Optional: CLIP-similarity frame deduplication
         if self.config.clip_frame_dedup and len(frames) > 1:
@@ -691,6 +736,35 @@ class VideoPipeline:
             full_text_parts.append(seg.text.strip())
 
         return transcript_segments, " ".join(full_text_parts)
+
+    def _screen_frame_quality(self, scenes: List[SceneInfo]) -> List[dict]:
+        """Run quality pre-screening on all key frames across all scenes.
+
+        Each frame's quality info is stored in FrameInfo metadata dict.
+        Returns a flat list of quality result dicts.
+        """
+        if not self.config.quality_screening_enabled:
+            return []
+
+        all_results = []
+        for scene in scenes:
+            prev_path = None
+            for frame in scene.key_frames:
+                result = screen_frame_quality(frame.filepath, self.config, prev_path)
+                # Store quality info on the frame
+                if not hasattr(frame, "metadata") or frame.metadata is None:
+                    frame.metadata = {}
+                frame.metadata["quality"] = {
+                    "blur_variance": result.get("blur_variance"),
+                    "is_blurry": result.get("is_blurry"),
+                    "brightness": result.get("brightness"),
+                    "is_static": result.get("is_static", False),
+                    "skip_ocr": result.get("should_skip_ocr", False),
+                    "skip_yolo": result.get("should_skip_yolo", False),
+                }
+                all_results.append(result)
+                prev_path = frame.filepath
+        return all_results
 
     def _detect_objects_on_frames(self, scenes: List[SceneInfo]):
         """Run YOLO object detection on all key frames.

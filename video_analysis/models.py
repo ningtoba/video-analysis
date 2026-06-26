@@ -23,6 +23,8 @@ class FrameInfo:
     ocr_text: Optional[str] = None
     action: Optional[str] = None  # X-CLIP action recognition label
     action_confidence: Optional[float] = None  # confidence score for the action
+    # Quality screening metadata (v0.21.0)
+    metadata: Optional[Dict[str, Any]] = None
 
 
 @dataclass

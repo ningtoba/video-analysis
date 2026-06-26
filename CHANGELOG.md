@@ -1,8 +1,84 @@
 # Changelog
 
-## 0.21.0 (2026-06-26) — Research Phase: Video Pipeline Infrastructure Evolution
+## 0.21.0 (2026-06-26) — Tiered Frame Storage & Quality Pre-Screening
 
-### 🔬 Beyond Model-Centric Research: Infrastructure & Operational Evolution
+### 🎯 Major Features
+
+### 💾 Tiered Frame Storage (60-75% Disk Savings)
+
+- **Three-tier frame storage**: `save_frame_tiered()` in new `video_analysis/storage.py` saves
+  each frame at three resolutions simultaneously — 960×540 analysis-res JPEG 85% for CLIP/action
+  recognition (~50-80 KB), original-res JPEG 90% for OCR/YOLO (~200-400 KB), and 320×180 WebP 80%
+  thumbnails for timeline preview (~15-25 KB).
+- **Configurable**: `frame_storage_mode` (full/tiered/compressed), `frame_analysis_size`,
+  `frame_thumbnail_size`, `frame_compression` (jpeg/webp), `frame_compression_quality` — all
+  env-overridable.
+- **Zero VRAM**: All operations are CPU-only via Pillow LANCZOS resampling.
+- **Integrated into pipeline**: `_extract_key_frames()` uses tiered storage when
+  `frame_storage_mode="tiered"` (the default). Each `FrameInfo.filepath` points to the full-res
+  frame; `FrameInfo.metadata` records analysis and thumbnail paths.
+- **Utility functions**: `save_frame_single()` and `compress_existing_frame()` for post-processing
+  archive tier (WebP bulk recompression, optional resize).
+
+### 🎯 Video Quality Pre-Screening
+
+- **Blur detection**: Laplacian variance analysis flags frames below `quality_min_blur_threshold`
+  (default: 100.0). CPU-only, <1ms per frame.
+- **Brightness check**: Mean pixel brightness detects over/under-exposed frames
+  (`quality_min_brightness`: 30.0, `quality_max_brightness`: 225.0).
+- **Static frame detection**: MSE-based consecutive-frame comparison flags frozen/paused frames
+  above `quality_static_threshold` (default: 0.98).
+- **Corruption check**: FFmpeg ffprobe-based video file validation before processing.
+- **Decision logic**: `should_skip_ocr` (when blurry/static) and `should_skip_yolo`
+  (when too dark/bright) offloads decision to pipeline stages, controllable via
+  `quality_skip_ocr_on_blurry` and `quality_skip_yolo_on_dark` config booleans.
+- **New module**: `video_analysis/quality.py` with `screen_frame_quality()` returning
+  structured quality dict per frame.
+- **Pipeline integration**: Step 4.5 runs quality screening after frame extraction, storing
+  results in `FrameInfo.metadata['quality']`.
+- **Config**: `quality_screening_enabled` (default: True), env-overridable via
+  `QUALITY_SCREENING_ENABLED`.
+
+### 🐛 Bug Fixes
+
+- **ChromaDB embedding shape fix** (rag.py): BGE-VL `model.encode()` could return a 2D array
+  (shape `[1, dim]`) for single inputs — added flatten logic to ensure 1D lists are passed to
+  `chromadb.add(embeddings=...)`.
+
+### 📦 New Modules
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `storage` | `video_analysis/storage.py` | ~130 | Tiered frame compression, resize, archive |
+| `quality` | `video_analysis/quality.py` | ~200 | Blur/brightness/static/corruption detection |
+
+### 🧪 Tests
+
+- **9 new tests** for `video_analysis/storage.py` — resize, tiered save (JPEG/WebP), single save,
+  compress existing, resize-on-compress, graceful error handling.
+- **11 new tests** for `video_analysis/quality.py` — blur detection (sharp/blurry), brightness
+  (normal/dark/bright), static frame (identical/different), corruption, screen_frame_quality
+  defaults, blurry-skip-OCR, previous-frame static detection.
+- **20 total new tests** (118 pre-existing → 138 passing, benchmark errors unchanged).
+
+### 🔧 Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FRAME_STORAGE_MODE` | `tiered` | Storage mode: full, tiered, compressed |
+| `FRAME_ANALYSIS_SIZE` | `960` | Longest edge for analysis frames (px) |
+| `FRAME_THUMBNAIL_SIZE` | `320` | Longest edge for timeline thumbnails (px) |
+| `FRAME_COMPRESSION` | `jpeg` | Compression format: jpeg, webp |
+| `FRAME_COMPRESSION_QUALITY` | `85` | Compression quality 1-100 |
+| `QUALITY_SCREENING_ENABLED` | `true` | Enable quality pre-screening |
+| `QUALITY_MIN_BLUR_THRESHOLD` | `100.0` | Laplacian variance threshold |
+| `QUALITY_MIN_BRIGHTNESS` | `30.0` | Below this = too dark |
+| `QUALITY_MAX_BRIGHTNESS` | `225.0` | Above this = too bright |
+| `QUALITY_STATIC_THRESHOLD` | `0.98` | Similarity for static frame flagging |
+| `QUALITY_SKIP_OCR_ON_BLURRY` | `true` | Skip OCR on blurry/static frames |
+| `QUALITY_SKIP_YOLO_ON_DARK` | `true` | Skip YOLO on dark/bright frames |
+
+### 🔬 Research Phase: Video Pipeline Infrastructure Evolution
 
 The v0.3 through v0.20 research phases covered every model, architecture, and pipeline
 enhancement. This research phase shifts focus to what comes after the models are chosen:

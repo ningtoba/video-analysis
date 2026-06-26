@@ -17,6 +17,8 @@ from video_analysis import (
     config,
     scene_graph,
     query_router,
+    storage,
+    quality,
 )
 
-__version__ = "0.20.0"
+__version__ = "0.21.0"
