@@ -1,5 +1,106 @@
 # Changelog
 
+## 0.10.0 (2026-06-26)
+
+### 🔬 Major Enhancement: Qwen3-VL Multimodal Embedding (Apache 2.0)
+
+- **True multimodal semantic search**: Added optional Qwen3-VL-Embedding-2B support (Apache 2.0, 2B params, 2048-dim) for fusing visual + textual information into a shared embedding space. When `MULTIMODAL_EMBEDDING=true` and the model weights are downloaded, frame images are embedded together with text descriptions for far richer semantic retrieval compared to text-only Nomic Embed v1.5.
+- **New config fields**: `multimodal_embedding_model` (default: `Qwen/Qwen3-VL-Embedding-2B`, 2B params fits in ~6GB VRAM), `multimodal_embedding_enabled` (reads `MULTIMODAL_EMBEDDING` env var, default `false`).
+- **Graceful fallback**: If `transformers`, `torch`, or `Pillow` are not installed, or if the model weights are not downloaded, falls back to text-only embedding with a log warning. No breaking changes.
+- **`rag.py`**: Added `_get_multimodal_embedding()` method and `search_all()` method for cross-video semantic search.
+
+### 🔍 New Feature: Cross-Video Semantic Search ("Video Search" Tab)
+
+- **New Gradio tab**: "🔍 Video Search" tab added after the Library tab. Users enter a natural language query and search across ALL indexed videos simultaneously.
+- **Rich results**: Results are grouped by video, showing timestamp, relevance score (as %), and expandable context preview for each matching chunk.
+- **`rag.search_all()`**: New method on `VideoRAG` that removes the `video_id` filter from ChromaDB queries, enabling true cross-video retrieval. Re-ranks results with the existing cross-encoder for best accuracy.
+- **Works with or without multimodal**: When `multimodal_embedding_enabled` is off, search uses the existing Nomic Embed v1.5 text model as before.
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MULTIMODAL_EMBEDDING` | `false` | Enable Qwen3-VL-Embedding multimodal search |
+
+### 🔧 Improvements
+
+- `video_analysis/config.py`: Added `multimodal_embedding_model` and `multimodal_embedding_enabled` fields.
+- `video_analysis/rag.py`: Added `_get_multimodal_embedding()` — wraps Qwen3-VL-Embedding for image+text fusion. Added `search_all()` — cross-video semantic search without `video_id` filter.
+
+### 🧪 Tests
+
+- Added test for multimodal embedding config defaults.
+- Added test for `search_all()` basic logic.
+- Pre-existing test suite: 43+ tests passing.
+
+### 🏗️ Architecture
+
+```
+video-analysis/
+├── video_analysis/
+│   ├── __init__.py              # v0.10.0
+│   ├── config.py                # +multimodal_embedding_model +multimodal_embedding_enabled
+│   └── rag.py                   # +_get_multimodal_embedding() +search_all()
+├── ui/
+│   └── app.py                   # +"🔍 Video Search" tab
+├── pyproject.toml               # v0.10.0
+├── README.md                    # Updated config & roadmap
+└── CHANGELOG.md
+```
+
+### 🔒 New Feature: Gradio UI Authentication
+
+- **FastAPI middleware auth**: Added HTTP Basic Auth middleware to the FastAPI app that mounts Gradio. When `GRADIO_PASSWORD` is set, all UI routes (except `/health`) require authentication via HTTP Basic Auth.
+- **Config-driven**: New config fields `ui_auth_enabled`, `ui_auth_username` (from `GRADIO_USER`, default `admin`), and `ui_auth_password` (from `GRADIO_PASSWORD`). Auth auto-enables when `GRADIO_PASSWORD` is set.
+- **/health stays public**: The health endpoint is excluded from auth, so Docker health checks and monitoring tools continue to work without credentials.
+
+### 🎞️ New Feature: Motion-Based Adaptive Frame Sampling
+
+- **Smarter frame extraction**: New `adaptive_frame_sampling` config flag (default: `False`). When enabled, frames are sampled more densely near scene boundaries (3× density in first/last 10% of each scene) and more sparsely in static middle regions. This captures transitions and action near cuts while reducing redundant frames from static scenes.
+- **Configurable sensitivity**: `adaptive_frame_sampling_sensitivity` (default: `0.3`) controls the base sampling rate — lower values extract more frames overall.
+
+### 🧹 New Feature: CLIP-Similarity Frame Deduplication
+
+- **Removes near-duplicate frames**: New `clip_frame_dedup` config flag (default: `False`). When enabled, consecutive frames within each scene are compared using OpenCLIP ViT-B-32 embedding cosine similarity. Frames exceeding `clip_frame_dedup_threshold` (default: `0.92`) are considered near-duplicates and removed.
+- **Graceful fallback**: If `open-clip-torch` is not installed, dedup is silently skipped.
+- **VRAM-efficient**: OpenCLIP model is loaded temporarily for the dedup pass, then unloaded from GPU memory.
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRADIO_USER` | `admin` | UI auth username |
+| `GRADIO_PASSWORD` | (unset) | UI auth password — set to enable authentication |
+| `ADAPTIVE_FRAME_SAMPLING` | `false` | Enable motion-based adaptive frame sampling |
+| `ADAPTIVE_FRAME_SAMPLING_SENSITIVITY` | `0.3` | Sampling density near scene boundaries |
+| `CLIP_FRAME_DEDUP` | `false` | Enable CLIP-similarity frame deduplication |
+| `CLIP_FRAME_DEDUP_THRESHOLD` | `0.92` | Similarity threshold for frame deduplication |
+
+### 🔧 Improvements
+
+- `ui/health.py`: Added `_setup_auth_middleware()` — configurable HTTP Basic Auth middleware. When `GRADIO_PASSWORD` is not set, the middleware is a no-op (no auth required), maintaining backward compatibility.
+- `video_analysis/config.py`: Added `ui_auth_enabled`, `ui_auth_username`, `ui_auth_password`, `adaptive_frame_sampling`, `adaptive_frame_sampling_sensitivity`, `clip_frame_dedup`, `clip_frame_dedup_threshold` fields.
+- `video_analysis/pipeline.py`: Added `_adaptive_frame_samples()` and `_dedup_frames_clip()` methods. Modified `_extract_key_frames()` to use adaptive sampling and/or CLIP dedup when configured.
+
+### 🧪 Tests
+
+- Added tests for new config fields and view-only auth module import.
+
+### 🏗️ Architecture
+
+```
+video-analysis/
+├── video_analysis/
+│   ├── __init__.py              # v0.9.0
+│   ├── config.py                # +auth +adaptive_sampling +clip_dedup
+│   └── pipeline.py              # +_adaptive_frame_samples() +_dedup_frames_clip()
+├── ui/
+│   └── health.py                # +_setup_auth_middleware()
+├── pyproject.toml               # v0.9.0
+├── README.md                    # Updated config & roadmap
+└── CHANGELOG.md
+```
+
 ## 0.8.0 (2026-06-26)
 
 ### 🔬 Comprehensive Research Sweep (Iteration 1)

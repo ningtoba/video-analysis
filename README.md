@@ -121,7 +121,7 @@ User Question
 | `rag` | `video_analysis/rag.py` | ChromaDB indexing, hybrid retrieval, re-ranking, temporal expansion |
 | `chat` | `video_analysis/chat.py` | LLM Q&A with conversation history and source citations |
 | `models` | `video_analysis/models.py` | Data models — VideoIndex, SceneInfo, FrameInfo, ChatMessage |
-| `config` | `video_analysis/config.py` | Configuration with sensible defaults |
+| `config` | `video_analysis/config.py` | Configuration with sensible defaults (auth, frame sampling, CLIP dedup) |
 | `ui/app` | `ui/app.py` | Gradio web interface with dark theme, tabs, library, clip export, batch queue, URL import |
 | `ui/utils` | `ui/utils.py` | Shared UI utility functions (importable without gradio) |
 
@@ -164,6 +164,13 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `YT_DLP_ENABLED` | `true` | Enable YouTube/URL video import |
 | `UI_HOST` | `0.0.0.0` | Web UI bind address |
 | `UI_PORT` | `7860` | Web UI port |
+| `GRADIO_USER` | `admin` | UI auth username |
+| `GRADIO_PASSWORD` | (unset) | UI auth password — set to enable authentication |
+| `ADAPTIVE_FRAME_SAMPLING` | `false` | Enable motion-based adaptive frame sampling |
+| `ADAPTIVE_FRAME_SAMPLING_SENSITIVITY` | `0.3` | Sampling density near scene boundaries |
+| `CLIP_FRAME_DEDUP` | `false` | Enable CLIP-similarity frame deduplication |
+| `CLIP_FRAME_DEDUP_THRESHOLD` | `0.92` | Similarity threshold for frame deduplication |
+| `MULTIMODAL_EMBEDDING` | `false` | Enable Qwen3-VL-Embedding multimodal search (Apache 2.0) |
 
 ## 🧪 Running Tests
 
@@ -210,12 +217,12 @@ python tests/test_basic.py
 - [x] Docker production hardening (CUDA 12.8, torch 2.6)
 - [x] Frame preview on timeline hover (CSS sprite sheet overlay)
 - [x] ColBERTv2 late-interaction re-ranking
-- [x] Action recognition research — InternVideo2.5 identified as successor to VideoMAE/TimeSformer
-- [ ] Action recognition (InternVideo2.5)
-- [ ] Gradio auth via env vars
-- [ ] Semantic video search (BGE-VL multimodal embeddings)
-- [ ] Motion-based adaptive frame sampling
-- [ ] CLIP-similarity frame deduplication
+- [x] Semantic video search (cross-video, multimodal — Qwen3-VL-Embedding + Video Search tab)
+- [x] Gradio auth via env vars
+- [x] Motion-based adaptive frame sampling
+- [x] CLIP-similarity frame deduplication
+- [ ] Action recognition (InternVideo2.5 — research complete)
+- [ ] Video MLLM integration (VideoChat-Flash for long-context video understanding)
 
 ## 📝 License
 

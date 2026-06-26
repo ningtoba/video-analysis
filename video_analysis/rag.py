@@ -107,6 +107,72 @@ class VideoRAG:
         emb = self._embedding_model.encode(text, normalize_embeddings=True)
         return emb.tolist()
 
+    def _get_multimodal_embedding(
+        self, text: str, image_path: Optional[str] = None
+    ) -> List[float]:
+        """Get multimodal embedding using Qwen3-VL-Embedding (optional).
+
+        When ``image_path`` is provided, the embedding fuses visual + textual
+        information in a shared semantic space.  Falls back to text-only
+        embedding when the model is not available or when neither image nor
+        long text is provided.
+
+        Requirements:
+            pip install qwen-vl-utils transformers torch Pillow
+        """
+        if not self.config.multimodal_embedding_enabled:
+            return self._get_embedding(text)
+
+        try:
+            import torch
+            from PIL import Image
+            from transformers import AutoModel, AutoTokenizer
+        except ImportError:
+            logger.debug(
+                "transformers or Pillow not available for multimodal embedding"
+            )
+            return self._get_embedding(text)
+
+        if self._embedding_model is not None and not isinstance(
+            self._embedding_model, str
+        ):
+            # Already loaded a SentenceTransformer — fall back for now
+            return self._get_embedding(text)
+
+        model_id = self.config.multimodal_embedding_model
+        try:
+            if (
+                not hasattr(self, "_multimodal_embedder")
+                or self._multimodal_embedder is None
+            ):
+                logger.info(f"Loading multimodal embedding model: {model_id}")
+                self._multimodal_tokenizer = AutoTokenizer.from_pretrained(
+                    model_id, trust_remote_code=True
+                )
+                self._multimodal_embedder = AutoModel.from_pretrained(
+                    model_id,
+                    torch_dtype=torch.bfloat16,
+                    trust_remote_code=True,
+                    device_map="cuda" if torch.cuda.is_available() else "cpu",
+                )
+                self._multimodal_embedder.eval()
+
+            embedder = self._multimodal_embedder
+            tokenizer = self._multimodal_tokenizer
+
+            inputs = [{"text": text}]
+            if image_path and Path(image_path).exists():
+                inputs[0]["image"] = Image.open(image_path).convert("RGB")
+
+            with torch.no_grad():
+                emb = embedder.process(inputs)
+            return emb[0].tolist()
+        except Exception as e:
+            logger.warning(
+                f"Multimodal embedding failed ({e}); falling back to text embedding"
+            )
+            return self._get_embedding(text)
+
     def index_video(self, video_index: VideoIndex):
         """Index a processed video into Chroma."""
         chunks = []
@@ -493,6 +559,70 @@ class VideoRAG:
             if q in vid.lower() or q in fname.lower():
                 matched.add(vid)
         return sorted(m for m in matched if m)
+
+    def search_all(
+        self,
+        query: str,
+        top_k: int = 20,
+        image_path: Optional[str] = None,
+    ) -> List[RetrievedChunk]:
+        """Cross-video semantic search — retrieves relevant chunks from ALL
+        indexed videos, without a ``video_id`` filter.
+
+        When ``multimodal_embedding_enabled`` is set in config and
+        ``image_path`` is provided, the query embedding fuses visual +
+        textual information via Qwen3-VL-Embedding.
+
+        Args:
+            query: Natural language search query.
+            top_k: Number of initial results from ChromaDB.
+            image_path: Optional path to an image for multimodal search.
+
+        Returns:
+            Re-ranked list of RetrievedChunk sorted by relevance.
+        """
+        # Use multimodal embedding if configured and image is available
+        if self.config.multimodal_embedding_enabled and image_path:
+            query_embedding = self._get_multimodal_embedding(query, image_path)
+        else:
+            query_embedding = self._get_embedding(query)
+
+        # No video_id filter → search all videos
+        results = self.collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k * 2,
+            where=None,
+            include=["documents", "metadatas", "distances"],
+        )
+
+        if not results["ids"] or not results["ids"][0]:
+            return []
+
+        chunks = []
+        for i, doc_id in enumerate(results["ids"][0]):
+            meta = results["metadatas"][0][i]
+            chunks.append(
+                RetrievedChunk(
+                    chunk_id=doc_id,
+                    video_id=meta.get("video_id", "unknown"),
+                    text=results["documents"][0][i],
+                    timestamp=meta.get("start_time", 0),
+                    scene_id=meta.get("scene_id", -1),
+                    score=1.0
+                    - (results["distances"][0][i] if results["distances"] else 0),
+                    frame_path=meta.get("frame_path"),
+                    metadata=meta,
+                )
+            )
+
+        # Re-rank with cross-encoder if available
+        try:
+            chunks = self._rerank(query, chunks, top_k)
+        except ImportError:
+            chunks.sort(key=lambda c: c.score, reverse=True)
+            chunks = chunks[:top_k]
+
+        return chunks
 
     def get_library_info(self, video_id: str) -> Optional[VideoLibraryInfo]:
         """Get summary info for a single video."""

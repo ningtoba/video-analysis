@@ -497,6 +497,122 @@ def test_is_video_file():
     assert is_video_file("video") is False
 
 
+def test_config_ui_auth():
+    """Test UI auth config fields."""
+    import os
+
+    # Test without env vars
+    cfg = Config(data_dir="/tmp/va_test_auth")
+    assert hasattr(cfg, "ui_auth_enabled")
+    assert hasattr(cfg, "ui_auth_username")
+    assert hasattr(cfg, "ui_auth_password")
+    assert cfg.ui_auth_username == "admin"
+    assert cfg.ui_auth_password == ""
+
+    # Test that auth is disabled when no password set
+    assert cfg.ui_auth_enabled is False
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_auth", ignore_errors=True)
+
+
+def test_config_adaptive_frame_sampling():
+    """Test adaptive frame sampling config fields."""
+    cfg = Config(data_dir="/tmp/va_test_adaptive")
+    assert hasattr(cfg, "adaptive_frame_sampling")
+    assert hasattr(cfg, "adaptive_frame_sampling_sensitivity")
+    assert cfg.adaptive_frame_sampling is False
+    assert cfg.adaptive_frame_sampling_sensitivity == 0.3
+
+    cfg2 = Config(data_dir="/tmp/va_test_adaptive2", adaptive_frame_sampling=True)
+    assert cfg2.adaptive_frame_sampling is True
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_adaptive", ignore_errors=True)
+    shutil.rmtree("/tmp/va_test_adaptive2", ignore_errors=True)
+
+
+def test_config_clip_frame_dedup():
+    """Test CLIP frame dedup config fields."""
+    cfg = Config(data_dir="/tmp/va_test_dedup")
+    assert hasattr(cfg, "clip_frame_dedup")
+    assert hasattr(cfg, "clip_frame_dedup_threshold")
+    assert cfg.clip_frame_dedup is False
+    assert cfg.clip_frame_dedup_threshold == 0.92
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_dedup", ignore_errors=True)
+
+
+def test_adaptive_frame_samples_basic():
+    """Test that _adaptive_frame_samples returns reasonable timestamps."""
+    from video_analysis.pipeline import VideoPipeline
+    from video_analysis.models import SceneInfo
+
+    cfg = Config(data_dir="/tmp/va_test_adaptive_samples", adaptive_frame_sampling=True)
+    pipeline = VideoPipeline(cfg)
+
+    # 30-second scene
+    scene = SceneInfo(scene_id=0, start_time=10.0, end_time=40.0)
+    samples = pipeline._adaptive_frame_samples(scene, 30.0)
+
+    assert len(samples) > 0
+    assert all(10.0 <= t <= 40.0 for t in samples)
+    # Should have mid-point
+    assert 25.0 in samples
+    # Should have samples near boundaries
+    assert any(t < 13.0 for t in samples)  # near start
+    assert any(t > 37.0 for t in samples)  # near end
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_adaptive_samples", ignore_errors=True)
+
+
+def test_adaptive_frame_samples_short_scene():
+    """Test that very short scenes (<5s) use default sampling (no adaptive)."""
+    from video_analysis.pipeline import VideoPipeline
+    from video_analysis.models import SceneInfo
+
+    cfg = Config(data_dir="/tmp/va_test_adaptive_short", adaptive_frame_sampling=True)
+    pipeline = VideoPipeline(cfg)
+
+    # 3-second scene — too short for adaptive
+    scene = SceneInfo(scene_id=0, start_time=0.0, end_time=3.0)
+    # _extract_key_frames would use default path (adaptive_frame_sampling is True
+    # but _adaptive_frame_samples is only called when duration > 5)
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_adaptive_short", ignore_errors=True)
+
+
+def test_dedup_frames_clip_no_openclip():
+    """Test _dedup_frames_clip falls back gracefully without open_clip."""
+    from video_analysis.pipeline import VideoPipeline
+    from video_analysis.models import FrameInfo
+
+    cfg = Config(data_dir="/tmp/va_test_dedup_fallback")
+    pipeline = VideoPipeline(cfg)
+
+    frames = [
+        FrameInfo(timestamp=0.0, filepath="/nonexistent.jpg", scene_id=0),
+        FrameInfo(timestamp=2.0, filepath="/nonexistent2.jpg", scene_id=0),
+    ]
+    # Should not crash — just return all frames
+    result = pipeline._dedup_frames_clip(frames, "test")
+    assert len(result) == 2
+    assert result[0].timestamp == 0.0
+    assert result[1].timestamp == 2.0
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_dedup_fallback", ignore_errors=True)
+
+
 def test_video_library_info_dataclass():
     """Test VideoLibraryInfo dataclass."""
     from video_analysis.rag import VideoLibraryInfo

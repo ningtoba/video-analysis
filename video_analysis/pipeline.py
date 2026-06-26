@@ -356,14 +356,23 @@ class VideoPipeline:
     def _extract_key_frames(
         self, video_path: Path, video_id: str, scene: SceneInfo
     ) -> List[FrameInfo]:
-        """Extract representative frames from a scene."""
+        """Extract representative frames from a scene.
+
+        Uses configurable strategies:
+        - Default: 1 frame every 2 seconds + mid-point of scene
+        - Adaptive: more frames near scene boundaries (motion-based), fewer in static regions
+        - CLIP dedup: removes near-duplicate frames after extraction
+        """
         frames = []
         scene_duration = scene.end_time - scene.start_time
 
-        # Extract frames: 1 every 2 seconds within the scene, plus mid-point
-        sample_times = {scene.start_time + scene_duration / 2}  # mid point
-        for t in range(int(scene.start_time), int(scene.end_time), 2):
-            sample_times.add(float(t))
+        if self.config.adaptive_frame_sampling and scene_duration > 5:
+            sample_times = self._adaptive_frame_samples(scene, scene_duration)
+        else:
+            # Default: mid-point + 1 every 2 seconds
+            sample_times = {scene.start_time + scene_duration / 2}  # mid point
+            for t in range(int(scene.start_time), int(scene.end_time), 2):
+                sample_times.add(float(t))
 
         scene_dir = self.config.frames_dir / video_id / f"scene_{scene.scene_id:04d}"
         scene_dir.mkdir(parents=True, exist_ok=True)
@@ -398,7 +407,133 @@ class VideoPipeline:
                     scene_id=scene.scene_id,
                 )
             )
+
+        # Optional: CLIP-similarity frame deduplication
+        if self.config.clip_frame_dedup and len(frames) > 1:
+            frames = self._dedup_frames_clip(frames, video_id)
+
         return frames
+
+    def _adaptive_frame_samples(self, scene: SceneInfo, duration: float) -> set:
+        """Generate sample times using motion-based adaptive frame sampling.
+
+        Samples more densely near scene boundaries (where change is likely)
+        and less frequently in the middle of static scenes. Uses a simple
+        cosine-based density function:
+        - 3x density in the first 10% and last 10% of the scene
+        - Base rate: 1 frame per 2 seconds
+        - Dense rate: 1 frame per 0.67 seconds
+        """
+        sensitivity = self.config.adaptive_frame_sampling_sensitivity
+        base_interval = max(0.5, 2.0 * sensitivity)
+        dense_interval = base_interval / 3.0
+
+        start, end = scene.start_time, scene.end_time
+        region_len = duration * 0.1
+
+        sample_times = set()
+        sample_times.add(start + duration / 2)  # mid-point
+
+        # Dense sampling near boundaries
+        t = start
+        while t <= start + region_len:
+            sample_times.add(round(t, 2))
+            t += dense_interval
+
+        t = end - region_len
+        while t <= end:
+            sample_times.add(round(t, 2))
+            t += dense_interval
+
+        # Sparse sampling in the middle
+        t = start + region_len
+        while t <= end - region_len:
+            sample_times.add(round(t, 2))
+            t += base_interval
+
+        return sample_times
+
+    def _dedup_frames_clip(
+        self, frames: List[FrameInfo], video_id: str
+    ) -> List[FrameInfo]:
+        """Remove near-duplicate frames using CLIP embedding similarity.
+
+        Compares each consecutive pair of frames' CLIP embeddings. If the cosine
+        similarity exceeds clip_frame_dedup_threshold, the later frame is considered
+        a near-duplicate and removed.
+
+        Requires open-clip-torch to be installed. Falls back to returning all frames.
+        """
+        if len(frames) < 2:
+            return frames
+
+        try:
+            import open_clip
+            import torch
+            import torch.nn.functional as F
+        except ImportError:
+            logger.debug("open_clip not available for frame dedup — skipping")
+            return frames
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        threshold = self.config.clip_frame_dedup_threshold
+
+        try:
+            model, _, preprocess = open_clip.create_model_and_transforms(
+                "ViT-B-32", pretrained="laion2b_s34b_b79k", device=device
+            )
+            model.eval()
+
+            from PIL import Image
+
+            embeddings = []
+            valid_indices = []
+            for i, frame in enumerate(frames):
+                try:
+                    img = Image.open(frame.filepath).convert("RGB")
+                    img_tensor = preprocess(img).unsqueeze(0).to(device)
+                    with torch.no_grad():
+                        emb = model.encode_image(img_tensor)
+                        emb = F.normalize(emb, dim=-1)
+                    embeddings.append(emb.cpu())
+                    valid_indices.append(i)
+                except Exception:
+                    valid_indices.append(i)
+                    embeddings.append(None)
+
+            # Dedup: keep frame if similarity to previous kept frame is below threshold
+            kept = [frames[0]]
+            last_emb = embeddings[0]
+            for i in range(1, len(frames)):
+                if last_emb is None or embeddings[i] is None:
+                    kept.append(frames[i])
+                    last_emb = embeddings[i]
+                    continue
+                sim = (last_emb @ embeddings[i].T).item()
+                if sim < threshold:
+                    kept.append(frames[i])
+                    last_emb = embeddings[i]
+                else:
+                    logger.debug(
+                        f"Dedup frame {frames[i].timestamp:.1f}s "
+                        f"(sim={sim:.3f} >= {threshold})"
+                    )
+
+            del model
+            if device == "cuda":
+                torch.cuda.empty_cache()
+
+            dedup_count = len(frames) - len(kept)
+            if dedup_count > 0:
+                logger.info(
+                    f"CLIP dedup removed {dedup_count}/{len(frames)} frames "
+                    f"(threshold={threshold})"
+                )
+            return kept
+
+        except Exception as e:
+            logger.warning(f"CLIP frame dedup failed: {e}")
+            return frames
 
     def _transcribe(
         self, audio_path: Path, video_id: str

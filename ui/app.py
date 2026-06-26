@@ -465,7 +465,37 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             '<p style="color:var(--text-muted);font-size:0.85rem;">Waiting for items to be added...</p>'
                         )
 
-            # ============ TAB 4: LIBRARY ============
+            # ============ TAB 5: SEARCH ALL VIDEOS (Cross-Video Semantic Search) ============
+            with gr.TabItem("🔍 Video Search", id="search"):
+                with gr.Row():
+                    with gr.Column(scale=2, min_width=350):
+                        gr.Markdown("### Search Across All Videos")
+                        gr.Markdown(
+                            "Search your entire video library with natural language. "
+                            "Queries match against transcripts, frame descriptions, OCR text, "
+                            "and detected objects from all indexed videos."
+                        )
+                        search_query = gr.Textbox(
+                            label="Search Query",
+                            placeholder='e.g., "people talking about Python" or "scenes with cars"',
+                            lines=2,
+                        )
+                        with gr.Row():
+                            search_btn = gr.Button(
+                                "🔎 Search All", variant="primary", scale=2
+                            )
+                            search_clear_btn = gr.Button("Clear", scale=1)
+                        search_status = gr.HTML(
+                            '<p style="color:var(--text-muted);padding:0.5rem 0;">'
+                            "Enter a query and click Search to find relevant scenes.</p>"
+                        )
+                    with gr.Column(scale=3):
+                        gr.Markdown("### Results")
+                        search_results = gr.HTML(
+                            '<p style="color:var(--text-muted);padding:1rem;">'
+                            "No results yet.</p>"
+                        )
+                        search_detail = gr.HTML("")
             with gr.TabItem("📚 Library", id="library"):
                 with gr.Row():
                     with gr.Column(scale=2, min_width=350):
@@ -1244,6 +1274,103 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             ],
         )
         refresh_lib_btn.click(refresh_library, outputs=[library_list, delete_status])
+
+        # --- Cross-video semantic search ---
+        def do_search_all(query: str):
+            """Cross-video semantic search across the entire library."""
+            if not query or not query.strip():
+                return (
+                    '<p style="color:var(--text-muted);">Enter a query to search.</p>',
+                    "",
+                    '<p style="color:var(--text-muted);">Enter a query to search.</p>',
+                )
+            try:
+                chunks = rag.search_all(query.strip(), top_k=15)
+                if not chunks:
+                    return (
+                        '<p style="color:var(--text-muted);">No results found.</p>',
+                        "",
+                        '<p style="color:#f59e0b;">No matching scenes found.</p>',
+                    )
+
+                # Group by video_id
+                from collections import defaultdict
+
+                by_video = defaultdict(list)
+                for c in chunks:
+                    by_video[c.video_id].append(c)
+
+                # Build HTML results
+                html_parts = []
+                total = len(chunks)
+                html_parts.append(
+                    f'<p style="color:#34d399;margin-bottom:1rem;">'
+                    f"Found {total} matching chunk(s) across {len(by_video)} video(s)</p>"
+                )
+                for vid, vid_chunks in sorted(by_video.items()):
+                    first = vid_chunks[0]
+                    fname = (
+                        first.metadata.get("filename", vid) if first.metadata else vid
+                    )
+                    html_parts.append(
+                        f'<div class="library-card" style="margin-bottom:0.75rem;">'
+                        f'<h4 style="margin:0 0 0.25rem 0;">📹 {fname}</h4>'
+                        f'<p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:var(--text-muted);">'
+                        f"{len(vid_chunks)} match(es)</p>"
+                    )
+                    for c in vid_chunks[:5]:  # max 5 per video
+                        ts = format_timestamp(c.timestamp)
+                        score_pct = f"{c.score * 100:.0f}%"
+                        preview = c.text[:200].replace("\n", " ")
+                        html_parts.append(
+                            f'<details style="margin:0.25rem 0;font-size:0.85rem;">'
+                            f'<summary style="cursor:pointer;color:var(--link);">'
+                            f"⏱ {ts} — relevance: {score_pct}</summary>"
+                            f'<p style="margin:0.25rem 0 0 1rem;color:var(--text-muted);'
+                            f'white-space:pre-wrap;">{preview}...</p>'
+                            f"</details>"
+                        )
+                    if len(vid_chunks) > 5:
+                        html_parts.append(
+                            f'<p style="font-size:0.8rem;color:var(--text-muted);'
+                            f'margin-left:1rem;">… and {len(vid_chunks) - 5} more</p>'
+                        )
+                    html_parts.append("</div>")
+
+                return (
+                    gr.update(value="\n".join(html_parts)),
+                    "",
+                    '<p style="color:#34d399;">✅ Search complete.</p>',
+                )
+            except Exception as e:
+                logger.error(f"Search all error: {e}", exc_info=True)
+                return (
+                    gr.update(),
+                    "",
+                    f'<p style="color:#ef4444;">❌ Search failed: {str(e)[:200]}</p>',
+                )
+
+        def do_clear_search():
+            return (
+                '<p style="color:var(--text-muted);padding:1rem;">No results yet.</p>',
+                "",
+                '<p style="color:var(--text-muted);">Enter a query and click Search.</p>',
+            )
+
+        search_btn.click(
+            fn=do_search_all,
+            inputs=[search_query],
+            outputs=[search_results, search_detail, search_status],
+        )
+        search_query.submit(
+            fn=do_search_all,
+            inputs=[search_query],
+            outputs=[search_results, search_detail, search_status],
+        )
+        search_clear_btn.click(
+            fn=do_clear_search,
+            outputs=[search_results, search_detail, search_status],
+        )
 
         # Library search
         lib_search.change(

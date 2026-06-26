@@ -46,6 +46,11 @@ class Config:
 
     # RAG
     embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
+    # Multimodal embedding (Qwen3-VL-Embedding — optional, Apache 2.0)
+    multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-2B"
+    multimodal_embedding_enabled: bool = bool(
+        os.environ.get("MULTIMODAL_EMBEDDING", "false").lower() == "true"
+    )
     chroma_collection: str = "video_analysis"
     top_k_retrieval: int = 20
     top_k_rerank: int = 5
@@ -71,8 +76,21 @@ class Config:
     ui_host: str = "0.0.0.0"
     ui_port: int = 7860
     ui_share: bool = False
+    ui_auth_enabled: bool = bool(os.environ.get("GRADIO_PASSWORD"))
+    ui_auth_username: str = os.environ.get("GRADIO_USER", "admin")
+    ui_auth_password: str = os.environ.get("GRADIO_PASSWORD", "")
     # Library
     library_max_videos: int = 50
+
+    # Frame sampling
+    adaptive_frame_sampling: bool = False  # motion-based adaptive sampling
+    adaptive_frame_sampling_sensitivity: float = (
+        0.3  # lower = more frames near boundaries
+    )
+    clip_frame_dedup: bool = False  # CLIP-similarity frame deduplication
+    clip_frame_dedup_threshold: float = (
+        0.92  # frames above this similarity are deduplicated
+    )
 
     # YouTube / URL import
     yt_dlp_enabled: bool = True

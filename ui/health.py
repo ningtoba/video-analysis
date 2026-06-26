@@ -12,6 +12,7 @@ import time
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from video_analysis import __version__
@@ -201,6 +202,50 @@ def _setup_routes(app: FastAPI) -> None:
         )
 
 
+def _setup_auth_middleware(app: FastAPI, config: Config) -> None:
+    """Add HTTP Basic Auth middleware to the FastAPI app if configured.
+
+    Reads credentials from config.ui_auth_username and config.ui_auth_password
+    (which default to GRADIO_USER and GRADIO_PASSWORD env vars). The /health
+    endpoint is excluded from auth.
+    """
+    if not config.ui_auth_enabled or not config.ui_auth_password:
+        logger.info("UI authentication disabled (no GRADIO_PASSWORD set)")
+        return
+
+    expected_user = config.ui_auth_username
+    expected_pass = config.ui_auth_password
+    logger.info(f"UI authentication enabled for user '{expected_user}'")
+
+    @app.middleware("http")
+    async def auth_middleware(request, call_next):
+        # Skip auth for health endpoint
+        if request.url.path == "/health":
+            return await call_next(request)
+        # Check auth header
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Basic "):
+            return Response(
+                status_code=401,
+                content="Unauthorized",
+                headers={"WWW-Authenticate": "Basic"},
+            )
+        import base64
+
+        try:
+            decoded = base64.b64decode(auth_header.removeprefix("Basic ")).decode()
+            username, _, password = decoded.partition(":")
+            if username == expected_user and password == expected_pass:
+                return await call_next(request)
+        except Exception:
+            pass
+        return Response(
+            status_code=401,
+            content="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+
 def create_health_app(config: Config) -> FastAPI:
     """Build and configure the FastAPI application.
 
@@ -212,8 +257,6 @@ def create_health_app(config: Config) -> FastAPI:
 
     _start_time = time.time()
     _rag = VideoRAG(config)
-    __version__  # ensure import is used
-    logger.info("Health API initialised — RAG engine ready")
 
     app = FastAPI(
         title="Video Analysis Platform API",
@@ -223,4 +266,8 @@ def create_health_app(config: Config) -> FastAPI:
 
     _setup_routes(app)
 
+    # Apply auth middleware if configured
+    _setup_auth_middleware(app, config)
+
+    logger.info("Health API initialised — RAG engine ready")
     return app
