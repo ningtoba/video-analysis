@@ -28,4 +28,4 @@ from video_analysis import (
 
 # Workflow module (requires Gradio 6.17+ for gr.Workflow)
 
-__version__ = "0.30.0"
+__version__ = "0.31.0"

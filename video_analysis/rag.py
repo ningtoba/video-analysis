@@ -762,6 +762,10 @@ class VideoRAG:
         if self.config.colbert_reranker_enabled:
             chunks = self._rerank_colbert(query, chunks, top_k)
 
+        # Optional ColBERT-Att attention-weighted re-ranking (arXiv:2603.25248)
+        if self.config.colbert_att_reranker_enabled:
+            chunks = self._rerank_colbert_att(query, chunks, top_k)
+
         return chunks
 
     def _rerank(
@@ -832,6 +836,55 @@ class VideoRAG:
             return chunks[:top_k]
         except Exception as e:
             logger.error(f"ColBERTv2 re-ranking failed: {e}")
+            return chunks[:top_k]
+
+    def _rerank_colbert_att(
+        self, query: str, chunks: List[RetrievedChunk], top_k: int
+    ) -> List[RetrievedChunk]:
+        """Re-rank using ColBERT-Att attention-weighted late interaction.
+
+        Uses ``ColBERTAttReranker`` which loads ColBERTv2 via transformers
+        and applies attention-weighted MaxSim scoring (arXiv:2603.25248).
+
+        Falls back gracefully if transformers or the model is unavailable.
+        The model is loaded lazily, used for re-ranking, then unloaded.
+        """
+        try:
+            from video_analysis.colbert_att_reranker import ColBERTAttReranker
+
+            reranker = ColBERTAttReranker()
+
+            if not reranker.available:
+                logger.info(
+                    "ColBERT-Att re-ranking unavailable (transformers not installed)"
+                )
+                return chunks[:top_k]
+
+            # Extract texts from chunks
+            texts = [c.text for c in chunks]
+
+            # Re-rank with ColBERT-Att
+            scored = reranker.rerank(query=query, documents=texts, top_k=top_k)
+
+            # Map scores back to chunks
+            score_map = {doc: score for doc, score in scored}
+            for chunk in chunks:
+                if chunk.text in score_map:
+                    chunk.score = float(score_map[chunk.text])
+
+            # Unload to free VRAM
+            reranker.unload()
+
+            chunks.sort(key=lambda c: c.score, reverse=True)
+            logger.info("ColBERT-Att re-ranking complete")
+            return chunks[:top_k]
+        except ImportError:
+            logger.info(
+                "ColBERT-Att not available — falling back to cross-encoder results"
+            )
+            return chunks[:top_k]
+        except Exception as e:
+            logger.error(f"ColBERT-Att re-ranking failed: {e}")
             return chunks[:top_k]
 
     def expand_temporal_context(

@@ -116,6 +116,7 @@ STAGE_CONFIG_KEYS: Dict[str, List[str]] = {
         "temporal_window",
         "temporal_decay_rate",
         "colbert_reranker_enabled",
+        "colbert_att_reranker_enabled",
     ],
     STAGE_DIARIZATION: ["diarize_enabled"],
     STAGE_AUDIO_EXTRACTION: [],

@@ -206,6 +206,7 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `DINO_FRAME_COMPRESSION` | `false` | Enable DINOv2 perceptual frame compression (LongVU-style, ~85 MB VRAM) |
 | `DINO_FRAME_COMPRESSION_THRESHOLD` | `0.88` | Cosine sim threshold [0,1]; lower = more aggressive compression |
 | `DINO_FRAME_COMPRESSION_MODEL` | `facebook/dinov2-small` | DINOv2 variant (small=21M, base=86M) |
+| `COLBERT_ATT_RERANKER_ENABLED` | `false` | Enable ColBERT-Att attention-weighted re-ranking (arXiv:2603.25248, +1-3% recall) |
 | `FACE_DETECTION_MODEL` | `buffalo_l` | InsightFace model pack for detection/recognition |
 || `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold for face identity matching |
 || `PROMETHEUS_ENABLED` | `true` | Enable Prometheus /metrics endpoint with pipeline/retrieval/GPU metrics |
@@ -314,6 +315,7 @@ python tests/test_basic.py
 |- [x] **Dependency modernization** — all pyproject.toml & requirements.txt bounds updated to latest stable (torch 2.12, transformers 5.12, sentence-transformers 5.6, fastapi 0.138, etc.)
 |- [x] **Gradio 6 Workflow integration** — `ui/workflow.py` with `gr.Workflow` visual pipeline builder canvas (Gradio 6.17+ API: `bind`, `edges`, `graph`)
 |||- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
+||- [x] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 ||- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)
 ||- [ ] Federated video search (MCP-based cross-instance query)
 |

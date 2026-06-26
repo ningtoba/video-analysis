@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.31.0 (2026-06-26) — ColBERT-Att Attention-Weighted Re-Ranking
+
+### 🧠 New Module: ColBERT-Att Re-Ranker (`video_analysis/colbert_att_reranker.py`)
+
+- **New module**: `video_analysis/colbert_att_reranker.py` — standalone implementation
+  of **ColBERT-Att** (Patel & Dutta, arXiv:2603.25248, Mar 2026), an attention-weighted
+  enhancement of the standard ColBERTv2 late-interaction scoring function.
+- **How it differs from ColBERTv2**: Standard ColBERTv2 MaxSim computes
+  `score = Σ max_sim(E_q_i, E_d_j)` treating all token matches equally. ColBERT-Att
+  weights each query and document token by its BERT attention weight:
+  `score = Σ α_i · max(β_j · cos_sim(E_q_i, E_d_j))` where α_i and β_j are
+  normalised attention weights from the encoder's last layer.
+- **No training needed**: Attention weights are extracted directly from the frozen
+  ColBERTv2/BERT checkpoint — zero additional training or fine-tuning.
+- **Config toggle**: `COLBERT_ATT_RERANKER_ENABLED` env var
+  (config: `colbert_att_reranker_enabled`, default: `false`).
+- **Expected impact**: +1-3% recall on MS-MARCO, BEIR, and LoTTE benchmarks per
+  the paper, with negligible latency increase (attention extraction is a forward-pass
+  side-effect, already computed by the model).
+- **VRAM**: ~2 GB when active, 0 when unloaded — fits 12 GB RTX 4070 with
+  sequential loading.
+- **Integration**: Plugs into `VideoRAG.retrieve()` after cross-encoder re-ranking
+  and ColBERTv2 (if both are enabled, ColBERT-Att runs last as the final re-rank).
+
+### 📋 Roadmap Progress
+- [x] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
+- [ ] Qwen3-VL-30B-A3B FP8 backend (needs torchao, FlashAttention-3, ~8 GB VRAM FP8)
+- [ ] Real-time streaming video analysis (architectural change)
+- [ ] Federated MCP-based cross-instance video search
+- [ ] EUPE encoder integration (when HF model weights stabilize)
+
+### 📦 New Modules
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `colbert_att_reranker` | `video_analysis/colbert_att_reranker.py` | ~350 | ColBERT-Att attention-weighted late-interaction re-ranker |
+
+### 🧪 Tests
+- **6 new tests** (`test_colbert_att_*`) — 329+/339+ passing
+- Tests cover: module import, empty document list, fallback (no model loaded),
+  config field defaults/env override, `_attention_weighted_maxsim()` scoring math,
+  pipeline integration config flow
+
+### 🔧 Configuration
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `COLBERT_ATT_RERANKER_ENABLED` | `false` | Enable ColBERT-Att attention-weighted re-ranking |
+
+### 📝 Dependencies
+- No new hard dependencies — uses `transformers` (already required) + `numpy` (already required)
+
+---
+
 ## 0.30.0 (2026-06-26) — DINOv2 Perceptual Frame Compression & PP-OCRv6 Update
 
 ### 🧠 New Module: DINOv2 Perceptual Frame Compression

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 import sys
 import tempfile
@@ -1568,7 +1569,7 @@ def test_version_0_15_0():
     """Test version is now 0.29.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.30")
+    assert __version__.startswith("0.31")
 
 
 # ====================================================================
@@ -1993,7 +1994,132 @@ def test_version_0_20_0():
     """Test version is now 0.29.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.30")
+    assert __version__.startswith("0.31")
+
+
+# ---------------------------------------------------------------------------
+# ColBERT-Att attention-weighted re-ranker tests
+# ---------------------------------------------------------------------------
+
+
+def test_colbert_att_reranker_import():
+    """Test ColBERTAttReranker module can be imported and reports availability."""
+    from video_analysis.colbert_att_reranker import ColBERTAttReranker
+
+    reranker = ColBERTAttReranker()
+    assert reranker.model_name == "colbert-ir/colbertv2.0"
+    assert isinstance(reranker.available, bool)
+    # Default config
+    assert reranker.query_attention_scale == 1.0
+    assert reranker.doc_attention_scale == 0.5
+
+
+def test_colbert_att_reranker_empty():
+    """Test rerank with empty document list returns empty."""
+    from video_analysis.colbert_att_reranker import ColBERTAttReranker
+
+    reranker = ColBERTAttReranker()
+    result = reranker.rerank("test query", [], top_k=5)
+    assert result == []
+
+
+def test_colbert_att_reranker_fallback():
+    """Test that _rerank_colbert_att in VideoRAG falls back gracefully
+    without transformers being loaded (the method catches ImportError)."""
+    from video_analysis.config import Config
+    from video_analysis.rag import VideoRAG, RetrievedChunk
+
+    cfg = Config(data_dir="/tmp/va_test_colbert_att")
+    cfg.colbert_att_reranker_enabled = True
+
+    rag = VideoRAG(cfg)
+
+    # Build sample chunks
+    chunks = [
+        RetrievedChunk(
+            chunk_id="test_1",
+            video_id="test_video",
+            text="A person is walking through a park.",
+            timestamp=10.0,
+            scene_id=0,
+            score=0.5,
+        ),
+    ]
+
+    # Should not crash when colbert-att reranker is enabled
+    # but the underlying model isn't loaded (ColBERTAttReranker
+    # will report unavailable, and it falls back gracefully)
+    result = rag._rerank_colbert_att("test query", chunks, top_k=5)
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_colbert_att", ignore_errors=True)
+
+
+def test_config_colbert_att_reranker():
+    """Test colbert_att_reranker_enabled config field."""
+    from video_analysis.config import Config
+
+    cfg = Config(data_dir="/tmp/va_test_colbert_att_cfg")
+    assert hasattr(cfg, "colbert_att_reranker_enabled")
+    assert cfg.colbert_att_reranker_enabled is False
+
+    cfg2 = Config(
+        data_dir="/tmp/va_test_colbert_att_cfg", colbert_att_reranker_enabled=True
+    )
+    assert cfg2.colbert_att_reranker_enabled is True
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_colbert_att_cfg", ignore_errors=True)
+
+
+def test_colbert_att_attention_weighted_maxsim():
+    """Test the attention-weighted MaxSim scoring function directly."""
+    import numpy as np
+    from video_analysis.colbert_att_reranker import ColBERTAttReranker
+
+    reranker = ColBERTAttReranker()
+
+    # Create simple test vectors
+    q_embs = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)  # 2 query tokens
+    q_weights = np.array([0.8, 0.2], dtype=np.float32)  # first token more important
+    d_embs = np.array(
+        [[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]], dtype=np.float32
+    )  # 3 doc tokens
+    d_weights = np.array([0.6, 0.3, 0.1], dtype=np.float32)
+
+    # Compute score
+    score = reranker._attention_weighted_maxsim(q_embs, q_weights, d_embs, d_weights)
+
+    # Sanity check: score should be a finite float
+    assert isinstance(score, float)
+    assert math.isfinite(score)
+    assert score > 0.0
+    # Max possible with unit vectors and no attention weighting = len(q_tokens) = 2
+    # With weighting, should be <= 2
+    assert score <= 2.0
+
+
+def test_colbert_att_pipeline_integration_config():
+    """Test that colbert_att_reranker_enabled flows through the retrieval pipeline."""
+    from video_analysis.config import Config
+    from video_analysis.rag import VideoRAG
+
+    cfg = Config(data_dir="/tmp/va_test_colbert_att_pipe")
+    cfg.colbert_att_reranker_enabled = False
+
+    rag = VideoRAG(cfg)
+    assert rag.config.colbert_att_reranker_enabled is False
+
+    # Verify it's in the code path by checking method exists
+    assert hasattr(rag, "_rerank_colbert_att")
+
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_colbert_att_pipe", ignore_errors=True)
 
 
 if __name__ == "__main__":
@@ -2068,4 +2194,11 @@ if __name__ == "__main__":
     test_config_processing_mode_env_var()
     test_pipeline_get_active_stages_audio_only()
     test_pipeline_get_active_stages_video_full()
+    # v0.31.0 — ColBERT-Att attention-weighted re-ranking
+    test_colbert_att_reranker_import()
+    test_colbert_att_reranker_empty()
+    test_colbert_att_reranker_fallback()
+    test_config_colbert_att_reranker()
+    test_colbert_att_attention_weighted_maxsim()
+    test_colbert_att_pipeline_integration_config()
     print("All tests passed! ✅")

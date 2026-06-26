@@ -71,6 +71,9 @@ class Config:
     temporal_window: int = 1  # neighbors on each side
     temporal_decay_rate: float = 0.1  # TV-RAG time-decay weighting (0 = disabled)
     colbert_reranker_enabled: bool = False  # optional ColBERTv2 late-interaction
+    colbert_att_reranker_enabled: bool = (
+        False  # ColBERT-Att attention-weighted (arXiv:2603.25248)
+    )
 
     # Tiered Frame Storage (v0.21.0)
     frame_storage_mode: str = "tiered"  # full, tiered, compressed
