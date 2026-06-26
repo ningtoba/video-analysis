@@ -1056,6 +1056,7 @@ def test_pipeline_get_active_stages_audio_only():
             "frame_extraction",
             "quality_screening",
             "object_detection",
+            "face_recognition",
             "ocr",
             "clip_classification",
             "video_mllm",
@@ -1465,7 +1466,7 @@ def test_version_0_15_0():
     """Test version is now 0.25.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.25")
+    assert __version__.startswith("0.26")
 
 
 # ====================================================================
@@ -1890,7 +1891,7 @@ def test_version_0_20_0():
     """Test version is now 0.25.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.25")
+    assert __version__.startswith("0.26")
 
 
 if __name__ == "__main__":

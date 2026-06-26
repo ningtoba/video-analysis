@@ -171,6 +171,7 @@ class VideoPipeline:
                 "frame_extraction",
                 "quality_screening",
                 "object_detection",
+                "face_recognition",
                 "ocr",
                 "clip_classification",
                 "video_mllm",
@@ -315,6 +316,17 @@ class VideoPipeline:
             logger.info("Object detection skipped (audio-only mode)")
         # Unload YOLO to free ~1 GB VRAM
         self._unload_model("_yolo_model")
+
+        # Step 7b: Face recognition (InsightFace, GPU, ~1.1 GB VRAM, optional)
+        if "face_recognition" not in skipped_stages:
+            if self.config.face_recognition_enabled:
+                self._detect_faces(scenes)
+                logger.info("Face recognition complete")
+                self._unload_face_model()
+            else:
+                logger.info("Face recognition disabled by config")
+        else:
+            logger.info("Face recognition skipped (audio-only mode)")
 
         # Step 8: Run OCR text extraction on frames (PaddleOCR — CPU)
         if "ocr" not in skipped_stages:
@@ -978,6 +990,123 @@ class VideoPipeline:
                     frame.objects = detections
                 except Exception as e:
                     logger.warning(f"Detection error on {frame.filepath}: {e}")
+
+    def _detect_faces(self, scenes: List[SceneInfo]):
+        """Run InsightFace face detection on all key frames (optional, GPU).
+
+        Detects faces, extracts 512-d ArcFace embeddings, and stores results
+        in each frame's ``faces`` field.  When ``face_recognition_enabled`` is
+        True in config, this step runs after object detection.
+
+        Embeddings enable cross-video person identity matching via
+        ``FaceRecognizer.match_faces()`` and ``cluster_faces()``.
+
+        Graceful fallback: if insightface is not installed, logs a warning and skips.
+        """
+        all_frames = []
+        for scene in scenes:
+            all_frames.extend(scene.key_frames)
+
+        if not all_frames:
+            return
+
+        try:
+            from video_analysis.face import FaceRecognizer
+        except ImportError:
+            logger.warning(
+                "video_analysis.face module not available — face recognition skipped"
+            )
+            return
+
+        try:
+            logger.info("Loading InsightFace face recognizer...")
+            self._face_recognizer = FaceRecognizer(
+                match_threshold=self.config.face_match_threshold,
+                det_model=self.config.face_detection_model,
+            )
+            if not self._face_recognizer.available:
+                logger.warning(
+                    "InsightFace not installed — face recognition skipped. "
+                    "Install with: pip install insightface onnxruntime-gpu"
+                )
+                self._face_recognizer = None
+                return
+        except Exception as exc:
+            logger.warning("Failed to initialise InsightFace: %s", exc)
+            self._face_recognizer = None
+            return
+
+        recognizer = self._face_recognizer
+        max_faces = self.config.face_max_faces
+        total_detected = 0
+
+        for idx, frame in enumerate(all_frames):
+            if self._shutdown_requested:
+                logger.warning("Shutdown requested — stopping face detection")
+                break
+
+            try:
+                if not Path(frame.filepath).exists():
+                    continue
+
+                faces = recognizer.detect_faces(
+                    frame.filepath,
+                    extract_embedding=True,
+                )
+
+                if max_faces > 0:
+                    faces = faces[:max_faces]
+
+                if faces:
+                    face_dicts = []
+                    for f in faces:
+                        entry = {
+                            "bbox": [round(x, 1) for x in f.bbox],
+                            "confidence": round(f.confidence, 3),
+                        }
+                        if f.embedding:
+                            entry["embedding"] = f.embedding
+                        if f.face_id:
+                            entry["face_id"] = f.face_id
+                        if f.gender is not None:
+                            entry["gender"] = f.gender
+                        if f.age is not None:
+                            entry["age"] = f.age
+                        face_dicts.append(entry)
+
+                    frame.faces = face_dicts
+                    total_detected += len(face_dicts)
+
+            except Exception as e:
+                logger.debug(
+                    "Face detection error on %s (t=%.1fs): %s",
+                    frame.filepath,
+                    frame.timestamp,
+                    e,
+                )
+
+            if (idx + 1) % 50 == 0:
+                logger.debug(
+                    "Face detection progress: %d/%d frames processed (%d faces detected)",
+                    idx + 1,
+                    len(all_frames),
+                    total_detected,
+                )
+
+        logger.info(
+            "Face detection complete: %d faces detected across %d frames",
+            total_detected,
+            len(all_frames),
+        )
+
+    def _unload_face_model(self):
+        """Release InsightFace model from GPU memory."""
+        if hasattr(self, "_face_recognizer") and self._face_recognizer is not None:
+            try:
+                self._face_recognizer.unload()
+            except Exception:
+                pass
+            self._face_recognizer = None
 
     def _describe_scenes_clip(
         self, scenes: List[SceneInfo], labels: Optional[List[str]] = None

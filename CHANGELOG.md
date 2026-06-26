@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.26.0 (2026-06-26) — InsightFace Face Recognition & Visual Pipeline Workflow
+
+### 🎯 Major Features
+
+#### 🧑‍🤝‍🧑 InsightFace Face Recognition — Cross-Video Person Identity
+- **New module**: `video_analysis/face.py` — Full InsightFace integration for face
+  detection (SCRFD-10G), face recognition (ArcFace W50, 512-d embeddings), and
+  cross-video person identity matching.
+- **Lazy GPU loading**: Model pack (`buffalo_l`) loads on first `detect_faces()` call
+  — zero import-time VRAM allocation. Graceful fallback when `insightface` is not
+  installed.
+- **Face recognition data model**: `DetectedFace` dataclass with bbox, confidence,
+  5-point landmarks, 512-d ArcFace embedding, estimated age, and gender.
+- **`FaceRecognizer` class** with four core APIs:
+  - `detect_faces(frame_path, extract_embedding)` — single-frame face detection
+  - `detect_faces_batch(frame_paths)` — multi-frame batch detection
+  - `match_faces(query_embedding, gallery)` — cosine-similarity matching against
+    known embeddings with configurable threshold (default: 0.45)
+  - `cluster_faces(all_embeddings)` — greedy agglomerative clustering into
+    identity groups (PERSON_0, PERSON_1, …)
+- **Pipeline integration**: Optional pipeline step 7b (`face_recognition`) runs
+  after object detection, before OCR. Stores face data in `FrameInfo.faces` as
+  a list of dicts. Configurable via `FACE_RECOGNITION_ENABLED` env var.
+- **Sequential GPU loading**: InsightFace ~1.1 GB VRAM, unloaded after processing
+  — compatible with 12 GB RTX 4070 limits.
+- **Config fields**: `face_recognition_enabled`, `face_detection_model` (buffalo_l),
+  `face_match_threshold` (0.45), `face_max_faces` (0=unlimited),
+  `face_recognition_providers` (CUDAExecutionProvider,CPUExecutionProvider).
+- **PipelineOrchestrator**: `face_recognition` added to audio-only skipped stages.
+- **Test coverage**: 21 new tests covering data class defaults, cosine similarity,
+  greedy clustering, match thresholding, batch API, missing-file resilience, and
+  config defaults.
+- **Dependency**: `insightface>=0.7.3` and `onnxruntime-gpu>=1.18.0` added to
+  optional requirements (not required for base install — face detection is opt-in).
+
+#### 🔧 Dependency Modernization
+- Updated pyproject.toml version to v0.26.0.
+- Added optional `insightface>=0.7.3` and `onnxruntime-gpu>=1.18.0` requirements
+  for the face recognition feature.
+
+### 📦 New Modules
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `face` | `video_analysis/face.py` | ~380 | InsightFace face detection & recognition | 
+
+### 🧪 Tests
+- **21 new tests** (test_face.py) — **269/293 passing** (0 failures, 24 deselected benchmarks)
+- Tests cover: DetectedFace data class, FaceRecognitionResult, cosine similarity,
+  match_faces API, cluster_faces API, batch API, missing-file resilience, config defaults
+
+### 📋 Roadmap Progress
+- [x] InsightFace face recognition (SCRFD-10G + ArcFace, ~1.1 GB VRAM)
+- [x] Dependency modernization — update pyproject.toml
+- [ ] Gradio 6 Workflow integration
+- [ ] Qwen3-VL-30B-A3B FP8 backend
+- [ ] ColBERT-Att attention-weighted re-ranking
+- [ ] Agentic self-check + re-retrieval
+- [ ] Real-time streaming video analysis
+- [ ] Federated video search (MCP-based)
+- [ ] Prometheus metrics endpoint + Grafana
+
+### 📝 Dependencies
+- New optional dependencies: `insightface>=0.7.3`, `onnxruntime-gpu>=1.18.0` (face recognition)
+
+---
+
 ## 0.25.0 (2026-06-26) — MCP Tool Server, Pipeline Benchmarking & Sparse-Frame Optical Flow
 
 ### 🎯 Major Features

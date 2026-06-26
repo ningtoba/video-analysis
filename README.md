@@ -33,6 +33,7 @@
 - **🎨 Polished UI** — Gradio 6 dark theme with tabs (Analysis, Batch, Library), responsive layout, real-time progress
 - **⚡ GPU Accelerated** — RTX 4070 CUDA support for all models with sequential loading to manage 12GB VRAM
 - **🔒 100% Local** — No API keys, no cloud services, all processing on your hardware
+- **🧑‍🤝‍🧑 Face Recognition** — InsightFace (SCRFD-10G + ArcFace W50) for face detection, 512-d embeddings, and cross-video person identity matching (optional, ~1.1 GB VRAM)
 - **🖥️ CLI Mode** — Process videos, download from URLs, batch process, and query from the terminal
 
 ## 🚀 Quick Start
@@ -95,6 +96,7 @@ Video File
 │   └── FFmpeg fallback (gt(scene,...))
 │              └── Per Scene: keyframe extraction
 │                            ├── YOLO object detection
+│                            ├── InsightFace face detection (optional)
 │                            ├── PaddleOCR text extraction
 │                            ├── OpenCLIP zero-shot scene classification
 │                            ├── X-CLIP zero-shot action recognition (optional)
@@ -128,6 +130,7 @@ User Question
 | `chat` | `video_analysis/chat.py` | LLM Q&A with conversation history and source citations |
 | `models` | `video_analysis/models.py` | Data models — VideoIndex, SceneInfo, FrameInfo, ChatMessage |
 | `config` | `video_analysis/config.py` | Configuration with sensible defaults (auth, frame sampling, CLIP dedup) |
+| `face_recognition` | `video_analysis/face.py` | InsightFace face detection & recognition — DetectedFace, FaceRecognizer, clustering |
 | `ui/app` | `ui/app.py` | Gradio web interface with dark theme, tabs, library, clip export, batch queue, URL import |
 | `ui/utils` | `ui/utils.py` | Shared UI utility functions (importable without gradio) |
 
@@ -142,6 +145,7 @@ User Question
 | **OCR** | PaddleOCR | Best accuracy for natural scenes, CPU mode |
 | **Scene Detection** | PySceneDetect 0.7+ (Adaptive/Content/Histogram/Hash) — or FFmpeg fallback |
 | **Object Detection** | YOLO (ultralytics) | State-of-the-art speed/accuracy |
+| **Face Recognition** | InsightFace (SCRFD-10G + ArcFace W50) | Cross-video person identity, 512-d embeddings, ~1.1 GB VRAM (optional) |
 | **Scene Description** | OpenCLIP (ViT-B-32 / ViT-L-14) | Configurable model size, zero-shot classification |
 | **Timeline Preview** | FFmpeg + Pillow sprite sheets | 100-thumbnail visual timeline navigation |
 | **Vector Store** | ChromaDB | Persistent, local, no server needed |
@@ -188,15 +192,18 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions (replaces OpenCLIP) |
 | `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
 || `AGENTIC_RETRIEVAL_ENABLED` | `false` | Enable agentic iterative retrieval loop |
-|| `AGENTIC_MAX_ROUNDS` | `3` | Max retrieval rounds in agentic loop |
-|| `AGENTIC_MIN_CONFIDENCE` | `0.5` | Min avg score of top-3 chunks to stop early |
-|| `PROCESSING_MODE` | `video_full` | Processing mode: video_full or audio_only |
-|| `CONVERSATION_MEMORY_ENABLED` | `true` | Enable ChromaDB-backed conversation memory |
-|| `CONVERSATION_MEMORY_MAX_ENTRIES` | `50` | Max conversation memory entries |
-|| `CONVERSATION_MEMORY_TTL_DAYS` | `30` | Entry TTL in days |
-|| `STRUCTURED_LOGGING_ENABLED` | `true` | Enable structlog-based structured logging |
-|| `STRUCTURED_LOGGING_FORMAT` | `auto` | Output format: auto, console, json |
-|| `STRUCTURED_LOGGING_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
+| `AGENTIC_MAX_ROUNDS` | `3` | Max retrieval rounds in agentic loop |
+| `AGENTIC_MIN_CONFIDENCE` | `0.5` | Min avg score of top-3 chunks to stop early |
+| `PROCESSING_MODE` | `video_full` | Processing mode: video_full or audio_only |
+| `CONVERSATION_MEMORY_ENABLED` | `true` | Enable ChromaDB-backed conversation memory |
+| `CONVERSATION_MEMORY_MAX_ENTRIES` | `50` | Max conversation memory entries |
+| `CONVERSATION_MEMORY_TTL_DAYS` | `30` | Entry TTL in days |
+| `STRUCTURED_LOGGING_ENABLED` | `true` | Enable structlog-based structured logging |
+| `STRUCTURED_LOGGING_FORMAT` | `auto` | Output format: auto, console, json |
+| `STRUCTURED_LOGGING_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
+| `FACE_RECOGNITION_ENABLED` | `false` | Enable InsightFace face detection & recognition (requires insightface + onnxruntime-gpu) |
+| `FACE_DETECTION_MODEL` | `buffalo_l` | InsightFace model pack for detection/recognition |
+| `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold for face identity matching |
 
 ## 🧪 Running Tests
 
@@ -295,8 +302,8 @@ python tests/test_basic.py
 |- [x] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows) — 7 tools, stdio + SSE
 |- [x] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU, video_analysis/flow.py)
 |- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy (backward compatible, no code change needed)
-|- [ ] InsightFace face recognition (RetinaFace + ArcFace, cross-video person identity)
-|- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
+- [x] InsightFace face recognition (SCRFD-10G + ArcFace, cross-video person identity)
+- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
 |- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 |- [ ] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
 |- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)

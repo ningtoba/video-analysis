@@ -23,6 +23,11 @@ class FrameInfo:
     ocr_text: Optional[str] = None
     action: Optional[str] = None  # X-CLIP action recognition label
     action_confidence: Optional[float] = None  # confidence score for the action
+    # Face detection (InsightFace, v0.26.0)
+    faces: List[dict] = field(default_factory=list)
+    # Each face dict:
+    #   {"bbox": [x1,y1,x2,y2], "confidence": 0.99, "embedding": [...],
+    #    "face_id": "PERSON_0", "gender": "Male", "age": 30}
     # Quality screening metadata (v0.21.0)
     metadata: Optional[Dict[str, Any]] = None
 

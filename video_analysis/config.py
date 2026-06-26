@@ -197,16 +197,18 @@ class Config:
     agentic_retrieval_enabled: bool = True  # enable iterative agentic retrieval loop
     agentic_max_rounds: int = 3  # max iterative rounds (default: 3)
     agentic_min_confidence: float = 0.5  # min avg top-3 score to stop early
-    # Audio-Only Processing Mode (v0.23.0)
-    # processing_mode is defined above (line ~123)
 
-    # Conversation Memory (v0.23.0)
-    # conversation_memory_enabled, conversation_memory_max_entries,
-    # conversation_memory_ttl_days are defined above (lines ~165-173)
+    # Face Recognition (InsightFace, v0.26.0)
+    face_recognition_enabled: bool = (
+        False  # overridden by FACE_RECOGNITION_ENABLED env var in __post_init__
+    )
+    face_detection_model: str = "buffalo_l"  # InsightFace model pack
+    face_match_threshold: float = 0.45  # cosine similarity for identity matching
+    face_max_faces: int = 0  # 0 = unlimited
+    face_recognition_providers: str = "CUDAExecutionProvider,CPUExecutionProvider"
 
-    # Structured JSON Logging (v0.23.0)
-    # structured_logging_enabled, structured_logging_format,
-    # structured_logging_level are defined above (lines ~106-111)
+    # Gradio Workflow (v0.26.0)
+    workflow_enabled: bool = True  # enable Gradio Workflow visual pipeline builder UI
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
@@ -270,6 +272,14 @@ class Config:
         processing_env = os.environ.get("PROCESSING_MODE", "").lower()
         if processing_env in ("video_full", "audio_only", "auto"):
             self.processing_mode = processing_env
+        # Override face_recognition_enabled from env var
+        face_env = os.environ.get("FACE_RECOGNITION_ENABLED", "").lower()
+        if face_env in ("true", "1", "yes"):
+            self.face_recognition_enabled = True
+        # Override workflow_enabled from env var
+        workflow_env = os.environ.get("WORKFLOW_ENABLED", "").lower()
+        if workflow_env in ("false", "0", "no"):
+            self.workflow_enabled = False
         for d in [
             self.data_dir,
             self.video_dir,
