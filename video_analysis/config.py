@@ -248,6 +248,12 @@ class Config:
         0  # overridden by STREAMING_MAX_CHUNKS env var (0 = unlimited)
     )
 
+    # Federated Video Search (v0.33.0 — MCP-based cross-instance query)
+    federation_enabled: bool = False  # overridden by FEDERATION_ENABLED env var
+    federation_peers: str = ""  # comma-separated URLs, overridden by FEDERATION_PEERS
+    federation_timeout: float = 30.0  # overridden by FEDERATION_TIMEOUT env var
+    federation_include_local: bool = True  # include local index in federated results
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -368,6 +374,24 @@ class Config:
                     self.streaming_max_chunks = val
             except ValueError:
                 pass
+        # Override federation config from env vars
+        fed_env = os.environ.get("FEDERATION_ENABLED", "").lower()
+        if fed_env in ("true", "1", "yes"):
+            self.federation_enabled = True
+        fed_peers = os.environ.get("FEDERATION_PEERS", "")
+        if fed_peers:
+            self.federation_peers = fed_peers
+        fed_timeout = os.environ.get("FEDERATION_TIMEOUT", "")
+        if fed_timeout:
+            try:
+                val = float(fed_timeout)
+                if val > 0:
+                    self.federation_timeout = val
+            except ValueError:
+                pass
+        fed_local = os.environ.get("FEDERATION_INCLUDE_LOCAL", "").lower()
+        if fed_local in ("false", "0", "no"):
+            self.federation_include_local = False
         for d in [
             self.data_dir,
             self.video_dir,

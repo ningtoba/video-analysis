@@ -216,6 +216,50 @@ def _setup_routes(app: FastAPI, config: Optional[Config] = None) -> None:
                 media_type="text/plain; charset=utf-8",
             )
 
+    # Federated Search REST endpoint (v0.33.0)
+    federation_enabled = config is not None and config.federation_enabled
+
+    if federation_enabled:
+
+        @app.get("/api/federated/search")
+        async def federated_search(
+            query: str,
+            top_k: int = 10,
+            include_local: bool = True,
+        ):
+            """Search across this instance's index (for consumption by federation peers).
+
+            Returns a JSON payload with ``chunks`` as a list of chunk dicts.
+            """
+            global _rag
+            if _rag is None:
+                raise HTTPException(
+                    status_code=503, detail="RAG engine not initialised"
+                )
+            try:
+                chunks = _rag.search_all(query=query, top_k=max(top_k, 50))
+                return {
+                    "query": query,
+                    "top_k": top_k,
+                    "total_chunks": len(chunks),
+                    "chunks": [
+                        {
+                            "chunk_id": c.chunk_id,
+                            "video_id": c.video_id,
+                            "text": c.text,
+                            "timestamp": c.timestamp,
+                            "scene_id": c.scene_id,
+                            "score": c.score,
+                            "frame_path": c.frame_path,
+                            "chunk_type": c.chunk_type,
+                        }
+                        for c in chunks
+                    ],
+                }
+            except Exception as e:
+                logger.error("Federated search endpoint error: %s", e)
+                raise HTTPException(status_code=500, detail=str(e))
+
 
 def _setup_auth_middleware(app: FastAPI, config: Config) -> None:
     """Add HTTP Basic Auth middleware to the FastAPI app if configured.

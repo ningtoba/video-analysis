@@ -135,6 +135,7 @@ User Question
 | `ui/utils` | `ui/utils.py` | Shared UI utility functions (importable without gradio) |
 | `ui/workflow` | `ui/workflow.py` | Gradio 6 Workflow visual pipeline builder (gr.Workflow canvas) |
 | `streaming` | `video_analysis/streaming.py` | Real-time streaming/chunked video analysis (StreamingVLM-inspired) |
+| `federation` | `video_analysis/federation.py` | Federated MCP-based cross-instance video search |
 
 ## 💻 Tech Stack
 
@@ -211,6 +212,10 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `FACE_DETECTION_MODEL` | `buffalo_l` | InsightFace model pack for detection/recognition |
 || `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold for face identity matching |
 || `PROMETHEUS_ENABLED` | `true` | Enable Prometheus /metrics endpoint with pipeline/retrieval/GPU metrics |
+|| `FEDERATION_ENABLED` | `false` | Enable federated video search REST endpoint (v0.33.0) |
+|| `FEDERATION_PEERS` | (empty) | Comma-separated peer MCP server URLs |
+|| `FEDERATION_TIMEOUT` | `30.0` | HTTP request timeout per peer (seconds) |
+|| `FEDERATION_INCLUDE_LOCAL` | `true` | Include local index in federated results |
 
 ## 🧪 Running Tests
 
@@ -318,7 +323,7 @@ python tests/test_basic.py
 |||- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 ||- [x] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 ||- [x] Real-time streaming video analysis (chunked processing, watch/stream modes)
-|||- [ ] Federated video search (MCP-based cross-instance query)
+||- [x] **Federated video search (MCP-based cross-instance query)**
 |
 |
 

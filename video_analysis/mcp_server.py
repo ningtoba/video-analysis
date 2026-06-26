@@ -41,6 +41,7 @@ from video_analysis.pipeline import VideoPipeline
 from video_analysis.streaming import StreamingPipeline, StreamingChunkResult
 from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
+from video_analysis.federation import FederatedSearch
 
 logger = logging.getLogger(__name__)
 
@@ -430,6 +431,112 @@ async def watch_video(
                 "unique_objects": stats["unique_objects"],
             },
         },
+        indent=2,
+    )
+
+
+# ── Federated Video Search Tools (v0.33.0) ───────────────────────────
+
+
+@mcp.tool(
+    description="Query multiple video-analysis instances and merge results. "
+    "Searches local index + all configured remote peers, de-duplicates, "
+    "and re-ranks via cross-encoder."
+)
+async def federated_search(
+    query: str,
+    top_k: int = 10,
+    include_peers: bool = True,
+    include_local: bool = True,
+) -> str:
+    """Federated query across all configured video-analysis peers.
+
+    Args:
+        query: Natural-language search query.
+        top_k: Number of final merged results to return (default: 10).
+        include_peers: If True, query all registered remote peers (default: True).
+        include_local: If True, include results from the local index (default: True).
+    """
+    _, rag, _ = _ensure_services()
+
+    # Build peer list from config
+    config = _config
+    peers_list: list[str] = []
+    if config is not None and config.federation_peers:
+        peers_list = [
+            p.strip() for p in config.federation_peers.split(",") if p.strip()
+        ]
+
+    search = FederatedSearch(peers=peers_list, rag=rag)
+    result = search.query(
+        query=query,
+        top_k=top_k,
+        include_peers=include_peers,
+        include_local=include_local,
+    )
+
+    if not result.merged_chunks:
+        return json.dumps(
+            {
+                "query": query,
+                "total_chunks": 0,
+                "peers_queried": result.peers_queried,
+                "peers_successful": result.peers_successful,
+                "chunks": [],
+            },
+            indent=2,
+        )
+
+    return json.dumps(
+        {
+            "query": query,
+            "total_chunks": result.total_chunks,
+            "peers_queried": result.peers_queried,
+            "peers_successful": result.peers_successful,
+            "chunks": [
+                {
+                    "chunk_id": c.chunk_id,
+                    "video_id": c.video_id,
+                    "text": c.text[:300],
+                    "timestamp": round(c.timestamp, 1),
+                    "scene_id": c.scene_id,
+                    "score": round(c.score, 4),
+                    "frame_path": c.frame_path,
+                    "chunk_type": c.chunk_type,
+                }
+                for c in result.merged_chunks
+            ],
+        },
+        indent=2,
+    )
+
+
+@mcp.tool(description="Register a remote video-analysis peer for federated search.")
+async def add_federation_peer(peer_url: str) -> str:
+    """Register a peer for federated search.
+
+    Args:
+        peer_url: The peer MCP server URL (e.g. ``http://192.168.1.50:8000``).
+    """
+    _, rag, _ = _ensure_services()
+
+    search = FederatedSearch(rag=rag)
+    search.add_peer(peer_url)
+    return json.dumps(
+        {"status": "ok", "peer_url": peer_url, "total_peers": len(search.peers)},
+        indent=2,
+    )
+
+
+@mcp.tool(description="List all registered federation peers.")
+async def list_federation_peers() -> str:
+    """List all currently registered federation peers."""
+    _, rag, _ = _ensure_services()
+
+    search = FederatedSearch(rag=rag)
+    peers = search.peers
+    return json.dumps(
+        {"peers": peers, "count": len(peers)},
         indent=2,
     )
 

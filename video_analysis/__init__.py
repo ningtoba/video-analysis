@@ -23,13 +23,14 @@ from video_analysis import (
     memory,
     frame_compression,
     streaming,
+    federation,
 )
 
 # face module is optional (requires insightface) — import on demand only
 
 # Workflow module (requires Gradio 6.17+ for gr.Workflow)
 
-__version__ = "0.32.0"
+__version__ = "0.33.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

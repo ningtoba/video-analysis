@@ -493,7 +493,7 @@ def test_streaming_pipeline_exported():
 
 
 def test_version_bumped():
-    """Verify version is bumped to 0.32.0."""
+    """Verify version is bumped to 0.33.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.32.0"
+    assert __version__ == "0.33.0"

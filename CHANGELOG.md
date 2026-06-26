@@ -1,5 +1,81 @@
 # Changelog
 
+## 0.33.0 (2026-06-27) — Federated Video Search (MCP-based cross-instance query)
+
+### 🌐 New Module: Federated Video Search (`video_analysis/federation.py`)
+
+- **New module**: `video_analysis/federation.py` — federated video search that
+  queries multiple video-analysis instances (remote peers) simultaneously and
+  merges the results into a unified, de-duplicated, cross-encoder re-ranked set.
+- **FederatedSearch class**: Coordinates queries across local index + remote peers.
+  Features:
+  - `query()` — query all peers and optionally local index, then merge & re-rank
+  - `add_peer()` / `remove_peer()` / `clear_peers()` — dynamic peer management
+  - De-duplication by `(video_id, chunk_id)` — keeps the higher score
+  - Cross-encoder re-ranking of merged results (via local `VideoRAG._rerank`)
+  - Both `asyncio` (parallel) and serial HTTP fallback for reliability
+  - `query_peer_videos()` — query a peer's video library listing
+- **Data models**: `FederatedPeerResult` (per-peer result with error + latency),
+  `FederatedQueryResult` (aggregated result with merge stats)
+- **Factory function**: `create_federated_search()` — recommended instantiation
+- **Zero extra dependencies**: Uses `httpx` (already installed as FastAPI dep)
+  for peer HTTP communication. Falls back gracefully when peers are unreachable.
+
+### 📡 Federated Search REST Endpoint (`/api/federated/search`)
+
+- **New REST endpoint**: `GET /api/federated/search?query=...&top_k=...` on
+  the FastAPI health app — each instance exposes a JSON search endpoint
+  that peers can query via HTTP.
+- **Config-toggle**: `FEDERATION_ENABLED` env var (default: `false`) controls
+  whether the `/api/federated/search` route is registered.
+- **Returns**: Structured JSON with `chunks` array (chunk_id, video_id, text,
+  timestamp, scene_id, score, frame_path, chunk_type) — ready for peer consumption.
+- **Auth-excluded**: The `/health`, `/metrics`, and `/api/federated/search`
+  endpoints are excluded from authentication middleware.
+
+### 🔌 MCP Tools for Federation
+
+- **Three new MCP tools** in `video_analysis/mcp_server.py`:
+  - `federated_search(query, top_k, include_peers, include_local)` — query all
+    configured peers + local index, return merged results
+  - `add_federation_peer(peer_url)` — register a remote peer at runtime
+  - `list_federation_peers()` — list all registered peers
+- All tools follow the existing `_ensure_services()` lazy-init pattern.
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FEDERATION_ENABLED` | `false` | Enable federated search REST endpoint |
+| `FEDERATION_PEERS` | (empty) | Comma-separated peer URLs |
+| `FEDERATION_TIMEOUT` | `30.0` | HTTP request timeout per peer (seconds) |
+| `FEDERATION_INCLUDE_LOCAL` | `true` | Include local index in federated results |
+
+### 🧪 Tests
+
+- **21 new tests** (`tests/test_federation.py`) — all pass in <0.3s
+- Tests cover: constructor with peers/RAG, peer add/remove/clear/duplicate,
+  query local only, query with deduplication, cross-encoder re-ranking,
+  `FederatedQueryResult`/`FederatedPeerResult` models, config defaults and
+  env overrides, module import and version checks
+
+### 📋 Roadmap Progress
+
+- [x] **Federated video search** (MCP-based cross-instance query)
+
+### 📦 New Modules
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `federation` | `video_analysis/federation.py` | ~320 | Federated cross-instance video search |
+
+### 📝 Dependencies
+
+- No new dependencies — uses `httpx` (already installed via FastAPI)
+- Test-only: `unittest.mock` (stdlib)
+
+---
+
 ## 0.32.0 (2026-06-26) — Real-time Streaming Video Analysis
 
 ### 🧠 New Module: Streaming Pipeline (`video_analysis/streaming.py`)
