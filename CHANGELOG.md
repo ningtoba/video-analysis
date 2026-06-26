@@ -1,6 +1,88 @@
 # Changelog
 
-## 0.34.0 (2026-06-27) — PP-OCRv6 Upgrade, Face Scene-Graph Enrichment & MMR Diversity Re-Ranking
+## 0.35.0 (2026-06-27) — Qwen3-VL-30B-A3B MoE Backend (vLLM + FP8)
+
+### 🧠 Qwen3-VL-30B-A3B Backend (vLLM + FP8)
+
+Mixture-of-Experts Vision-Language Model backend for video understanding,
+available as the third MLLM backend option alongside VideoChat-Flash and SmolVLM2.
+
+- **New module**: `video_analysis/backends/qwen3_vl.py` — full Qwen3-VL-30B-A3B backend
+  with three deployment modes:
+  - `vllm_server` — connect to a pre-existing vLLM OpenAI-compatible server via HTTP
+    (recommended for production, best for 12GB VRAM, model runs on separate GPU/server)
+  - `vllm_offline` — in-process inference using vLLM's LLM class
+  - `transformers` — HuggingFace transformers fallback
+  - `auto` — try vLLM server → vLLM offline → transformers
+- **FP8 quantization** via `--quantization fp8` flag for 2× memory reduction in vLLM
+- **128K context length** with sliding window attention, configurable via `--max-model-len`
+- **Hybrid thinking/non-thinking mode** via `thinking_mode` parameter (Qwen3's native feature)
+- **FlashAttention-3** auto-detection for Hopper GPUs (H100+, `cap >= (9,0)`)
+- **vLLM server management**: `Qwen3VLBackend.start_vllm_server()` class method launches
+  the vLLM OpenAI-compatible API server programmatically as a subprocess
+- **Graceful fallback**: returns `None` for all operations when unavailable
+- **Apache 2.0 license** — fully open-weight model from Qwen Team
+
+### 🔧 Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VIDEO_MLLM_BACKEND` | `auto` | Now accepts `qwen3_vl` as backend value |
+| `VIDEO_MLLM_MODEL` | `OpenGVLab/...` | Overridable to any Qwen3-VL model name |
+| `QWEN3_VL_VLLM_URL` | `http://localhost:8000` | vLLM server URL for Qwen3-VL |
+
+- `video_mllm_backend` Config field now accepts `"qwen3_vl"` as a valid backend string
+- New env var `QWEN3_VL_VLLM_URL` overrides the default vLLM server endpoint
+- New env var `VIDEO_MLLM_MODEL` allows overriding the MLLM model name at runtime
+
+### 🔌 Integration
+
+- `VideoMLLM._resolve_backend()` — auto-detection tries Qwen3-VL (vLLM server) first
+  when backend=`auto`, before falling back to SmolVLM2 or VideoChat-Flash
+- `describe_scene()`, `summarize_video()`, `answer()` all dispatch to Qwen3VLBackend
+- `unload()` cleans up Qwen3-VL GPU resources
+- Backend packagized at `video_analysis.backends.qwen3_vl` for clean imports
+
+### 🧪 Tests
+
+- **34 new tests** — all pass in <2s (no GPU/network required)
+- Tests cover: module import, init defaults/custom, env var overrides,
+  availability check, empty/null input handling, vLLM server connectivity check
+  (graceful failure), message building (text + image), temp frame cleanup,
+  resolve_backend for all 4 modes, config integration, VideoMLLM qwen3_vl route,
+  version check, vLLM server management callable
+- All existing tests continue to pass
+
+### 📝 Dependencies
+
+- No new hard dependencies — Qwen3-VL backend is fully optional
+- `vllm>=0.8.0` recommended for the vLLM server/inference modes
+- `torchao>=0.17` recommended for FP8 weight quantization (transformers mode)
+
+### 📖 Usage
+
+```bash
+# Option 1: Start vLLM server separately (recommended)
+pip install vllm>=0.8.0
+python -m vllm.entrypoints.openai.api_server \
+  --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8 \
+  --port 8000 \
+  --max-model-len 32768 \
+  --gpu-memory-utilization 0.9 \
+  --enforce-eager \
+  --trust-remote-code \
+  --quantization fp8
+
+# Then use normally — VideoMLLM auto-detects the server
+python -m video_analysis
+# Or via env var:
+# QWEN3_VL_VLLM_URL=http://localhost:8000 VIDEO_MLLM_BACKEND=qwen3_vl python -m video_analysis
+
+# Option 2: vLLM offline (uses GPU in-process)
+VIDEO_MLLM_BACKEND=qwen3_vl python -m video_analysis
+```
+
+And update all version tests to 0.35.0.
 
 ### 📦 PP-OCRv6 Upgrade (PaddleOCR 3.7.0)
 

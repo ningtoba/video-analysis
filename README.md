@@ -23,7 +23,7 @@
 - **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
 - **🎯 MMR Diversity Re-Ranking** — Maximal Marginal Relevance (Carbonell & Goldstein, SIGIR'98) reduces context redundancy by 30-50% over pure relevance-sorted retrieval; configurable via `MMR_DIVERSITY_ENABLED`, `MMR_LAMBDA`, and `MMR_TOP_K`
 - **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6 — +4.6% detection, +5.1% recognition over v5), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
-- **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) for video-native scene description, summarization, and Q&A
+|- **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) or **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)** for video-native scene description, summarization, and Q&A
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
 - **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
@@ -137,6 +137,7 @@ User Question
 | `ui/workflow` | `ui/workflow.py` | Gradio 6 Workflow visual pipeline builder (gr.Workflow canvas) |
 | `streaming` | `video_analysis/streaming.py` | Real-time streaming/chunked video analysis (StreamingVLM-inspired) |
 | `federation` | `video_analysis/federation.py` | Federated MCP-based cross-instance video search |
+| `backends` | `video_analysis/backends/` | MLLM backend implementations (Qwen3-VL-30B-A3B with vLLM + FP8) |
 
 ## 💻 Tech Stack
 
@@ -189,9 +190,9 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `MULTIMODAL_EMBEDDING` | `false` | Enable Qwen3-VL-Embedding multimodal search (Apache 2.0) |
 | `ACTION_RECOGNITION_ENABLED` | `false` | Enable X-CLIP zero-shot action recognition (requires transformers) |
 | `ACTION_MODEL_NAME` | `microsoft/xclip-base-patch16-zero-shot` | X-CLIP model for action recognition |
-| `VIDEO_MLLM_ENABLED` | `false` | Enable VideoChat-Flash 2B video MLLM (~5.4 GB VRAM) |
-| `VIDEO_MLLM_MODEL` | `OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448` | Video MLLM model name |
-| `VIDEO_MLLM_BACKEND` | `auto` | Video MLLM backend (auto/videochat_flash/smolvlm2) |
+| `VIDEO_MLLM_ENABLED` | `false` | Enable VideoChat-Flash 2B / Qwen3-VL-30B-A3B video MLLM (~5.4 GB VRAM) |
+| `VIDEO_MLLM_MODEL` | `OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448` | Video MLLM model name (overridable, e.g. Qwen/Qwen3-VL-30B-A3B-Instruct-FP8) |
+| `VIDEO_MLLM_BACKEND` | `auto` | Video MLLM backend (auto/videochat_flash/smolvlm2/qwen3_vl) |
 | `VIDEO_MLLM_MODEL_SIZE` | `2.2B` | SmolVLM2 model size (2.2B/500M/256M) |
 | `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions (replaces OpenCLIP) |
 | `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
@@ -333,7 +334,7 @@ python tests/test_basic.py
 ||- [x] **PP-OCRv6 upgrade (config + model tier for tiny/small/medium)**
 ||- [x] **Scene graph face-entity enrichment (cross-video person-based edges)**
 ||- [x] **MMR diversity re-ranking (30-50% context redundancy reduction)**
-||- [ ] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, 256K context)
+|- [x] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, 256K context)
 |
-
-MIT
+|
+|MIT

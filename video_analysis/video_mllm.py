@@ -1,7 +1,7 @@
 """
 Video MLLM (Multimodal Large Language Model) module.
 
-Supports two backends:
+Supports three backends:
 - **VideoChat-Flash** (OpenGVLab, ICLR 2026) — a hierarchical compression
   video MLLM that supports long-context video understanding with only 16
   tokens per frame.  The 2B variant (``OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448``)
@@ -9,6 +9,10 @@ Supports two backends:
 - **SmolVLM2** (HuggingFaceTB) — a family of compact vision-language models
   (2.2B, 500M, 256M) using standard ``AutoModelForImageTextToText`` from
   transformers (no trust_remote_code).  Uses ``decord`` for video decoding.
+- **Qwen3-VL-30B-A3B** (Qwen Team, Apache 2.0) — Mixture-of-Experts VLM with
+  30B total / 3B active params, FP8 quantization, 128K context, hybrid
+  thinking/non-thinking mode.  Deployed via vLLM server (recommended),
+  vLLM offline inference, or transformers fallback.
 
 Provides:
 - ``describe_scene(frames)`` — richer scene descriptions than OpenCLIP labels
@@ -25,6 +29,7 @@ All methods gracefully return None when the model is unavailable
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Literal
 
@@ -37,7 +42,7 @@ SMOLVLM2_MODEL_PATHS = {
     "256M": "HuggingFaceTB/SmolVLM2-256M-Video-Instruct",
 }
 
-BackendType = Literal["auto", "videochat_flash", "smolvlm2"]
+BackendType = Literal["auto", "videochat_flash", "smolvlm2", "qwen3_vl"]
 ModelSizeType = Literal["2.2B", "500M", "256M"]
 
 
@@ -104,6 +109,8 @@ class VideoMLLM:
 
         if backend == "smolvlm2":
             return self._load_smolvlm2()
+        elif backend == "qwen3_vl":
+            return self._load_qwen3_vl()
         else:
             return self._load_videochat_flash()
 
@@ -113,8 +120,20 @@ class VideoMLLM:
             return "videochat_flash"
         elif self.backend == "smolvlm2":
             return "smolvlm2"
+        elif self.backend == "qwen3_vl":
+            return "qwen3_vl"
         elif self.backend == "auto":
-            # Try SmolVLM2 first (standard API, no trust_remote_code)
+            # Try Qwen3-VL first (check if vLLM server is available)
+            try:
+                from video_analysis.backends.qwen3_vl import Qwen3VLBackend
+
+                qb = Qwen3VLBackend(backend="auto")
+                if qb._check_vllm_server():
+                    logger.info("Auto backend: using Qwen3-VL (vLLM server)")
+                    return "qwen3_vl"
+            except Exception:
+                pass
+            # Try SmolVLM2 next (standard API, no trust_remote_code)
             try:
                 import torch  # noqa: F401
                 import transformers  # noqa: F401
@@ -212,6 +231,47 @@ class VideoMLLM:
             self._available = False
             return False
 
+    def _load_qwen3_vl(self) -> bool:
+        """Load Qwen3-VL-30B-A3B backend.
+
+        Delegates to Qwen3VLBackend from video_analysis.backends.qwen3_vl,
+        which handles vLLM server, vLLM offline, and transformers backends.
+        """
+        try:
+            from video_analysis.backends.qwen3_vl import Qwen3VLBackend
+
+            # Determine the Qwen3-VL backend type based on config
+            qwen_backend = "auto"
+            qwen_vllm_url = os.environ.get("QWEN3_VL_VLLM_URL")
+
+            logger.info(f"Loading Qwen3-VL backend (model={self.model_name})")
+            self._qwen3_vl = Qwen3VLBackend(
+                model_name=self.model_name,
+                backend=qwen_backend,
+                vllm_server_url=qwen_vllm_url,
+                use_fp8=True,
+                max_frames=32,
+            )
+            loaded = self._qwen3_vl.load()
+            if loaded:
+                self._resolved_backend = "qwen3_vl"
+                logger.info("Qwen3-VL backend loaded successfully")
+            else:
+                logger.warning("Qwen3-VL backend failed to load")
+                self._available = False
+            return loaded
+        except ImportError as e:
+            logger.warning(
+                f"Qwen3-VL backend not available: {e}. "
+                "Install with: pip install vllm  # for vLLM mode"
+            )
+            self._available = False
+            return False
+        except Exception as e:
+            logger.warning(f"Failed to load Qwen3-VL backend: {e}")
+            self._available = False
+            return False
+
     def unload(self):
         """Unload the model from GPU memory.
 
@@ -231,6 +291,11 @@ class VideoMLLM:
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
             logger.debug("Video MLLM model unloaded from GPU")
+
+        if hasattr(self, "_qwen3_vl") and self._qwen3_vl is not None:
+            self._qwen3_vl.unload()
+            self._qwen3_vl = None
+            self._resolved_backend = None
 
     # ------------------------------------------------------------------
     # Video-native understanding methods
@@ -334,6 +399,8 @@ class VideoMLLM:
 
             if self._resolved_backend == "smolvlm2":
                 return self._smolvlm2_generate(prompt, frames=frames)
+            elif self._resolved_backend == "qwen3_vl":
+                return self._qwen3_vl.describe_scene(frames, prompt=prompt)
             else:
                 # VideoChat-Flash path
                 inputs = self._processor(
@@ -409,6 +476,8 @@ class VideoMLLM:
                     temp_dir = Path(frame_paths[0]).parent if frame_paths else None
                     if temp_dir and temp_dir.exists():
                         shutil.rmtree(temp_dir, ignore_errors=True)
+            elif self._resolved_backend == "qwen3_vl":
+                return self._qwen3_vl.summarize_video(str(video), num_frames=num_frames)
             else:
                 # VideoChat-Flash path
                 inputs = self._processor(
@@ -471,6 +540,10 @@ class VideoMLLM:
                             shutil.rmtree(temp_dir, ignore_errors=True)
                 else:
                     return self._smolvlm2_generate(query, frames=frames)
+            elif self._resolved_backend == "qwen3_vl":
+                return self._qwen3_vl.answer(
+                    query, frames=frames, video_path=video_path
+                )
             else:
                 # VideoChat-Flash path
                 if video_path:
