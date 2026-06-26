@@ -1399,10 +1399,10 @@ def test_rag_multi_hop_no_subqueries():
 
 
 def test_version_0_15_0():
-    """Test version is now 0.15.0."""
+    """Test version is now 0.20.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.18.0"
+    assert __version__ == "0.20.0"
 
 
 # ====================================================================
@@ -1823,11 +1823,11 @@ def test_scene_graph_track_id_entity_matching():
     shutil.rmtree("/tmp/va_test_sg_tracks", ignore_errors=True)
 
 
-def test_version_0_19_0():
-    """Test that version is now 0.19.0."""
+def test_version_0_20_0():
+    """Test that version is now 0.20.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.19.0"
+    assert __version__ == "0.20.0"
 
 
 if __name__ == "__main__":

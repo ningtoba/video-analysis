@@ -1,5 +1,91 @@
 # Changelog
 
+## 0.20.0 (2026-06-26) — Research Phase: Autonomous Video Agents & Pipeline Evolution
+
+### 🔬 Autonomous Pipeline Architecture Research
+
+- **Modular actor pipeline**: Stages become independent, cacheable, composable actors
+  (PipelineStage ABC) with an explicit DAG — enabling stage toggle/reorder/parallelization
+  without editing pipeline.py.
+- **Content-addressable pipeline cache**: SHA-256 based per-stage caching using video hash +
+  stage parameter hash → 70-90% faster re-processing. New `PIPELINE_CACHE_ENABLED` and
+  `PIPELINE_CACHE_DIR` config fields.
+- **Stage-as-a-Service**: Unified three-interface design — each stage exposed as FastAPI
+  endpoint (existing pattern), Gradio 6.19+ Workflow subgraph (composable UI), and MCP tool
+  (agentic/CLI). Full MCP server blueprint with `process_video`, `search_videos`,
+  `ask_question`, `extract_scenes` tools.
+
+### 🤖 PipelineOrchestrator Design
+
+- **Heuristic video classifier**: File extension + audio metadata → video type detection
+  (lecture/sports/interview/movie/screen_recording/vlog) — zero VRAM, instant.
+- **ML video classifier** (future, P2): Qwen3.5-0.8B sampling 3-5 keyframes for ~200ms
+  classification (~1.6 GB VRAM).
+- **Stage selection matrix**: Per-video-type optimized stage profiles — sports skips OCR
+  but runs action recognition; interviews skip action recognition but run face recognition.
+
+### 🧠 InsightFace Integration Blueprint
+
+- **Face recognition layer**: RetinaFace + ArcFace 512-dim embeddings for person identity
+  across videos. Pipeline Step 7.5 (post-YOLO/ByteTrack).
+- **Face gallery persistence**: Cross-video face matching via `data/face_gallery.pkl` —
+  enables "find all scenes with [person_name]" queries across the library.
+- **VRAM budget**: ~1.1 GB peak (800 MB RetinaFace + 300 MB ArcFace) — fits 12 GB budget
+  with sequential loading.
+
+### 📦 Pipeline Cache Architecture
+
+- **Two-level cache structure**: `data/cache/manifests/<video_hash>.json` (stage→key
+  mapping) and `data/cache/blobs/<sha256>.pkl` (serialized stage outputs).
+- **Cache invalidation**: Explicit (reindex --force), automatic (config change detected
+  via hash mismatch), and TTL-based (optional max-age per stage).
+- **Estimated impact**: Full re-run → 5s (hash check), partial re-run (config change) →
+  2 min (only affected stages), add new stage → 30s.
+
+### 📝 PaddleOCR v5 Upgrade Plan
+
+- **PP-OCRv5 upgrade**: +13% end-to-end accuracy, 109 languages (up from ~50), PP-StructureV3
+  hierarchical document parsing. Minimal code change — one-line `version='ppocrv5'` flag.
+- PP-ChatOCRv4 integration for LLM-powered key information extraction from video text.
+
+### 🎬 MCP Tool Server Design
+
+- Full Python `mcp` SDK server exposing all pipeline stages as MCP tools.
+- Hermes integration via `~/.hermes/config.yaml` mcp_servers entry.
+- Tools: `process_video`, `search_videos`, `ask_question`, `extract_scenes`,
+  `detect_objects`, `list_library`.
+- 600-second timeout for long-running pipeline tasks.
+
+### 📊 Updated Implementation Priority
+
+- **P0**: Pipeline cache (2-3d) + dependency modernization (1d)
+- **P1**: MCP tool server (1-2d) + PaddleOCR v5 (1d) + Gradio Workflow subgraphs (2-3d)
+- **P2**: InsightFace (3-4d) + Qwen3-VL-30B-A3B FP8 (3-4d) + PipelineOrchestrator heuristic (2d)
+- **P3**: Sparse-frame FFmpeg optical flow (2d) + PipelineOrchestrator Qwen3.5 (2-3d)
+
+### 🗺️ Roadmap Progress
+
+- [x] [RESEARCH v0.18] Qwen3-VL-30B-A3B (Apache 2.0, 3B active, MoE, FP8) — Deployment
+      blueprint for RTX 4070 (FP8 via torchao, sliding window attention, FlashAttention-3)
+- [x] [RESEARCH v0.18] PaddleOCR v5 upgrade — confirmed viable, minimal code change
+- [x] [RESEARCH v0.18] Dependency modernization — torch>=2.5.0, transformers>=5.0.0
+- [x] [RESEARCH v0.20] Modular actor pipeline — PipelineStage ABC with DAG orchestration
+- [x] [RESEARCH v0.20] Content-addressable pipeline cache — SHA-256 based, 70-90% faster re-runs
+- [x] [RESEARCH v0.20] MCP tool server — full Python SDK server blueprint
+- [x] [RESEARCH v0.20] InsightFace integration — RetinaFace + ArcFace person identity blueprint
+- [x] [RESEARCH v0.20] PipelineOrchestrator — heuristic + ML video type classifier
+- [x] [RESEARCH v0.20] FFmpeg motion vector extractor — zero-GPU optical flow
+- [x] [RESEARCH v0.20] Gradio 6 Workflow subgraph API patterns
+- [ ] Qwen3-VL-30B-A3B FP8 backend — torchao deployment + sliding window attention
+- [ ] Dependency modernization — update pyproject.toml bounds
+- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR
+- [ ] Pipeline caching + incremental re-indexing — content-addressable per-stage cache
+- [ ] PipelineOrchestrator heuristic — file-type based stage selection
+- [ ] MCP tool server — expose stages as MCP tools for Hermes/agentic workflows
+- [ ] InsightFace face recognition — cross-video person identity matching
+- [ ] Gradio 6 Workflow integration — drag-and-drop pipeline composition UI
+- [ ] Sparse-frame optical flow — FFmpeg motion vectors for adaptive sampling
+
 ## 0.19.0 (2026-06-26) — Entity Tracking & Cross-Video Scene Graphs
 
 ### 🎯 Major Feature: ByteTrack Entity Tracking (Persistent Object IDs)

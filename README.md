@@ -265,15 +265,23 @@ python tests/test_basic.py
 ||- [x] [RESEARCH v0.18] ChromaDB confirmed (stay) — LanceDB only if >5M vectors
 - [x] **Entity-level tracking across scenes** (ByteTrack via Ultralytics built-in — MIT, ~500 MB shared with YOLO)
 - [x] **Cross-video scene graph edges** (track_id entity matching enables cross-video scene retrieval)
-- [ ] Qwen3-VL-30B-A3B FP8 backend integration (replace VideoChat-Flash as primary MLLM)
+|- [x] [RESEARCH v0.20] Modular actor pipeline — PipelineStage ABC with DAG orchestration (Stage-as-a-Service: FastAPI + Gradio Workflow + MCP)
+|- [x] [RESEARCH v0.20] Content-addressable pipeline cache — SHA-256 per-stage caching, 70-90% faster re-runs
+|- [x] [RESEARCH v0.20] MCP tool server — Python SDK server design (process_video, search_videos, ask_question, extract_scenes)
+|- [x] [RESEARCH v0.20] InsightFace integration — RetinaFace + ArcFace person identity blueprint
+|- [x] [RESEARCH v0.20] PipelineOrchestrator — heuristic + Qwen3.5-0.8B ML video type classifier
+|- [x] [RESEARCH v0.20] FFmpeg motion vector extractor — zero-GPU sparse optical flow
+- [ ] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, sliding window for 256K context)
 - [ ] Dependency modernization — update pyproject.toml bounds for torch>=2.5.0, transformers>=4.50.0
-- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR
-- [ ] Pipeline caching + incremental re-indexing (70-90% faster re-runs)
-- [ ] Qwen3.5-0.8B PipelineOrchestrator — dynamic video type classification
-- [ ] Gradio 6 Workflow integration (expose pipeline stages as composable API subgraphs)
+- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy
+- [ ] Pipeline caching + incremental re-indexing (content-addressable per-stage cache)
+- [ ] PipelineOrchestrator heuristic — file-type based stage selection
 - [ ] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows)
-- [ ] Sparse-frame optical flow for motion-based adaptive frame sampling
-- [ ] InsightFace face recognition (person identity across scenes)
+- [ ] InsightFace face recognition (RetinaFace + ArcFace, cross-video person identity)
+- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
+- [ ] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU)
+- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
+- [ ] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
 
 ## 📝 License
 
