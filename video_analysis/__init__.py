@@ -7,6 +7,7 @@ Modules:
 - models: Data models and schemas
 - chat: LLM-powered Q&A over video context
 - config: Configuration management
+- self_check: LLM-based self-check verification + re-retrieval (v0.27.0)
 """
 
 from video_analysis import (
@@ -24,4 +25,4 @@ from video_analysis import (
 
 # face module is optional (requires insightface) — import on demand only
 
-__version__ = "0.26.0"
+__version__ = "0.27.0"

@@ -195,8 +195,15 @@ class Config:
 
     # Agentic RAG — Iterative Retrieval with Confidence Checking
     agentic_retrieval_enabled: bool = True  # enable iterative agentic retrieval loop
-    agentic_max_rounds: int = 3  # max iterative rounds (default: 3)
+    agentic_max_rounds: int = (
+        4  # max iterative rounds (default: 4 — standard, multi-hop, scene-graph, self-check)
+    )
     agentic_min_confidence: float = 0.5  # min avg top-3 score to stop early
+
+    # Self-Check + Re-Retrieval (LLM-verified answer-evidence alignment, v0.27.0)
+    self_check_enabled: bool = True  # enable LLM-based self-check verification
+    self_check_max_rounds: int = 2  # max verification+reretrieval rounds
+    self_check_min_confidence: float = 0.7  # min confidence to stop early
 
     # Face Recognition (InsightFace, v0.26.0)
     face_recognition_enabled: bool = (

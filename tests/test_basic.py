@@ -1466,7 +1466,7 @@ def test_version_0_15_0():
     """Test version is now 0.25.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.26")
+    assert __version__.startswith("0.27")
 
 
 # ====================================================================
@@ -1478,7 +1478,7 @@ def test_config_agentic_rag_fields():
     """Test agentic RAG config fields exist with correct defaults."""
     cfg = Config(data_dir="/tmp/va_test_ar_cfg")
     assert cfg.agentic_retrieval_enabled is True
-    assert cfg.agentic_max_rounds == 3
+    assert cfg.agentic_max_rounds == 4  # updated to include self-check round
     assert cfg.agentic_min_confidence == 0.5
     import shutil
 
@@ -1888,10 +1888,10 @@ def test_scene_graph_track_id_entity_matching():
 
 
 def test_version_0_20_0():
-    """Test version is now 0.25.0."""
+    """Test version is now 0.27.0."""
     from video_analysis import __version__
 
-    assert __version__.startswith("0.26")
+    assert __version__.startswith("0.27")
 
 
 if __name__ == "__main__":

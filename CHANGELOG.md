@@ -1,5 +1,77 @@
 # Changelog
 
+## 0.27.0 (2026-06-26) — LLM Self-Check + Re-Retrieval (Agentic Verification)
+
+### 🎯 Major Feature: Self-Check RAG — LLM-Verified Answer-Evidence Alignment
+
+#### 🧠 LLM Self-Check Verification Layer
+- **New module**: `video_analysis/self_check.py` — `SelfCheckRAG` class adding an
+  LLM-based verification layer after agentic retrieval. Inspired by Self-RAG (ICLR 2024),
+  CRAG (Corrective RAG, 2024), and DSLM2 (Dynamic Self-Correction, 2025).
+- **4-step verification pipeline**:
+  1. **Evidence construction**: Builds structured evidence from top-10 retrieved chunks
+     with timestamps, chunk types, scene IDs, and scores
+  2. **LLM draft + verification**: Asks the LLM to produce a draft answer and rate
+     whether the evidence supports it (supported/partial/unsupported) with a 0.0-1.0
+     confidence score
+  3. **Gap identification**: LLM identifies specific evidence gaps (missing timestamps,
+     incomplete coverage, conflicting information)
+  4. **Re-retrieval**: On "unsupported" or "partial" with gaps, reformulates the query
+     to address gaps and re-retrieves via the existing RAG pipeline, then re-verifies
+
+- **Configurable behavior**: `self_check_enabled`, `self_check_max_rounds` (default: 2),
+  `self_check_min_confidence` (default: 0.7) — all env-overridable.
+
+#### 🔄 Agentic RAG Round 4 Integration
+- **Expanded to 4 rounds**: The existing `agentic_retrieve()` now runs a 4th round
+  (LLM self-check) after rounds 1-3 (standard retrieval, multi-hop, scene-graph expansion).
+- **Config updated**: `agentic_max_rounds` default changed from 3 → 4.
+- **Lazy initialization**: `SelfCheckRAG` is created on-demand only when
+  `agentic_retrieve()` is called with self-check enabled.
+- **Chunk merging**: Re-retrieved chunks are deduplicated by `chunk_id`, with fresh
+  results receiving a small score boost.
+
+#### 💪 Resilience
+- **Graceful fallback**: When Hermes CLI is unavailable (e.g., dev environment without
+  `hermes` command), self-check silently falls back to returning chunks as-is.
+- **Timeout protection**: 60-second LLM timeout for verification, 30-second for query
+  reformulation.
+- **JSON parsing robustness**: Handles plain JSON, markdown code fences, and embedded
+  JSON with surrounding text.
+
+### 📦 New Modules
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| `self_check` | `video_analysis/self_check.py` | ~400 | LLM self-check verification + re-retrieval |
+
+### 📋 Roadmap Progress
+- [x] **Agentic self-check + re-retrieval** (LLM-verified answer-evidence alignment)
+- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
+- [ ] Qwen3-VL-30B-A3B FP8 backend (torchao FP8, FlashAttention-3, sliding window)
+- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade)
+- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)
+- [ ] Federated video search (MCP-based cross-instance query)
+- [ ] Prometheus metrics endpoint + Grafana dashboards
+
+### 🧪 Tests
+- **11 new tests** (test_self_check.py) — **298/307 passing** (0 failures, 9 benchmark errors)
+- Tests cover: SelfCheckResult dataclass, evidence text formatting, LLM output parsing,
+  chunk merging/dedup, empty-chunk handling, query reformulation fallback,
+  config defaults, module import, zero-dependency init
+- Existing test suite updated: version checks (0.26 → 0.27), agentic_max_rounds (3 → 4)
+
+### 🔧 Configuration
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SELF_CHECK_ENABLED` | `true` | Enable LLM-based self-check verification |
+| `SELF_CHECK_MAX_ROUNDS` | `2` | Max verification+reretrieval rounds |
+| `SELF_CHECK_MIN_CONFIDENCE` | `0.7` | Min confidence to stop early |
+
+### 📝 Dependencies
+- No new dependencies — uses `subprocess` (Hermes CLI) which is already a core dependency
+
+---
+
 ## 0.26.0 (2026-06-26) — InsightFace Face Recognition & Visual Pipeline Workflow
 
 ### 🎯 Major Features

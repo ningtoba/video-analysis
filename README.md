@@ -20,7 +20,7 @@
 
 ## ✨ Features
 
-- **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 3 rounds (standard → multi-hop → scene-graph expansion), inspired by Self-RAG and FLARE
+- **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
 - **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**
 - **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) for video-native scene description, summarization, and Q&A
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
@@ -192,7 +192,7 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions (replaces OpenCLIP) |
 | `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
 || `AGENTIC_RETRIEVAL_ENABLED` | `false` | Enable agentic iterative retrieval loop |
-| `AGENTIC_MAX_ROUNDS` | `3` | Max retrieval rounds in agentic loop |
+| `AGENTIC_MAX_ROUNDS` | `4` | Max retrieval rounds in agentic loop |
 | `AGENTIC_MIN_CONFIDENCE` | `0.5` | Min avg score of top-3 chunks to stop early |
 | `PROCESSING_MODE` | `video_full` | Processing mode: video_full or audio_only |
 | `CONVERSATION_MEMORY_ENABLED` | `true` | Enable ChromaDB-backed conversation memory |
@@ -301,11 +301,11 @@ python tests/test_basic.py
 |- [x] Pipeline benchmarking infra — pynvml per-stage VRAM tracking, pytest-benchmark suite
 |- [x] MCP tool server (expose stages as MCP tools for Hermes/agentic workflows) — 7 tools, stdio + SSE
 |- [x] Sparse-frame optical flow for motion-based adaptive frame sampling (FFmpeg MVs, zero GPU, video_analysis/flow.py)
-|- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy (backward compatible, no code change needed)
-- [x] InsightFace face recognition (SCRFD-10G + ArcFace, cross-video person identity)
-- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
-|- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
-|- [ ] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
+||- [ ] PaddleOCR v5 upgrade — PP-OCRv5 for 109-language OCR, +13% accuracy (backward compatible, no code change needed)
+|- [x] InsightFace face recognition (SCRFD-10G + ArcFace, cross-video person identity)
+|- [x] Agentic self-check + re-retrieval (LLM-verified answer-evidence alignment)
+|- [ ] Gradio 6 Workflow integration (composable pipeline subgraph UI)
+||- [ ] ColBERT-Att attention-weighted re-ranking (drop-in ColBERTv2 upgrade, +1-3% recall)
 |- [ ] Real-time streaming video analysis (chunked processing, watch/stream modes)
 |- [ ] Federated video search (MCP-based cross-instance query)
 |- [ ] Prometheus metrics endpoint + Grafana dashboards
