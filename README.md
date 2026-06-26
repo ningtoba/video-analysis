@@ -254,9 +254,13 @@ python tests/test_basic.py
 - [x] **SmolVLM2 dual-backend** (Apache 2.0 — 2.2B, 500M, 256M video MLLM via transformers-native API)
 - [x] **Agentic RAG** (iterative retrieval loop with confidence-based early stopping, 3-round strategy)
 - [x] **CI/CD + pre-commit hooks** (GitHub Actions matrix build, ruff, mypy, benchmark infrastructure)
-- [ ] Entity-level indexing across scenes (track people/objects with persistent IDs)
-- [ ] Cross-video scene graph edges (multi-video semantic retrieval)
-- [ ] Gradio 6 Workflow integration (expose pipeline stages as composable APIs)
+- [x] [RESEARCH] Entity tracking — ByteTrack/BoxMOT confirmed for persistent person/object IDs across scenes (~500 MB, integrates with YOLO)
+- [x] [RESEARCH] Cross-video scene graph edges — scene_graph.py adjacency structure already supports cross-video keys; add entity-based + BGE-VL cross-video edges
+- [x] [RESEARCH] Gradio 6 Workflow subgraphs — Gradio 6.19+ exposes composable subgraph API endpoints; FastAPI hybrid approach complements it
+- [x] [RESEARCH] Sparse-frame optical flow — FFmpeg motion vectors (zero-cost) recommended over deep flow models for 12GB VRAM pipeline
+- [ ] Entity-level tracking across scenes (ByteTrack/BoxMOT + persistent person/object IDs)
+- [ ] Cross-video scene graph edges (multi-video semantic retrieval via entity + BGE-VL)
+- [ ] Gradio 6 Workflow integration (expose pipeline stages as composable API subgraphs)
 - [ ] Sparse-frame optical flow for motion-based adaptive frame sampling
 
 ## 📝 License

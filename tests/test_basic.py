@@ -1402,7 +1402,7 @@ def test_version_0_15_0():
     """Test version is now 0.15.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.15.0"
+    assert __version__ == "0.16.0"
 
 
 # ====================================================================

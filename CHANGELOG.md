@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.16.0 (2026-06-26) — Research Phase
+
+### 🔬 Entity Tracking Research — ByteTrack/BoxMOT for Persistent IDs
+
+- **Deep research** into multi-object tracking (MOT) for assigning persistent IDs to
+  people and objects across video scenes. Current YOLO detections are per-frame with
+  no identity — a person in scene 1 has no connection to the same person in scene 3.
+- **ByteTrack via BoxMOT** selected as the primary approach (MIT license, minimal
+  VRAM ~500 MB shared with YOLO, integrates directly with YOLOv26 already in pipeline).
+  BoxMOT wraps ByteTrack, BoT-SORT, DeepOCSORT, and ImprAssocFlow in a unified API.
+- **InsightFace** (MIT, ~1.5 GB VRAM) identified as optional add-on for face-based
+  person ReID when tracking across long temporal gaps or across different videos.
+- **Integration strategy**: Pipeline Step 7 post-YOLO → ByteTrack assigns track_ids →
+  stored in FrameInfo.objects → indexed in ChromaDB → used by scene_graph.py for
+  entity-shared edges (replacing text-parsed name matching).
+- **Full research**: `docs/research/v0.16.0-research-evolution.md`
+
+### 🕸️ Cross-Video Scene Graph Research
+
+- Scene graph adjacency structure already supports `(video_id, scene_id)` tuple keys
+  across videos. Current `rebuild()` only connects within each video.
+- **Phase 1**: Extend semantic Jaccard + entity edges across ALL videos (trivial code
+  change, removes video_id grouping in cross-comparison loops).
+- **Phase 2**: Add BGE-VL cross-video scene embedding comparison via FAISS approximate
+  kNN — leverages existing BGE-VL model already loaded during indexing.
+- Cross-video edges enable queries like "find all interviews in any video" by linking
+  semantically similar scenes across the entire library.
+
+### ⚡ Gradio 6 Workflow Integration Research
+
+- Gradio 6.19.0 (June 2026) introduced **Workflow subgraphs** — each subgraph is
+  exposed as a named endpoint via `/info`, `/call`, `/api` with a "View API" panel.
+- **4-phase plan**: (A) Refactor pipeline steps into independently callable stage
+  methods, (B) Expose as FastAPI endpoints, (C) Add Gradio Workflow subgraphs for UI,
+  (D) Add MCP tool definitions for external agent access.
+- Pipeline.py already has most steps as individual methods — Phase A is minimal effort.
+- Existing `/health` and `/api/library` FastAPI endpoints provide the foundation.
+
+### 🎞️ Sparse-Frame Optical Flow Research
+
+- Current adaptive frame sampling uses a motion-unaware cosine density function (dense
+  near scene boundaries regardless of actual motion).
+- **FFmpeg motion vector extraction** identified as the optimal approach — every
+  h264/h265 video already encodes per-macroblock motion vectors as part of compression.
+  Extracting them costs zero GPU and <1ms per frame via `ffprobe` / `ffmpeg codecview`.
+- **Comparison**: FFmpeg MVs (0 GPU, <1ms) >> OpenCV Farneback/DIS (CPU, 15-30ms) >>
+  RAFT/GMFlow/FlowFormer (GPU, 80-200ms, 1-2 GB VRAM).
+- Recommendation: Use FFmpeg MVs as primary (always available, zero cost), fall back to
+  OpenCV Farneback for videos without motion vectors (e.g., screen recordings, GIFs).
+- Motion score per frame guides sampling: high-motion (>0.5) → 1 fps, medium (0.2-0.5)
+  → 1 per 2s, low (<0.2) → 1 per 5s or scene mid-point.
+
+### 🧠 Cutting-Edge Developments (Feb-Jun 2026)
+
+- **SmolVLM2** (Apache 2.0, Mar 2026) — already integrated in v0.15.0, project is current
+- **VideoChat-Flash 2B** (MIT, ICLR 2026) — already integrated in v0.13.0, project is current
+- **InternVideo2.5** (Feb 2026, 8B, ~16GB VRAM) — too heavy for 12GB RTX 4070, skip
+- **VGent** (NeurIPS 2025 Spotlight) — graph-based video RAG, already implemented in scene_graph.py
+- **ViG-RAG** (AAAI 2026) — hybrid temporal+semantic graph, already implemented
+- Trend: small video MLLMs under 3B that fit consumer GPUs (low-hanging fruit all integrated)
+- Gradio 6.19+ Workflow subgraphs + MCP integration is the most impactful new capability
+
+### 📚 Documentation
+
+- Full v0.16.0 research plan saved at `docs/research/v0.16.0-research-evolution.md`
+- README roadmap updated: 4 research items marked done, 4 implementation items pending
+- Next implementation priority: Entity tracking → Cross-video graphs → Gradio Workflows → Optical flow
+
+---
+
 ## 0.15.0 (2026-06-26) — SmolVLM2, Agentic RAG & Production Hardening
 
 ### 🧠 Major Feature: SmolVLM2 Backend — Lightweight Video MLLM (Apache 2.0)
