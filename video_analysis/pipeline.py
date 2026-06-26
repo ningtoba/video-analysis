@@ -7,13 +7,15 @@ and produces a structured VideoIndex with all metadata.
 
 import json
 import logging
+import math
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cv2
 import numpy as np
+from PIL import Image
 
 from video_analysis.config import Config
 from video_analysis.models import (
@@ -25,6 +27,36 @@ from video_analysis.models import (
 
 logger = logging.getLogger(__name__)
 
+# Default candidate labels for OpenCLIP zero-shot scene classification.
+# These cover a broad range of common video scenes.
+DEFAULT_CLIP_LABELS = [
+    "indoor scene",
+    "outdoor scene",
+    "cityscape",
+    "nature",
+    "people talking",
+    "person speaking",
+    "crowd",
+    "empty room",
+    "sports",
+    "action scene",
+    "calm scene",
+    "technology/computer screen",
+    "food",
+    "vehicle",
+    "animal",
+    "text/document",
+    "presentation",
+    "interview",
+    "lecture",
+    "music performance",
+    "cooking",
+    "building",
+    "landscape",
+    "night scene",
+    "underwater",
+]
+
 
 class VideoPipeline:
     """Main video processing pipeline."""
@@ -33,6 +65,9 @@ class VideoPipeline:
         self.config = config or Config()
         self._whisper_model = None
         self._yolo_model = None
+        self._clip_model = None
+        self._clip_preprocess = None
+        self._clip_tokenizer = None
 
     def process(self, video_path: str) -> VideoIndex:
         """
@@ -40,7 +75,7 @@ class VideoPipeline:
         1. Extract metadata + audio
         2. Detect scenes and extract key frames
         3. Transcribe audio
-        4. Describe frames (objects via YOLO, OCR)
+        4. Describe frames (objects via YOLO, OCR, OpenCLIP zero-shot)
         5. Assemble VideoIndex
         """
         video_path = Path(video_path)
@@ -80,10 +115,20 @@ class VideoPipeline:
         self._detect_objects_on_frames(scenes)
         logger.info("Object detection complete")
 
-        # Step 7: Assign transcript to scenes
+        # Step 7: Run OpenCLIP zero-shot scene classification on frames
+        self._describe_scenes_clip(scenes)
+        logger.info("OpenCLIP scene classification complete")
+
+        # Step 8: Assign transcript to scenes
         self._assign_transcript_to_scenes(scenes, transcript_segments)
 
-        # Step 8: Build index
+        # Step 9: Generate sprite sheet for timeline preview
+        sprite_path, sprite_meta = self._generate_sprite_sheet(
+            video_path, video_id, num_thumbnails=100
+        )
+        logger.info(f"Sprite sheet generated: {sprite_path}")
+
+        # Step 10: Build index
         index = VideoIndex(
             video_id=video_id,
             filename=video_path.name,
@@ -92,28 +137,37 @@ class VideoPipeline:
             scenes=scenes,
             transcript=transcript_segments,
             full_transcript=full_transcript,
+            sprite_sheet=str(sprite_path) if sprite_path else None,
+            sprite_metadata=sprite_meta or {},
         )
         return index
 
     def _get_duration(self, video_path: Path) -> float:
-        """Get video duration using ffprobe."""
-        result = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "json",
-                str(video_path),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        data = json.loads(result.stdout)
-        return float(data["format"]["duration"])
+        """Get video duration using ffprobe. Returns 0.0 on failure."""
+        if not video_path.exists():
+            logger.warning(f"Video file not found: {video_path}")
+            return 0.0
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "json",
+                    str(video_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            data = json.loads(result.stdout)
+            return float(data["format"]["duration"])
+        except (json.JSONDecodeError, KeyError, subprocess.TimeoutExpired) as e:
+            logger.warning(f"Failed to get duration for {video_path}: {e}")
+            return 0.0
 
     def _extract_audio(self, video_path: Path, video_id: str) -> Path:
         """Extract audio as 16kHz mono WAV."""
@@ -347,6 +401,150 @@ class VideoPipeline:
             except Exception as e:
                 logger.warning(f"Detection error on {frame.filepath}: {e}")
 
+    def _describe_scenes_clip(
+        self, scenes: List[SceneInfo], labels: Optional[List[str]] = None
+    ):
+        """
+        Run OpenCLIP zero-shot classification on key frames and set frame descriptions.
+
+        For each key frame, the model scores the frame against a set of candidate
+        labels and assigns a human-readable description string with the top-3 labels
+        and their confidence percentages.
+
+        Graceful fallback: if open_clip is not installed, logs a warning and skips.
+
+        Args:
+            scenes: List of SceneInfo with key_frames to classify.
+            labels: Optional list of candidate labels. Uses DEFAULT_CLIP_LABELS if None.
+        """
+        # Collect all frames
+        all_frames = []
+        for scene in scenes:
+            all_frames.extend(scene.key_frames)
+
+        if not all_frames:
+            return
+
+        # Attempt to import open_clip — graceful fallback if not installed
+        try:
+            import open_clip
+            import torch
+        except ImportError:
+            logger.warning(
+                "open-clip-torch not installed. Skipping zero-shot scene classification. "
+                "Install with: pip install open-clip-torch>=2.24.0"
+            )
+            return
+
+        # Determine device
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        candidate_labels = labels or DEFAULT_CLIP_LABELS
+
+        # Lazy-load the OpenCLIP model
+        if self._clip_model is None:
+            try:
+                logger.info(
+                    f"Loading OpenCLIP ViT-B-32 (laion2b_s34b_b79k) on {device}..."
+                )
+                model, _, preprocess = open_clip.create_model_and_transforms(
+                    "ViT-B-32",
+                    pretrained="laion2b_s34b_b79k",
+                    device=device,
+                )
+                tokenizer = open_clip.get_tokenizer("ViT-B-32")
+                self._clip_model = model
+                self._clip_preprocess = preprocess
+                self._clip_tokenizer = tokenizer
+                logger.info("OpenCLIP model loaded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to load OpenCLIP model: {e}")
+                return
+
+        model = self._clip_model
+        preprocess = self._clip_preprocess
+        tokenizer = self._clip_tokenizer
+
+        # Tokenize labels once
+        import torch.nn.functional as F
+
+        text_tokens = tokenizer(candidate_labels).to(device)
+
+        with torch.no_grad():
+            # Encode all text labels once
+            text_features = model.encode_text(text_tokens)
+            text_features = F.normalize(text_features, dim=-1)
+
+            # Process frames in batches for GPU efficiency
+            batch_size = getattr(self.config, "clip_batch_size", 16)
+
+            for i in range(0, len(all_frames), batch_size):
+                batch = all_frames[i : i + batch_size]
+
+                # Load and preprocess images
+                try:
+                    from PIL import Image
+
+                    images = []
+                    valid_indices = []
+                    for idx, frame in enumerate(batch):
+                        try:
+                            img = Image.open(frame.filepath).convert("RGB")
+                            images.append(preprocess(img).unsqueeze(0))
+                            valid_indices.append(idx)
+                        except Exception as e:
+                            logger.warning(
+                                f"Could not load frame {frame.filepath}: {e}"
+                            )
+
+                    if not images:
+                        continue
+
+                    image_input = torch.cat(images).to(device)
+
+                    # Encode images
+                    image_features = model.encode_image(image_input)
+                    image_features = F.normalize(image_features, dim=-1)
+
+                    # Compute similarity scores (zero-shot classification)
+                    similarity = (100.0 * image_features @ text_features.T).softmax(
+                        dim=-1
+                    )
+
+                    # Get top-3 labels per frame
+                    top_values, top_indices = similarity.topk(3, dim=-1)
+
+                    for j, local_idx in enumerate(valid_indices):
+                        frame = batch[local_idx]
+                        labels_str = ", ".join(
+                            f"{candidate_labels[top_indices[j, k].item()]} "
+                            f"({top_values[j, k].item():.0f}%)"
+                            for k in range(3)
+                        )
+                        frame.description = f"Scene: {labels_str}"
+
+                except Exception as e:
+                    logger.warning(f"CLIP classification batch error: {e}")
+                    continue
+
+        # Unload CLIP model from GPU if not needed for further processing
+        # (keep it cached for potential reuse within the same pipeline run)
+        # Explicit GPU memory management: if VRAM is tight, release after use
+        import gc
+
+        if device == "cuda":
+            # Let caller manage via cleanup() — but we can free the model
+            # if the user requested tight memory mode
+            if getattr(self.config, "clip_unload_after_inference", False):
+                del self._clip_model
+                del self._clip_preprocess
+                del self._clip_tokenizer
+                self._clip_model = None
+                self._clip_preprocess = None
+                self._clip_tokenizer = None
+                torch.cuda.empty_cache()
+                gc.collect()
+                logger.info("OpenCLIP model unloaded from GPU to free VRAM")
+
     def _assign_transcript_to_scenes(
         self, scenes: List[SceneInfo], transcript: List[TranscriptSegment]
     ):
@@ -360,14 +558,173 @@ class VideoPipeline:
                         scene.transcript = segment.text
                     break
 
+    def _generate_sprite_sheet(
+        self,
+        video_path: Path,
+        video_id: str,
+        num_thumbnails: int = 100,
+    ) -> Tuple[Optional[Path], Optional[dict]]:
+        """
+        Generate a thumbnail sprite sheet for timeline hover preview.
+
+        Extracts evenly-spaced frames from the video, montages them into a
+        single sprite sheet image (default: 10 columns x 10 rows = 100
+        thumbnails), saves it to ``thumbnails_dir/{video_id}_sprite.jpg``,
+        and writes a metadata JSON with the timestamp for each thumbnail.
+
+        Sprite sheet format:
+            - Each thumbnail: 160x90 pixels
+            - Total width:  num_columns * 160
+            - Total height: num_rows * 90
+            - Arranged left-to-right, top-to-bottom
+
+        Returns
+        -------
+        (sprite_path, metadata)
+            sprite_path : Path or None if an error occurred.
+            metadata    : dict with structure
+                { "num_thumbnails": int,
+                  "num_columns": int,
+                  "num_rows": int,
+                  "thumbnail_width": int,
+                  "thumbnail_height": int,
+                  "duration": float,
+                  "thumbnails": [
+                      {"index": 0, "timestamp": 0.0, "x": 0, "y": 0},
+                      ...
+                  ]
+                } or None if an error occurred.
+        """
+        duration = self._get_duration(video_path)
+        if duration <= 0 or num_thumbnails < 1:
+            return None, None
+
+        cols = 10
+        rows = math.ceil(num_thumbnails / cols)
+        thumb_w = 160
+        thumb_h = 90
+        total = rows * cols  # actual number of thumbnails in the grid
+
+        sprite_path = self.config.thumbnails_dir / f"{video_id}_sprite.jpg"
+        sprite_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Work in a temp directory for individual frame extraction
+        tmp_dir = self.config.thumbnails_dir / f"{video_id}_sprite_tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+
+        metadata: dict = {
+            "num_thumbnails": total,
+            "num_columns": cols,
+            "num_rows": rows,
+            "thumbnail_width": thumb_w,
+            "thumbnail_height": thumb_h,
+            "duration": duration,
+            "thumbnails": [],
+        }
+
+        try:
+            # Extract evenly-spaced frames using FFmpeg
+            step = duration / total if total > 1 else duration
+
+            frame_files: List[Path] = []
+            for i in range(total):
+                ts = i * step
+                ts = min(ts, duration - 0.001)  # stay within bounds
+                frame_file = tmp_dir / f"thumb_{i:04d}.jpg"
+                result = subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-ss",
+                        str(ts),
+                        "-i",
+                        str(video_path),
+                        "-vframes",
+                        "1",
+                        "-qscale:v",
+                        "3",  # high quality
+                        "-vf",
+                        f"scale={thumb_w}:{thumb_h}",
+                        "-y",
+                        str(frame_file),
+                    ],
+                    capture_output=True,
+                    timeout=60,
+                )
+                # FFmpeg may return non-zero (e.g., 234) for end-of-stream
+                # or when seeking past the last keyframe; that's okay —
+                # we just check if the file was actually created.
+                if result.returncode != 0:
+                    logger.debug(
+                        f"FFmpeg warn for thumb {i} @ {ts:.2f}s: "
+                        f"exit={result.returncode}"
+                    )
+                if frame_file.exists():
+                    frame_files.append(frame_file)
+                    col = i % cols
+                    row = i // cols
+                    metadata["thumbnails"].append(
+                        {
+                            "index": i,
+                            "timestamp": round(ts, 3),
+                            "x": col * thumb_w,
+                            "y": row * thumb_h,
+                        }
+                    )
+
+            if not frame_files:
+                logger.warning("No thumbnails extracted for sprite sheet")
+                return None, None
+
+            # Montage into a single sprite sheet
+            sprite_img = Image.new("RGB", (cols * thumb_w, rows * thumb_h))
+            for i, fpath in enumerate(frame_files):
+                col = i % cols
+                row = i // cols
+                try:
+                    img = Image.open(fpath).resize((thumb_w, thumb_h), Image.LANCZOS)
+                    sprite_img.paste(img, (col * thumb_w, row * thumb_h))
+                except Exception:
+                    pass
+
+            sprite_img.save(sprite_path, "JPEG", quality=85)
+            logger.info(
+                f"Sprite sheet saved: {sprite_path} "
+                f"({sprite_img.size[0]}x{sprite_img.size[1]}, "
+                f"{len(frame_files)} thumbnails)"
+            )
+
+            # Write metadata JSON alongside
+            meta_path = sprite_path.with_suffix(".json")
+            meta_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+
+            return sprite_path, metadata
+
+        except Exception as e:
+            logger.error(f"Sprite sheet generation failed: {e}")
+            return None, None
+
+        finally:
+            # Clean up temp files
+            import shutil
+
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
     def cleanup(self):
-        """Release GPU memory."""
+        """Release GPU memory from all loaded models."""
         if self._whisper_model is not None:
             del self._whisper_model
             self._whisper_model = None
         if self._yolo_model is not None:
             del self._yolo_model
             self._yolo_model = None
+        if self._clip_model is not None:
+            del self._clip_model
+            self._clip_model = None
+            self._clip_preprocess = None
+            self._clip_tokenizer = None
         import torch
 
         torch.cuda.empty_cache()
+        import gc
+
+        gc.collect()

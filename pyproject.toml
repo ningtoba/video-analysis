@@ -4,8 +4,8 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "video-analysis"
-version = "0.1.0"
-description = "Self-hosted video analysis platform with AI chatbot"
+version = "0.2.0"
+description = "Self-hosted video analysis platform with AI chatbot — scene understanding, RAG, clip export"
 readme = "README.md"
 authors = [
     {name = "Hermes Agent"},
@@ -25,6 +25,7 @@ dependencies = [
     "torch>=2.1.0",
     "torchvision>=0.16.0",
     "langchain-text-splitters>=0.1.0",
+    "open-clip-torch>=2.24.0",
 ]
 
 [project.scripts]

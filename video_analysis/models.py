@@ -3,7 +3,7 @@ Data models for video analysis platform.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import timedelta
 import json
 
@@ -55,6 +55,8 @@ class VideoIndex:
     transcript: List[TranscriptSegment] = field(default_factory=list)
     full_transcript: str = ""
     chunks: List[dict] = field(default_factory=list)
+    sprite_sheet: Optional[str] = None  # path to sprite sheet image
+    sprite_metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -92,6 +94,8 @@ class VideoIndex:
                 for t in self.transcript
             ],
             "full_transcript": self.full_transcript,
+            "sprite_sheet": self.sprite_sheet,
+            "sprite_metadata": self.sprite_metadata,
         }
 
 

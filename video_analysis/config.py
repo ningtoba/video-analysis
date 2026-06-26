@@ -44,10 +44,15 @@ class Config:
     llm_temperature: float = 0.3
     llm_max_tokens: int = 2048
 
+    # Clip export
+    clip_export_dir: Path = field(init=False)
+
     # UI
     ui_host: str = "0.0.0.0"
     ui_port: int = 7860
     ui_share: bool = False
+    # Library
+    library_max_videos: int = 50
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
@@ -56,12 +61,14 @@ class Config:
         self.audio_dir = self.data_dir / "audio"
         self.thumbnails_dir = self.data_dir / "thumbnails"
         self.chroma_path = self.data_dir / "chroma"
+        self.clip_export_dir = self.data_dir / "clips"
         for d in [
             self.data_dir,
             self.video_dir,
             self.frames_dir,
             self.audio_dir,
             self.thumbnails_dir,
+            self.clip_export_dir,
             self.chroma_path,
         ]:
             d.mkdir(parents=True, exist_ok=True)

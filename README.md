@@ -1,29 +1,32 @@
 # 🎥 Video Analysis Platform
 
-**Self-hosted video analysis with an AI chatbot.** Upload any video, let the AI pipeline extract and analyze every detail (transcription, scene detection, object recognition), then ask natural language questions about the content with precise timestamp citations.
+**Self-hosted video analysis with an AI chatbot.** Upload any video, let the AI pipeline extract and analyze every detail (transcription, scene detection, object recognition, semantic description), then ask natural language questions about the content with precise timestamp citations.
 
 ```
-┌──────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│  Upload Video│───▶│  Analysis Pipeline   │───▶│  RAG Vector Index   │
-│  (drag-drop) │    │  FFmpeg → Whisper    │    │  ChromaDB + BGE     │
-│              │    │  → Scene Detect      │    │  + Cross-Encoder    │
-└──────────────┘    │  → YOLO → Index     │    │                     │
-                    └─────────────────────┘    └─────────┬───────────┘
-                                                         │
-┌──────────────┐    ┌─────────────────────┐             │
-│  Ask Q&A     │◀───│  Context Retrieval   │◀────────────┘
+┌──────────────┐    ┌─────────────────────────┐    ┌─────────────────────┐
+│  Upload Video│───▶│  Analysis Pipeline       │───▶│  RAG Vector Index   │
+│  (drag-drop) │    │  FFmpeg → Whisper        │    │  ChromaDB + BGE     │
+│              │    │  → Scene Detect          │    │  + Cross-Encoder    │
+└──────────────┘    │  → YOLO → CLIP → Index  │    └─────────┬───────────┘
+                    │  → Sprite Sheet          │              │
+                    └─────────────────────────┘              │
+┌──────────────┐    ┌─────────────────────┐                  │
+│  Ask Q&A     │◀───│  Context Retrieval   │◀─────────────────┘
 │  + Citations │    │  Hybrid Search +     │
-└──────────────┘    │  Temporal Context    │
-                    └─────────────────────┘
+│  + Clip Export│   │  Temporal Context    │
+└──────────────┘    └─────────────────────┘
 ```
 
 ## ✨ Features
 
-- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), object detection (YOLO)
+- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), object detection (YOLO), semantic scene description (OpenCLIP)
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
 - **🔍 RAG-Powered** — ChromaDB vector store + BGE embeddings + cross-encoder re-ranking for accurate retrieval
-- **🎨 Polished UI** — Gradio 6 dark theme with responsive layout and real-time progress
-- **⚡ GPU Accelerated** — RTX 4070 CUDA support for all models (transcription, embeddings, detection)
+- **✂️ Clip Export** — Export precise video clips at any timestamp range from the UI
+- **📚 Video Library** — Multi-video management with searchable library tab
+- **🖼️ Timeline Preview** — Sprite sheet generation for visual timeline browsing
+- **🎨 Polished UI** — Gradio 6 dark theme with tabs, responsive layout, real-time progress
+- **⚡ GPU Accelerated** — RTX 4070 CUDA support for all models with sequential loading to manage 12GB VRAM
 - **🔒 100% Local** — No API keys, no cloud services, all processing on your hardware
 - **🖥️ CLI Mode** — Batch process videos and query from the terminal
 
@@ -75,7 +78,9 @@ Video File
 ├── FFmpeg ──→ Scene Detection (scene filter)
 │              └── Per Scene: keyframe extraction
 │                            ├── YOLO object detection
+│                            ├── OpenCLIP zero-shot scene classification
 │                            └── Frame metadata
+├── FFmpeg ──→ Sprite sheet (100 thumbnails for timeline)
 └── Merge ──→ Structured VideoIndex
               └── ChromaDB Vector Store (BGE embeddings)
 ```
@@ -96,12 +101,12 @@ User Question
 
 | Module | Path | Purpose |
 |--------|------|---------|
-| `pipeline` | `video_analysis/pipeline.py` | Video processing — scene detection, frame extraction, transcription, YOLO |
+| `pipeline` | `video_analysis/pipeline.py` | Video processing — scene detection, frame extraction, transcription, YOLO, CLIP, sprite sheets |
 | `rag` | `video_analysis/rag.py` | ChromaDB indexing, hybrid retrieval, re-ranking, temporal expansion |
 | `chat` | `video_analysis/chat.py` | LLM Q&A with conversation history and source citations |
 | `models` | `video_analysis/models.py` | Data models — VideoIndex, SceneInfo, FrameInfo, ChatMessage |
 | `config` | `video_analysis/config.py` | Configuration with sensible defaults |
-| `ui/app` | `ui/app.py` | Gradio web interface with dark theme |
+| `ui/app` | `ui/app.py` | Gradio web interface with dark theme, tabs, library, clip export |
 
 ## 💻 Tech Stack
 
@@ -112,6 +117,8 @@ User Question
 | **Transcription** | faster-whisper (large-v3) | ~12× realtime on RTX 4070, int8 quantized |
 | **Scene Detection** | FFmpeg scene filter | Always available, no extra deps |
 | **Object Detection** | YOLO (ultralytics) | State-of-the-art speed/accuracy |
+| **Scene Description** | OpenCLIP (ViT-B-32) | Zero-shot classification, rich semantic understanding |
+| **Timeline Preview** | FFmpeg + Pillow sprite sheets | 100-thumbnail visual timeline navigation |
 | **Vector Store** | ChromaDB | Persistent, local, no server needed |
 | **Embeddings** | BAAI/bge-small-en-v1.5 | Strong retrieval, light weight |
 | **Re-ranker** | cross-encoder/ms-marco-MiniLM | Boosts precision to ~95%+ |
@@ -147,8 +154,10 @@ python tests/test_basic.py
 | Transcription (large-v3, int8) | ~50s (~12× realtime) |
 | Scene detection | ~20s |
 | Frame extraction + object detection | ~60s |
+| CLIP scene description | ~30s |
+| Sprite sheet generation | ~15s |
 | RAG indexing | ~5s |
-| **Total pipeline** | **~2-3 min** |
+| **Total pipeline** | **~3-4 min** |
 | Q&A response | ~2-5s per question |
 
 ## 🗺️ Roadmap
@@ -157,13 +166,16 @@ python tests/test_basic.py
 - [x] RAG indexing and retrieval
 - [x] Chat interface with source citations
 - [x] Gradio web UI
+- [x] OpenCLIP zero-shot scene classification
+- [x] Thumbnail sprite sheets for timeline preview
+- [x] Clip export (jump to precise moments)
+- [x] Multi-video library management
+- [x] GPU pipeline management (sequential model loading for 12GB VRAM)
 - [ ] Voice activity detection for speaker diarization (WhisperX)
 - [ ] PaddleOCR for on-screen text extraction
-- [ ] Multi-video library management
-- [ ] Video clip export (jump to precise moments)
-- [ ] Frame preview on timeline hover (sprite sheets)
-- [ ] OpenCLIP zero-shot classification
-- [ ] GPU pipeline management for 12GB VRAM
+- [ ] Frame preview on timeline hover (CSS sprite sheet overlay)
+- [ ] Batch video processing
+- [ ] YouTube URL import
 
 ## 📝 License
 
