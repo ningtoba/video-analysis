@@ -41,7 +41,7 @@ from video_analysis import (
 
 # api and stream_chat modules are imported on demand
 
-__version__ = "0.41.0"
+__version__ = "0.42.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

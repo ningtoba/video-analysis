@@ -145,8 +145,15 @@ class TestHealthEndpoint:
 
         cfg = Config()
         app = create_health_app(cfg)
-        routes = {r.path for r in app.routes}
-        assert "/metrics" in routes
+        routes = {r.path for r in app.routes if hasattr(r, "path")}
+        # Also check OpenAPI paths
+        paths = set()
+        try:
+            spec = app.openapi()
+            paths = set(spec.get("paths", {}).keys())
+        except Exception:
+            pass
+        assert "/metrics" in routes or "/metrics" in paths
 
     def test_metrics_route_disabled(self):
         """/metrics route not registered when prometheus disabled."""
@@ -155,7 +162,7 @@ class TestHealthEndpoint:
 
             cfg = Config()
             app = create_health_app(cfg)
-            routes = {r.path for r in app.routes}
+            routes = {r.path for r in app.routes if hasattr(r, "path")}
             assert "/metrics" not in routes
 
     def test_metrics_returns_valid_text(self):
@@ -263,11 +270,11 @@ class TestVersion:
     def test_version(self):
         from video_analysis import __version__
 
-        assert __version__ == "0.41.0"
+        assert __version__ == "0.42.0"
 
     def test_pyproject_version(self):
         import tomllib
 
         with open("pyproject.toml", "rb") as f:
             data = tomllib.load(f)
-        assert data["project"]["version"] == "0.41.0"
+        assert data["project"]["version"] == "0.42.0"

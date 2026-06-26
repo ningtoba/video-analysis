@@ -327,18 +327,16 @@ def create_health_app(config: Config) -> FastAPI:
         description="REST API for the self-hosted video analysis platform",
     )
 
-    _setup_routes(app, config)
-
-    # Mount the full REST API layer (v0.41.0)
+    # Pass the module-level RAG instance to the API router
     try:
-        from video_analysis.api import create_api_router, set_rag_instance
+        from video_analysis.api import set_rag_instance
 
         set_rag_instance(_rag)
-        api_router = create_api_router(config)
-        app.include_router(api_router)
-        logger.info("Full REST API mounted at /api (OpenAPI docs at /docs)")
     except ImportError as exc:
         logger.warning("REST API module not available: %s", exc)
+
+    # Routes are registered by _setup_routes (create_api_router included there)
+    _setup_routes(app, config)
 
     # Apply auth middleware if configured
     _setup_auth_middleware(app, config)

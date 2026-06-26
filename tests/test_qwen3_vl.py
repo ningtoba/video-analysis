@@ -293,4 +293,4 @@ def test_qwen3_vl_version():
     """Test version string is updated."""
     from video_analysis import __version__
 
-    assert __version__ == "0.41.0"
+    assert __version__ == "0.42.0"

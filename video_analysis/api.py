@@ -212,6 +212,15 @@ class SSEErrorResponse(BaseModel):
     error: str = Field(..., description="Error message")
 
 
+class VideoListResponse(BaseModel):
+    """Response from GET /api/videos."""
+
+    count: int = Field(0, description="Number of videos in the library")
+    videos: List[Dict[str, Any]] = Field(
+        default_factory=list, description="List of video summaries"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Helper: retrieve full transcript from RAG
 # ---------------------------------------------------------------------------
@@ -515,6 +524,12 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
 
     def _get_rag() -> VideoRAG:
         nonlocal rag
+        # Check module-level RAG first (set by ui/health.py via set_rag_instance)
+        import video_analysis.api as _api_mod
+
+        if _api_mod._RAG is not None:  # noqa: SLF001
+            rag = _api_mod._RAG
+            _api_mod._RAG = None  # clear to avoid stale ref
         if rag is None:
             rag = VideoRAG(cfg)
         return rag
@@ -909,6 +924,49 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         )
 
     # ------------------------------------------------------------------
+    # GET /api/videos — list all indexed videos
+    # ------------------------------------------------------------------
+
+    @router.get(
+        "/api/videos",
+        response_model=VideoListResponse,
+        summary="List all indexed videos",
+    )
+    async def api_list_videos():
+        """Return a list of all videos currently indexed in the library."""
+        rag_instance = _get_rag()
+        loop = asyncio.get_event_loop()
+
+        try:
+            video_ids = await loop.run_in_executor(None, rag_instance.list_videos)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"RAG engine error: {exc}")
+
+        items = []
+        for vid in video_ids:
+            try:
+                info = await loop.run_in_executor(
+                    None, rag_instance.get_library_info, vid
+                )
+                if info is not None:
+                    items.append(
+                        {
+                            "video_id": info.video_id,
+                            "filename": info.filename,
+                            "num_scenes": info.num_scenes,
+                            "num_chunks": info.num_chunks,
+                            "duration": info.duration,
+                            "has_sprite": info.has_sprite,
+                        }
+                    )
+            except Exception:
+                items.append(
+                    {"video_id": vid, "filename": "", "error": "metadata unavailable"}
+                )
+
+        return VideoListResponse(count=len(items), videos=items)
+
+    # ------------------------------------------------------------------
     # GET /api/videos/{video_id}  — detailed video info
     # ------------------------------------------------------------------
 
@@ -987,3 +1045,13 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         )
 
     return router
+
+
+def set_rag_instance(rag: VideoRAG) -> None:
+    """Set the module-level RAG instance (called by ui/health.py at startup).
+
+    Args:
+        rag: Initialised VideoRAG instance to share across API routes.
+    """
+    global _RAG
+    _RAG = rag

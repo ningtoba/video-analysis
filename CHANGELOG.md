@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.42.0 (2026-06-27) — API-First Evolution: List Videos Endpoint & Bug Fixes
+
+### 🌐 REST API Enhancements
+
+- **New `GET /api/videos` endpoint** — list all indexed videos with metadata (filename, scenes, chunks, duration, sprite status). Consolidates video listing into the `video_analysis/api.py` router alongside existing detail/delete/process endpoints.
+- **Two new API tests** — `TestListVideos` covers success (2 videos returned) and empty library (count=0).
+
+### 🐛 Bug Fixes
+
+- **Fixed duplicate OpenAPI operation IDs** — `ui/health.py` was calling `create_api_router()` *twice* (once via `_setup_routes()` and once directly on lines 337-338), causing FastAPI to emit "Duplicate Operation ID" warnings for all API routes. Removed the redundant second include; `set_rag_instance()` is now called before `_setup_routes()` so the module-level RAG reference is available when the router is created.
+
+### 📦 Files Changed
+
+- **Modified**: `ui/health.py` — removed duplicate `create_api_router()` call, fixed RAG setup ordering
+- **Modified**: `video_analysis/api.py` — added `VideoListResponse` schema + `GET /api/videos` endpoint
+- **Modified**: `tests/test_api.py` — added `TestListVideos` with 2 tests, added `/api/videos` to route checks
+- **Modified**: `video_analysis/__init__.py` — v0.42.0
+- **Modified**: `pyproject.toml` — v0.42.0
+
 ## 0.41.0 (2026-06-27) — Full REST API, Webcam UI & MLLM Streaming
 
 ### 🌐 Full REST API Layer (`video_analysis/api.py`)

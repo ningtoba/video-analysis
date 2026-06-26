@@ -20,7 +20,7 @@
 
 ## ✨ Features
 
-- **🌐 Full REST API** (v0.41.0) — comprehensive HTTP API with 10+ endpoints for video processing, Q&A with SSE streaming, transcript/chapter retrieval, frame extraction, and cross-video search; auto-generated OpenAPI docs at `/docs`
+- **🌐 Full REST API** (v0.42.0) — comprehensive HTTP API with 11+ endpoints including `GET /api/videos` to list all indexed videos; video processing, Q&A with SSE streaming, transcript/chapter retrieval, frame extraction, and cross-video search; auto-generated OpenAPI docs at `/docs`
 |- **📷 Webcam Capture** (v0.41.0) — real-time webcam capture and frame analysis tab in the Gradio UI; supports live preview, capture & analyze, and continuous monitoring mode
 |- **🧠 MLLM Streaming Q&A** (v0.41.0) — token-by-token SSE streaming for LLM responses from both Hermes CLI and OpenAI-compatible backends; enables real-time chat updates in the Gradio UI and REST API
 |- **📡 Live Stream Analysis** (v0.40.0) — capture and analyze live RTMP/RTSP/HLS streams in real-time with auto-reconnect, sliding window context, and incremental indexing; connect OBS, IP cameras, and streaming platforms directly to the analysis pipeline
