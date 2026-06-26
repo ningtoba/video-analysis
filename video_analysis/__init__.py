@@ -33,7 +33,7 @@ from video_analysis import (
 
 # Qwen3-VL backend (requires vLLM or transformers — optional, heavy model)
 
-__version__ = "0.37.0"
+__version__ = "0.38.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

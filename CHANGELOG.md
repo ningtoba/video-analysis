@@ -1,6 +1,37 @@
 # Changelog
 
-## 0.37.0 (2026-06-27) — Video Content Chaptering (Topic Segmentation)
+## 0.38.0 (2026-06-27) — Research: Self-Contained LLM & Live Stream Analysis
+
+### 📖 Research Phase
+
+Deep research into the two most impactful next features for the video-analysis platform:
+
+1. **Self-Contained LLM Provider** — abstraction over `_call_llm` to support OpenAI-compatible
+   endpoints (vLLM, Ollama, OpenAI API) as alternatives to the Hermes CLI dependency
+2. **Live RTMP/RTSP/HLS Stream Analysis** — extend the streaming pipeline to ingest
+   live video streams (webcams, IP cameras, OBS, Twitch, YouTube Live)
+
+### 🧹 Cleanup
+
+- **README roadmap cleanup** — all 4 remaining unchecked items marked as done:
+  - Qwen3-VL-30B-A3B FP8 backend (v0.35.0, backends/qwen3_vl.py)
+  - Dependency modernization (v0.35.0, pyproject.toml bounds updated)
+  - PP-OCRv6 upgrade (v0.34.0, replaced PP-OCRv5)
+  - ColBERT-Att re-ranking (v0.31.0, colbert_att_reranker.py)
+
+### 🔬 Research Document
+
+- **New**: `docs/research/v0.38.0-research-self-contained-llm-and-livestream.md`
+  - Full analysis of platform maturity at v0.37.0 (494 tests, 33+ modules)
+  - Evaluated 10+ alternative features; rejected 7 as lower priority
+  - Implementation plan for P0 (LLM Provider) and P1 (Live Stream)
+  - Priority matrix: README cleanup (5 min, done) → LLM Provider (2-3h) → Live Stream (4-6h)
+
+### 📋 Roadmap
+
+- [x] **README roadmap cleanup** — all items now accurately reflect implementation status
+
+---
 
 ### 📖 New Module: Video Content Chaptering (`video_analysis/chapters.py`)
 
