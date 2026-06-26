@@ -30,7 +30,7 @@ def test_qwen3_vl_importable():
 
 
 def test_version_check():
-    """Verify version is bumped to 0.45.0."""
+    """Verify version is bumped to 0.46.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.45.0"
+    assert __version__ == "0.46.0"

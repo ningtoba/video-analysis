@@ -31,6 +31,7 @@ from video_analysis.models import format_timestamp, VideoIndex
 from ui.utils import parse_yt_url, queue_html
 from ui.workflow import inject_workflow_tab
 from ui.camera import inject_camera_tab
+from ui.monitor import inject_monitor_tab
 
 logger = logging.getLogger(__name__)
 
@@ -532,6 +533,9 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
             # ============ TAB 7: CAMERA (Webcam Live Capture) ============
             inject_camera_tab(app, config)
+
+            # ============ TAB 8: MONITOR (Dashboard & Evaluations) ============
+            inject_monitor_tab(app, config)
 
         # ==================== EVENT HANDLERS ====================
 

@@ -83,7 +83,7 @@ class EvalReport:
 
     run_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     timestamp: float = field(default_factory=time.time)
-    version: str = "0.44.0"
+    version: str = "0.46.0"
     config_snapshot: Dict[str, Any] = field(default_factory=dict)
     results: List[EvalTaskResult] = field(default_factory=list)
     total_duration_ms: float = 0.0

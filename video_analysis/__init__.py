@@ -13,6 +13,7 @@ Modules:
 - chapters: Video content chaptering — auto topic segmentation & chapter generation (v0.37.0)
 - api: Full REST API layer with OpenAPI docs (v0.41.0)
 - job_queue: In-process async job queue for background video processing (v0.43.0)
+- monitor ui: Gradio Monitoring Dashboard with system metrics, evaluation runner, and job queue viewer (v0.46.0)
 """
 
 from video_analysis import (
@@ -42,7 +43,7 @@ from video_analysis import (
 
 # api and stream_chat modules are imported on demand
 
-__version__ = "0.45.0"
+__version__ = "0.46.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

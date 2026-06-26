@@ -1,6 +1,49 @@
 # Changelog
 
-## 0.45.0 (2026-06-27) — Autonomous Video Curator: MCR Closed-Loop Exploration
+## 0.46.0 (2026-06-27) — Monitoring Dashboard & Interactive Eval Runner
+
+### 📊 Monitoring Dashboard (`ui/monitor.py`)
+
+A new **Gradio UI Monitoring tab** that provides real-time system observability
+directly within the application UI — no separate Grafana instance required.
+
+- **System Metrics Cards** — live counters from Prometheus metrics displayed as
+  styled HTML cards: pipeline runs (total/success/failure), videos indexed,
+  questions answered, GPU memory usage
+- **Job Queue Viewer** — shows recent jobs from the async job queue with status
+  badges (pending/running/completed/failed) and progress percentages
+- **Interactive Evaluation Runner** — run evaluation tasks directly from the UI
+  by entering task names (comma-separated, empty = all tasks); results are
+  displayed as formatted markdown with pass/fail/skipped indicators and per-task
+  metric breakdowns
+- **Refresh Button** — one-click refresh of all metrics without page reload
+- **Dark Theme Integration** — consistent visual styling with the existing
+  Gradio dark theme (--surface, --border, --primary color tokens)
+
+### ⚙️ Configuration
+
+- No new config fields — the Monitoring tab always appears as Tab 8 in the UI
+
+### 📦 Module
+
+- `ui/monitor.py` — `inject_monitor_tab()` for Gradio Blocks integration
+- `_collect_system_metrics()` — reads Prometheus Counter values via the
+  `video_analysis.metrics` module
+- `_build_system_metrics_html()` / `_build_job_queue_html()` / `_build_metrics_snapshot_html()`
+  — HTML rendering helpers for the dashboard cards
+- `_run_eval_task()` — synchronous wrapper for `EvaluationRunner.run_all()`
+  with formatted markdown result output
+
+### 🧪 Test Coverage
+
+- **20 new tests** covering all monitor module functions:
+  - `_collect_system_metrics` — returns dict with all keys, mocked metric values
+  - HTML builders — correct output format, edge cases (zero metrics, high failures)
+  - Job queue — no jobs, with jobs (4 statuses), manager exception
+  - CSS constant — proper string format
+  - Evaluation runner — empty/all/specific/multiple task names, graceful error handling
+  - Snapshot builder — full HTML with CSS included
+- 663 total tests (0 failures, 9 pre-existing benchmark errors)
 
 ### 🧠 Autonomous Video Curator (`video_analysis/curator.py`)
 
