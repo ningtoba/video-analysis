@@ -8,6 +8,7 @@ questions about video content with source citations.
 import json
 import logging
 import subprocess
+from pathlib import Path
 from typing import List, Optional
 
 from video_analysis.config import Config
@@ -18,16 +19,39 @@ logger = logging.getLogger(__name__)
 
 
 class VideoChat:
-    """Chat interface over indexed video content."""
+    """Chat interface over indexed video content.
+
+    Supports two backends:
+    1. **Hermes CLI** (default) — text-only RAG with retrieved chunks + Hermes/DeepSeek LLM
+    2. **Video MLLM** (optional) — VideoChat-Flash video-native Q&A that sees frame images directly
+
+    When ``video_mllm_as_chat_backend`` is enabled and frames are available,
+    the Video MLLM backend is used for more accurate visual understanding.
+    Falls back to the text-only RAG path when the MLLM is unavailable.
+    """
 
     def __init__(self, rag: VideoRAG, config: Optional[Config] = None):
         self.rag = rag
         self.config = config or Config()
         self.history: List[ChatMessage] = []
+        self._mllm = None  # lazy-loaded Video MLLM
+
+    def _get_mllm(self):
+        """Lazy-load Video MLLM for video-native Q&A."""
+        if self._mllm is None:
+            from video_analysis.video_mllm import VideoMLLM
+
+            self._mllm = VideoMLLM(model_name=self.config.video_mllm_model)
+        return self._mllm if self._mllm.available else None
 
     def ask(self, query: str, video_id: Optional[str] = None) -> ChatMessage:
         """
         Ask a question about video content.
+
+        When ``video_mllm_as_chat_backend`` is enabled in config, this will
+        attempt to use VideoChat-Flash for video-native visual Q&A (using
+        frame images directly). Falls back to the text-only RAG + Hermes CLI
+        path when the MLLM is unavailable.
 
         Args:
             query: Natural language question
@@ -36,6 +60,67 @@ class VideoChat:
         Returns:
             ChatMessage with answer and source citations
         """
+        # Try Video MLLM backend first (video-native Q&A with visual context)
+        if self.config.video_mllm_enabled and self.config.video_mllm_as_chat_backend:
+            mllm = self._get_mllm()
+            if mllm is not None:
+                result = self._ask_mllm(query, video_id, mllm)
+                if result is not None:
+                    return result
+                logger.info("Video MLLM QA returned None — falling back to RAG path")
+
+        # RAG-based retrieval + Hermes CLI (default path)
+        return self._ask_rag(query, video_id)
+
+    def _ask_mllm(
+        self, query: str, video_id: Optional[str], mllm
+    ) -> Optional[ChatMessage]:
+        """Ask using Video MLLM with frame images as visual context."""
+        # Collect frame images from the video
+        frame_paths = []
+        if video_id:
+            try:
+                meta_result = self.rag.collection.get(
+                    where={"video_id": video_id},
+                    include=["metadatas"],
+                )
+                if meta_result["ids"]:
+                    seen = set()
+                    for meta in meta_result["metadatas"]:
+                        fp = meta.get("frame_path")
+                        if fp and fp not in seen:
+                            seen.add(fp)
+                            path = Path(fp)
+                            if path.exists():
+                                frame_paths.append(str(path))
+            except Exception:
+                pass
+
+        if not frame_paths:
+            logger.debug("No frames found for MLLM QA — returning None")
+            return None
+
+        # Build a prompt that includes the query
+        prompt = (
+            f"You are a video analysis assistant. Answer based on the video frames shown.\n\n"
+            f"Question: {query}\n\n"
+            f"Provide a concise answer with timestamp references where possible."
+        )
+
+        answer = mllm.answer(query=prompt, frames=frame_paths[:8])
+        if not answer:
+            return None
+
+        message = ChatMessage(
+            role="assistant",
+            content=answer,
+            sources=[],
+        )
+        self.history.append(ChatMessage(role="user", content=query))
+        self.history.append(message)
+        return message
+
+    def _ask_rag(self, query: str, video_id: Optional[str] = None) -> ChatMessage:
         # Retrieve relevant context
         chunks = self.rag.retrieve(query, video_id=video_id)
 
@@ -76,8 +161,22 @@ class VideoChat:
     def ask_with_history(
         self, query: str, video_id: Optional[str] = None
     ) -> ChatMessage:
-        """Ask with conversation history included in context."""
-        # Retrieve relevant context
+        """Ask with conversation history included in context.
+
+        When ``video_mllm_as_chat_backend`` is enabled, uses Video MLLM
+        for video-native Q&A. Falls back to the text-only RAG path
+        when the MLLM is unavailable.
+        """
+        # Try Video MLLM backend first (video-native Q&A with visual context)
+        if self.config.video_mllm_enabled and self.config.video_mllm_as_chat_backend:
+            mllm = self._get_mllm()
+            if mllm is not None:
+                result = self._ask_mllm(query, video_id, mllm)
+                if result is not None:
+                    return result
+                logger.info("Video MLLM QA returned None — falling back to RAG path")
+
+        # RAG-based retrieval + Hermes CLI (default path)
         chunks = self.rag.retrieve(query, video_id=video_id)
         if video_id and chunks:
             chunks = self.rag.expand_temporal_context(chunks, video_id)

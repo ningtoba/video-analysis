@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.13.0 (2026-06-26) — Video MLLM Integration
+
+### 🧠 Major Feature: VideoChat-Flash — Lightweight Video MLLM (ICLR 2026)
+
+- **New `video_analysis/video_mllm.py` module**: Wraps OpenGVLab's VideoChat-Flash 2B (`OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448`) — the state-of-the-art lightweight video MLLM that fits in 12 GB VRAM (~5.4 GB BF16). Key specs: 16 tokens/frame (vs 256+ for typical VLMs), 448px resolution, 99.1% NIAH over 10K frames (~3 hours of video), MVBench 70.0. MIT license.
+- **`VideoMLLM` class**: Lazy-load on first use, GPU memory management (load/unload compatible with sequential pipeline model), graceful fallback when dependencies are missing. Three core methods:
+  - `describe_scene(frames)` — rich natural language scene descriptions with people, objects, actions, setting, and mood
+  - `summarize_video(video_path, num_frames=32)` — comprehensive global video summary using VideoChat-Flash's hierarchical compression (handles long videos with few tokens)
+  - `answer(query, frames, video_path)` — video-native Q&A that sees frame images directly (not just text context)
+
+### ⚙️ Config & Pipeline Integration
+
+- **New config fields**:
+  | Variable | Default | Description |
+  |----------|---------|-------------|
+  | `VIDEO_MLLM_ENABLED` | `false` | Enable Video MLLM module |
+  | `VIDEO_MLLM_MODEL` | `OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448` | MLLM model name |
+  | `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions instead of OpenCLIP |
+  | `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend instead of Hermes CLI |
+- **Pipeline integration** (Step 10): When `video_mllm_as_describer` is enabled, runs VideoChat-Flash on each scene's key frames after OpenCLIP classification. Generates rich natural language descriptions that augment (or replace) the OpenCLIP zero-shot labels. MLLM model is unloaded after use to free ~5.4 GB VRAM for subsequent steps.
+- **Chat integration**: `VideoChat.ask()` and `ask_with_history()` now have an optional Video MLLM backend. When `video_mllm_as_chat_backend` is enabled, the MLLM answers the question using frame images directly as visual context — enabling questions about visual details that text-only RAG would miss. Falls back gracefully to the text-only RAG + Hermes CLI path when the MLLM is unavailable.
+
+### 🎯 Graph-Based Video RAG Research — Next Frontier
+
+- **VGent** (NeurIPS 2025 Spotlight, arXiv:2510.14032): Graph-based retrieval-reasoning that outperforms SOTA video RAG methods by +8.6% on MLVU. Core idea: index videos as structured graphs with semantic relationships between clips.
+- **ViG-RAG** (AAAI 2026, #6 ranked): Hybrid temporal+semantic graph reasoning — combines temporal edges (before/after/overlap) with entity-based semantic edges.
+- **Architecture proposed**: SceneGraph layer alongside existing ChromaDB multi-granularity chunks, with K-hop expansion for retrieval context.
+
+### 🎯 Query Classification & Multi-Modal Routing Research
+
+- Multi-RAG pattern: classify user queries into text/visual/temporal/multimodal routes before retrieval. Complex queries use multi-hop decomposition (sub-question → retrieve → reason).
+- Current pipeline does uniform text embedding for all queries. Adding classification would route to optimal retrieval strategy for each query type.
+
+### 📚 Documentation
+
+- Full v0.13.0 research plan saved at `.hermes/plans/2026-06-26_173500-v0.13.0-research-synthesis.md`
+- README roadmap updated with 4 new items (research marked done, 4 implementation items remaining)
+
+---
+
 ## 0.12.0 (2026-06-26)
 
 ### 🧠 Major Feature: BGE-VL Multimodal Embedding — Single Unified Model

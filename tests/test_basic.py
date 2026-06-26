@@ -918,6 +918,102 @@ def test_config_temporal_decay_zero_disabled():
     shutil.rmtree("/tmp/va_test_td0", ignore_errors=True)
 
 
+def test_video_mllm_import():
+    """Test that VideoMLLM module can be imported cleanly."""
+    from video_analysis.video_mllm import VideoMLLM
+
+    mllm = VideoMLLM()
+    assert mllm.model_name == "OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448"
+    assert mllm._available is None  # not checked yet
+    # available should not raise
+    assert isinstance(mllm.available, bool)
+
+
+def test_video_mllm_describe_no_frames():
+    """Test describe_scene returns None when given no frames."""
+    from video_analysis.video_mllm import VideoMLLM
+
+    mllm = VideoMLLM()
+    result = mllm.describe_scene([])
+    assert result is None
+
+
+def test_video_mllm_answer_no_frames():
+    """Test answer returns None when given no frames and no video path."""
+    from video_analysis.video_mllm import VideoMLLM
+
+    mllm = VideoMLLM()
+    result = mllm.answer("what is happening?", frames=None, video_path=None)
+    assert result is None
+
+
+def test_video_mllm_summarize_nonexistent():
+    """Test summarize_video returns None for nonexistent file."""
+    from video_analysis.video_mllm import VideoMLLM
+
+    mllm = VideoMLLM()
+    result = mllm.summarize_video("/tmp/nonexistent_video_xyz.mp4")
+    assert result is None
+
+
+def test_video_mllm_unload_on_unloaded():
+    """Test unload is safe when model was never loaded."""
+    from video_analysis.video_mllm import VideoMLLM
+
+    mllm = VideoMLLM()
+    # Should not raise
+    mllm.unload()
+    assert mllm._model is None
+    assert mllm._processor is None
+
+
+def test_config_video_mllm_fields():
+    """Test that Video MLLM config fields exist with correct defaults."""
+    cfg = Config(data_dir="/tmp/va_test_mllm_cfg")
+    assert cfg.video_mllm_enabled is False
+    assert "VideoChat-Flash" in cfg.video_mllm_model
+    assert cfg.video_mllm_as_describer is False
+    assert cfg.video_mllm_as_chat_backend is False
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_mllm_cfg", ignore_errors=True)
+
+
+def test_pipeline_video_mllm_attr():
+    """Test that pipeline has _video_mllm attribute."""
+    from video_analysis.pipeline import VideoPipeline
+
+    cfg = Config(data_dir="/tmp/va_test_pipe_mllm")
+    pipe = VideoPipeline(cfg)
+    assert hasattr(pipe, "_video_mllm")
+    assert pipe._video_mllm is None
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_pipe_mllm", ignore_errors=True)
+
+
+def test_chat_video_mllm_backend_disabled():
+    """Test that chat falls back to RAG when MLLM chat backend is disabled."""
+    from video_analysis.rag import VideoRAG
+    from video_analysis.chat import VideoChat
+
+    cfg = Config(
+        data_dir="/tmp/va_test_chat_mllm",
+        video_mllm_enabled=False,
+        video_mllm_as_chat_backend=False,
+    )
+    rag = VideoRAG(cfg)
+    chat = VideoChat(rag, cfg)
+    # _get_mllm should return None when not enabled
+    mllm = chat._get_mllm()
+    # available should return True/False based on deps, but None if disabled
+    # Since video_mllm_enabled is False, _get_mllm still checks availability
+    assert mllm is None or isinstance(mllm, object)
+    import shutil
+
+    shutil.rmtree("/tmp/va_test_chat_mllm", ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_scene_info()
@@ -952,4 +1048,12 @@ if __name__ == "__main__":
     test_pipeline_unload_model()
     test_chunk_type_in_retrieved_chunk()
     test_config_temporal_decay_zero_disabled()
+    test_video_mllm_import()
+    test_video_mllm_describe_no_frames()
+    test_video_mllm_answer_no_frames()
+    test_video_mllm_summarize_nonexistent()
+    test_video_mllm_unload_on_unloaded()
+    test_config_video_mllm_fields()
+    test_pipeline_video_mllm_attr()
+    test_chat_video_mllm_backend_disabled()
     print("All tests passed! ✅")

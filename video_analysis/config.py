@@ -114,6 +114,18 @@ class Config:
     action_model_name: str = "microsoft/xclip-base-patch16-zero-shot"
     action_categories_count: int = 26  # all DEFAULT_ACTION_CATEGORIES
 
+    # Video MLLM (optional VideoChat-Flash 2B — ICLR 2026, MIT, ~5.4 GB VRAM)
+    video_mllm_enabled: bool = (
+        False  # overridden by VIDEO_MLLM_ENABLED env var in __post_init__
+    )
+    video_mllm_model: str = "OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448"
+    video_mllm_as_describer: bool = (
+        False  # use MLLM for scene descriptions instead of OpenCLIP
+    )
+    video_mllm_as_chat_backend: bool = (
+        False  # use MLLM as video-native Q&A backend instead of Hermes CLI
+    )
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -126,6 +138,16 @@ class Config:
         env_val = os.environ.get("ACTION_RECOGNITION_ENABLED", "").lower()
         if env_val in ("true", "1", "yes"):
             self.action_recognition_enabled = True
+        # Override video_mllm_enabled from env var
+        mllm_env = os.environ.get("VIDEO_MLLM_ENABLED", "").lower()
+        if mllm_env in ("true", "1", "yes"):
+            self.video_mllm_enabled = True
+        mllm_desc_env = os.environ.get("VIDEO_MLLM_AS_DESCRIBER", "").lower()
+        if mllm_desc_env in ("true", "1", "yes"):
+            self.video_mllm_as_describer = True
+        mllm_chat_env = os.environ.get("VIDEO_MLLM_AS_CHAT_BACKEND", "").lower()
+        if mllm_chat_env in ("true", "1", "yes"):
+            self.video_mllm_as_chat_backend = True
         for d in [
             self.data_dir,
             self.video_dir,

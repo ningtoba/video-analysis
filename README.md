@@ -179,6 +179,10 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `MULTIMODAL_EMBEDDING` | `false` | Enable Qwen3-VL-Embedding multimodal search (Apache 2.0) |
 | `ACTION_RECOGNITION_ENABLED` | `false` | Enable X-CLIP zero-shot action recognition (requires transformers) |
 | `ACTION_MODEL_NAME` | `microsoft/xclip-base-patch16-zero-shot` | X-CLIP model for action recognition |
+| `VIDEO_MLLM_ENABLED` | `false` | Enable VideoChat-Flash 2B video MLLM (~5.4 GB VRAM) |
+| `VIDEO_MLLM_MODEL` | `OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448` | Video MLLM model name |
+| `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions (replaces OpenCLIP) |
+| `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
 
 ## 🧪 Running Tests
 
@@ -236,7 +240,10 @@ python tests/test_basic.py
 - [x] **Systematic GPU memory management** (per-stage model unloading, 12 GB VRAM friendly)
 - [x] **Graceful SIGTERM/SIGINT shutdown** (clean partial saves on termination)
 - [x] **Production deployment** (DCGM GPU monitoring, Caddy reverse proxy)
-- [ ] Video MLLM integration (VideoChat-Flash for long-context video understanding)
+- [x] Video MLLM integration (VideoChat-Flash 2B — optional scene describer + long-video Q&A + video-native chat backend)
+- [ ] Graph-based video RAG (VGent/ViG-RAG inspired — scene-graph retrieval + K-hop expansion)
+- [ ] Query classification & routing (text/visual/temporal modality dispatch)
+- [ ] Multi-hop query decomposition (sub-question → retrieve → reason)
 
 ## 📝 License
 

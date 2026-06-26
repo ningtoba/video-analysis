@@ -70,6 +70,7 @@ class VideoPipeline:
         self._clip_tokenizer = None
         self._action_recognizer = None
         self._ocr_model = None
+        self._video_mllm = None  # Optional VideoChat-Flash MLLM
 
         # Graceful shutdown support
         self._shutdown_requested = False
@@ -133,6 +134,12 @@ class VideoPipeline:
             except Exception:
                 pass
             self._action_recognizer = None
+        if self._video_mllm is not None:
+            try:
+                self._video_mllm.unload()
+            except Exception:
+                pass
+            self._video_mllm = None
         import torch
 
         torch.cuda.empty_cache()
@@ -151,10 +158,11 @@ class VideoPipeline:
         5. Run object detection on frames (YOLO)
         6. Run OCR text extraction (PaddleOCR)
         7. Run OpenCLIP zero-shot scene classification
-        8. Run action recognition (X-CLIP, optional)
-        9. Assign transcript to scenes
-        10. Generate sprite sheet timeline preview
-        11. Build VideoIndex
+        8. Run Video MLLM scene description (optional, VideoChat-Flash)
+        9. Run action recognition (X-CLIP, optional)
+        10. Assign transcript to scenes
+        11. Generate sprite sheet timeline preview
+        12. Build VideoIndex
         """
         video_path = Path(video_path)
         video_id = video_path.stem
@@ -226,7 +234,15 @@ class VideoPipeline:
         self._unload_model("_clip_preprocess")
         self._unload_model("_clip_tokenizer")
 
-        # Step 10: Action recognition (optional X-CLIP, GPU, ~4 GB VRAM)
+        # Step 10: Optional Video MLLM scene description (VideoChat-Flash 2B, GPU, ~5.4 GB VRAM)
+        if self.config.video_mllm_enabled and self.config.video_mllm_as_describer:
+            self._describe_scenes_mllm(scenes)
+            logger.info("Video MLLM scene description complete")
+            self._unload_model("_video_mllm")
+        else:
+            logger.info("Video MLLM scene description disabled by config")
+
+        # Step 11: Action recognition (optional X-CLIP, GPU, ~4 GB VRAM)
         if self.config.action_recognition_enabled:
             self._classify_actions(scenes)
             logger.info("Action recognition complete")
@@ -875,6 +891,60 @@ class VideoPipeline:
                 torch.cuda.empty_cache()
                 gc.collect()
                 logger.info("OpenCLIP model unloaded from GPU to free VRAM")
+
+    def _describe_scenes_mllm(self, scenes: List[SceneInfo]):
+        """Run VideoChat-Flash MLLM on key frames for rich scene descriptions.
+
+        Optional replacement for OpenCLIP's zero-shot labels.  Uses the
+        VideoChat-Flash 2B model (~5.4 GB VRAM) to generate natural language
+        descriptions of each scene, including visible objects, people, actions,
+        setting, and mood.
+
+        Only runs when ``config.video_mllm_enabled`` *and*
+        ``config.video_mllm_as_describer`` are both True.
+
+        Graceful fallback: if the model is unavailable, logs a warning and
+        falls back to the existing OpenCLIP descriptions (if any).
+        """
+        from video_analysis.video_mllm import VideoMLLM
+
+        if self._video_mllm is None:
+            self._video_mllm = VideoMLLM(
+                model_name=self.config.video_mllm_model,
+            )
+
+        if not self._video_mllm.load():
+            logger.warning(
+                "Video MLLM not available for scene description — "
+                "falling back to OpenCLIP descriptions"
+            )
+            return
+
+        success_count = 0
+        for scene in scenes:
+            if not scene.key_frames:
+                continue
+
+            frame_paths = [f.filepath for f in scene.key_frames if f.filepath]
+            if not frame_paths:
+                continue
+
+            description = self._video_mllm.describe_scene(frame_paths)
+            if description:
+                # Append the MLLM description to each frame
+                for frame in scene.key_frames:
+                    base = frame.description or ""
+                    frame.description = (
+                        f"{base} | MLLM: {description[:300]}"
+                        if base
+                        else f"Scene detail: {description[:300]}"
+                    )
+                success_count += 1
+
+        if success_count > 0:
+            logger.info(f"Video MLLM described {success_count}/{len(scenes)} scenes")
+        else:
+            logger.info("Video MLLM scene description completed (no scenes described)")
 
     def _classify_actions(self, scenes: List[SceneInfo]):
         """Run X-CLIP zero-shot action recognition on key frames.
