@@ -20,11 +20,12 @@
 
 ## ✨ Features
 
-- **🌐 Full REST API** (v0.42.0) — comprehensive HTTP API with 11+ endpoints including `GET /api/videos` to list all indexed videos; video processing, Q&A with SSE streaming, transcript/chapter retrieval, frame extraction, and cross-video search; auto-generated OpenAPI docs at `/docs`
+- **🌐 Full REST API** (v0.43.0) — comprehensive HTTP API with 13+ endpoints including async video processing via background job queue; list, detail, delete, search, SSE streaming, transcript/chapter retrieval, frame extraction, and job status polling; auto-generated OpenAPI docs at `/docs`
 |- **📷 Webcam Capture** (v0.41.0) — real-time webcam capture and frame analysis tab in the Gradio UI; supports live preview, capture & analyze, and continuous monitoring mode
 |- **🧠 MLLM Streaming Q&A** (v0.41.0) — token-by-token SSE streaming for LLM responses from both Hermes CLI and OpenAI-compatible backends; enables real-time chat updates in the Gradio UI and REST API
 |- **📡 Live Stream Analysis** (v0.40.0) — capture and analyze live RTMP/RTSP/HLS streams in real-time with auto-reconnect, sliding window context, and incremental indexing; connect OBS, IP cameras, and streaming platforms directly to the analysis pipeline
 |- **🤖 Agentic RAG** — iterative retrieval loop with confidence-based early stopping across 4 rounds (standard → multi-hop → scene-graph → LLM self-check verification with re-retrieval), inspired by Self-RAG, FLARE, and CRAG
+- **⏳ Async Job Queue** (v0.43.0) — in-process background job queue for the REST API; `POST /api/videos/process` returns immediately with a `job_id`, poll `GET /api/jobs/{job_id}` for completion status and results. Zero external dependencies — pure asyncio with Python 3.11+ TaskGroup.
 |- **🤖 Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent with 7 specialized tools (analyze_frames, detect_objects, OCR, search_transcript, search_rag, temporal_grounding, summarize_video) that dynamically routes questions to the right tools
 |- **📖 Video Chaptering** (v0.37.0) — automatic topic segmentation of transcripts into chapters using NLTK TextTiling, with LLM-generated chapter titles and summaries; generates structured chapter reports and agent-chapter context
 - **🎯 MMR Diversity Re-Ranking** — Maximal Marginal Relevance (Carbonell & Goldstein, SIGIR'98) reduces context redundancy by 30-50% over pure relevance-sorted retrieval; configurable via `MMR_DIVERSITY_ENABLED`, `MMR_LAMBDA`, and `MMR_TOP_K`
@@ -158,6 +159,7 @@ User Question
 | `backends` | `video_analysis/backends/` | MLLM backend implementations (Qwen3-VL-30B-A3B with vLLM + FP8) |
 | `agent` | `video_analysis/agent.py` | Agentic Video Understanding Agent — multi-tool video analysis agent |
 | `chapters` | `video_analysis/chapters.py` | Video content chaptering — topic segmentation & LLM chapter title generation |
+| `job_queue` | `video_analysis/job_queue.py` | In-process async job queue — background video processing with status polling |
 
 ## 💻 Tech Stack
 
@@ -257,7 +259,8 @@ Set via environment variables or edit `video_analysis/config.py`:
 ||| `LIVE_STREAM_SLIDING_WINDOW` | `300` | Sliding context window in seconds |
 ||| `LIVE_STREAM_AUTO_RECONNECT` | `true` | Auto-reconnect on stream loss |
 ||| `LIVE_STREAM_MAX_RETRIES` | `3` | Max reconnection attempts |
-||| `LIVE_STREAM_RETRY_DELAY` | `5.0` | Delay between retries (seconds) |
+|||| `LIVE_STREAM_RETRY_DELAY` | `5.0` | Delay between retries (seconds) |
+|| `JOB_QUEUE_MAX_CONCURRENT` | `1` | Max concurrent background processing jobs (v0.43.0) |
 
 ## 🧪 Running Tests
 

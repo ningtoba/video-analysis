@@ -270,11 +270,11 @@ class TestVersion:
     def test_version(self):
         from video_analysis import __version__
 
-        assert __version__ == "0.42.0"
+        assert __version__ == "0.43.0"
 
     def test_pyproject_version(self):
         import tomllib
 
         with open("pyproject.toml", "rb") as f:
             data = tomllib.load(f)
-        assert data["project"]["version"] == "0.42.0"
+        assert data["project"]["version"] == "0.43.0"

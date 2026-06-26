@@ -5,8 +5,15 @@ Provides a comprehensive set of endpoints for video processing, querying,
 searching, and management. Designed to be mounted as a FastAPI APIRouter
 into the existing FastAPI application in ``ui/health.py``.
 
+Async Job Queue (v0.43.0):
+    ``POST /api/videos/process`` now enqueues video processing as a
+    background job and returns immediately with a ``job_id``.  Poll
+    ``GET /api/jobs/{job_id}`` for completion status and results.
+
 Endpoints:
-    POST   /api/videos/process          — Process a new video (file or URL)
+    POST   /api/videos/process          — Enqueue a video for processing
+    GET    /api/jobs/{job_id}           — Poll job status
+    GET    /api/jobs                    — List recent jobs
     POST   /api/videos/{video_id}/query — Ask a question about a video
     GET    /api/videos/search           — Cross-video semantic search
     GET    /api/videos/{video_id}/transcript  — Get video transcript
@@ -35,6 +42,12 @@ from video_analysis.rag import VideoRAG, RetrievedChunk, VideoLibraryInfo
 from video_analysis.chat import VideoChat
 from video_analysis.models import VideoIndex, ChatMessage, ChatSource, format_timestamp
 from video_analysis.chapters import ChapterGenerator, ChapteringResult
+from video_analysis.job_queue import (
+    Job,
+    JobManager,
+    JobStatus as JQStatus,
+    get_default_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -222,8 +235,76 @@ class VideoListResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Job Queue schemas (v0.43.0)
+# ---------------------------------------------------------------------------
+
+
+class JobResponse(BaseModel):
+    """Response from GET /api/jobs/{job_id}."""
+
+    job_id: str = Field(..., description="Unique job identifier")
+    job_type: str = Field(..., description="Type of job (e.g. process_video)")
+    status: str = Field(
+        ..., description="Job status: pending/running/completed/failed/cancelled"
+    )
+    progress: str = Field("", description="Human-readable progress message")
+    progress_pct: float = Field(
+        0.0, description="Estimated completion percentage (0-100)"
+    )
+    created_at: float = Field(..., description="Unix timestamp when job was created")
+    started_at: Optional[float] = Field(
+        None, description="Unix timestamp when processing began"
+    )
+    completed_at: Optional[float] = Field(
+        None, description="Unix timestamp when job finished"
+    )
+    result: Optional[Dict[str, Any]] = Field(
+        None, description="Job result (populated on completion)"
+    )
+    error: Optional[str] = Field(
+        None, description="Error message (populated on failure)"
+    )
+
+
+class JobListResponse(BaseModel):
+    """Response from GET /api/jobs."""
+
+    total: int = Field(0, description="Total number of jobs")
+    jobs: List[JobResponse] = Field(
+        default_factory=list, description="Recent job entries"
+    )
+
+
+class EnqueueResponse(BaseModel):
+    """Response from POST /api/videos/process (async enqueue mode)."""
+
+    job_id: str = Field(..., description="Job identifier for status polling")
+    status: str = Field("pending", description="Initial job status")
+    message: str = Field(
+        "Video processing enqueued. Poll GET /api/jobs/{job_id} for status.",
+        description="Status message",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Helper: retrieve full transcript from RAG
 # ---------------------------------------------------------------------------
+
+
+def _job_to_response(job: Job) -> JobResponse:
+    """Convert a ``Job`` dataclass to a ``JobResponse`` Pydantic model."""
+    return JobResponse(
+        job_id=job.job_id,
+        job_type=job.job_type,
+        status=job.status.value,
+        progress=job.progress,
+        progress_pct=job.progress_pct,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        result=job.result,
+        error=job.error,
+    )
 
 
 def _get_video_transcript_data(rag: VideoRAG, video_id: str) -> Dict[str, Any]:
@@ -553,29 +634,101 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         return chapter_gen
 
     # ------------------------------------------------------------------
-    # POST /api/videos/process
+    # Job Queue — internal handlers
+    # ------------------------------------------------------------------
+
+    def _process_video_handler(
+        manager: JobManager,
+        job_id: str,
+        video_path: str,
+        video_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Run the full video pipeline (sync, runs in thread pool).
+
+        Registered as the ``process_video`` handler in the JobManager.
+        """
+        # Report phase 1: pipeline
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            # Create fresh instances for background work
+            local_pipeline = VideoPipeline(cfg)
+            local_rag = VideoRAG(cfg)
+
+            loop.call_soon_threadsafe(
+                asyncio.ensure_future,
+                manager.update_job(
+                    job_id,
+                    progress="Running video pipeline (transcription, scene detection, OCR, YOLO...)",
+                    progress_pct=10.0,
+                ),
+            )
+
+            video_index: VideoIndex = local_pipeline.process(video_path)
+
+            loop.call_soon_threadsafe(
+                asyncio.ensure_future,
+                manager.update_job(
+                    job_id,
+                    progress="Indexing into RAG vector store...",
+                    progress_pct=75.0,
+                ),
+            )
+
+            local_rag.index_video(video_index)
+
+            result = {
+                "video_id": video_index.video_id,
+                "filename": video_index.filename,
+                "duration": video_index.duration,
+                "num_scenes": len(video_index.scenes),
+                "num_chunks": len(video_index.chunks),
+                "full_transcript": video_index.full_transcript,
+                "status": "processed",
+            }
+            return result
+        finally:
+            loop.close()
+
+    # Register the handler on the default manager
+    _job_manager = get_default_manager()
+
+    # Only register if not already registered (re-entrant route factory calls)
+    try:
+        _job_manager._worker_registry.get("process_video")
+    except KeyError:
+        _job_manager.register_handler("process_video", _process_video_handler)
+
+    # ------------------------------------------------------------------
+    # POST /api/videos/process  (async — returns job_id immediately)
     # ------------------------------------------------------------------
 
     @router.post(
         "/api/videos/process",
-        response_model=ProcessResponse,
-        summary="Process a new video",
+        response_model=EnqueueResponse,
+        summary="Enqueue a video for processing",
     )
     async def api_process_video(
         file: Optional[UploadFile] = File(None, description="Video file upload"),
         url: str = Form("", description="URL to download and process"),
         file_path: str = Form("", description="Local file path to process"),
     ):
-        """Process a new video through the analysis pipeline.
+        """Enqueue a video for background processing.
 
-        Accepts either a file upload, a URL (YouTube, direct link), or a
-        local file path. Returns a summary of the processed video index.
+        Accepts a file upload, a URL (YouTube, direct link), or a local
+        file path.  Returns immediately with a ``job_id`` that can be
+        polled via ``GET /api/jobs/{job_id}`` for status and results.
+
+        When the job completes (status=``completed``), the ``result``
+        field contains the processed video's metadata including
+        ``video_id``.
         """
         loop = asyncio.get_event_loop()
 
-        # Determine source
+        # Determine source and resolve to a local video_path
         if file is not None and file.filename:
-            # Uploaded file — save to disk first
             video_dir = cfg.video_dir
             video_dir.mkdir(parents=True, exist_ok=True)
             dest = video_dir / file.filename
@@ -584,7 +737,6 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
             video_path = str(dest)
 
         elif url:
-            # URL — download first
             pipe = _get_pipeline()
             video_dir = cfg.video_dir
             video_dir.mkdir(parents=True, exist_ok=True)
@@ -602,7 +754,6 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
                 )
 
         elif file_path:
-            # Local file path
             video_path = file_path
             if not Path(video_path).exists():
                 raise HTTPException(
@@ -613,33 +764,78 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
                 status_code=400, detail="Provide a file upload, url, or file_path"
             )
 
-        # Process the video
-        pipe = _get_pipeline()
-        try:
-            video_index: VideoIndex = await loop.run_in_executor(
-                None, pipe.process, video_path
-            )
-        except Exception as exc:
-            logger.error("Pipeline processing error: %s", exc)
-            raise HTTPException(
-                status_code=500, detail=f"Video processing failed: {exc}"
-            )
+        # Enqueue the job
+        job = await _job_manager.enqueue(
+            "process_video",
+            video_path=video_path,
+        )
 
-        # Index into RAG
-        try:
-            await loop.run_in_executor(None, _get_rag().index_video, video_index)
-        except Exception as exc:
-            logger.error("RAG indexing error: %s", exc)
-            raise HTTPException(status_code=500, detail=f"Indexing failed: {exc}")
+        return EnqueueResponse(
+            job_id=job.job_id,
+            status=job.status.value,
+            message="Video processing enqueued. Poll GET /api/jobs/{job_id} for status.",
+        )
 
-        return ProcessResponse(
-            video_id=video_index.video_id,
-            filename=video_index.filename,
-            duration=video_index.duration,
-            num_scenes=len(video_index.scenes),
-            num_chunks=len(video_index.chunks),
-            full_transcript=video_index.full_transcript,
-            status="processed",
+    # ------------------------------------------------------------------
+    # GET /api/jobs/{job_id}  — poll job status
+    # ------------------------------------------------------------------
+
+    @router.get(
+        "/api/jobs/{job_id}",
+        response_model=JobResponse,
+        summary="Poll a job's status and results",
+    )
+    async def api_get_job(job_id: str):
+        """Retrieve the current status and results of a background job.
+
+        Returns the job's lifecycle state (pending/running/completed/
+        failed/cancelled), progress information, and — on success —
+        the ``result`` dict containing the processed video metadata
+        (``video_id``, ``filename``, ``duration``, ``num_scenes``,
+        ``num_chunks``, ``full_transcript``).
+        """
+        job = await _job_manager.get_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+        return _job_to_response(job)
+
+    # ------------------------------------------------------------------
+    # GET /api/jobs  — list recent jobs
+    # ------------------------------------------------------------------
+
+    @router.get(
+        "/api/jobs",
+        response_model=JobListResponse,
+        summary="List recent processing jobs",
+    )
+    async def api_list_jobs(
+        limit: int = Query(50, description="Maximum number of jobs to return"),
+        offset: int = Query(0, description="Number of jobs to skip"),
+        status: Optional[str] = Query(
+            None, description="Filter by status (pending/running/completed/failed)"
+        ),
+    ):
+        """Return recent processing jobs, newest first.
+
+        Supports pagination via *limit* and *offset*, and optional
+        filtering by *status*.
+        """
+        status_filter = None
+        if status:
+            try:
+                status_filter = JQStatus(status)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid status '{status}'. Valid: pending, running, completed, failed, cancelled",
+                )
+
+        jobs = await _job_manager.list_jobs(
+            limit=limit, offset=offset, status_filter=status_filter
+        )
+        return JobListResponse(
+            total=len(jobs),
+            jobs=[_job_to_response(j) for j in jobs],
         )
 
     # ------------------------------------------------------------------

@@ -12,7 +12,7 @@ Modules:
 - agent: Agentic Video Understanding Agent with multi-tool dispatch (v0.36.0)
 - chapters: Video content chaptering — auto topic segmentation & chapter generation (v0.37.0)
 - api: Full REST API layer with OpenAPI docs (v0.41.0)
-- stream_chat: Token-by-token MLLM streaming (SSE) for both providers (v0.41.0)
+- job_queue: In-process async job queue for background video processing (v0.43.0)
 """
 
 from video_analysis import (
@@ -41,7 +41,7 @@ from video_analysis import (
 
 # api and stream_chat modules are imported on demand
 
-__version__ = "0.42.0"
+__version__ = "0.43.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

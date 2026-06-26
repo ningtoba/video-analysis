@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.43.0 (2026-06-27) — Async Job Queue for REST API
+
+### ⏳ Async Job Queue (`video_analysis/job_queue.py`)
+
+A brand-new in-process async job queue for background video processing — **zero
+external dependencies** (no Redis, no Celery).
+
+- **`JobManager`** — singleton async job queue with asyncio-based background
+  worker; `asyncio.Semaphore` for concurrency control; `asyncio.Lock` for
+  thread-safe job state; clean FastAPI lifespan integration
+- **`Job`** dataclass with full lifecycle: `PENDING → RUNNING → COMPLETED|FAILED`
+- **`JobStatus`** enum — `pending`, `running`, `completed`, `failed`, `cancelled`
+- **Progress tracking** — `progress` (human-readable string) + `progress_pct`
+  (0-100 float) fields updated during pipeline phases
+- **Job listing** — paginated with optional status filter
+- **`POST /api/videos/process`** now returns immediately with a `job_id` instead
+  of blocking until pipeline completion
+- **`GET /api/jobs/{job_id}`** — poll job status and results
+- **`GET /api/jobs`** — list recent jobs (newest first, with pagination)
+- **`_process_video_handler`** — registered as the background handler; creates
+  fresh `VideoPipeline` + `VideoRAG` instances per job (thread-safe); reports
+  progress (pipeline: 10%→75%, indexing: 75%→100%)
+- **`_job_to_response()`** helper — converts `Job` dataclass to `JobResponse`
+  Pydantic schema
+- **`EnqueueResponse`** schema — `job_id`, `status`, `message` returned on enqueue
+- **`JobResponse`** schema — full job status for polling endpoints
+- **`JobListResponse`** schema — paginated job listing
+
+### 📦 Files Changed
+
+- **New**: `video_analysis/job_queue.py` — in-process async job queue (~450 lines)
+- **Modified**: `video_analysis/api.py` — async process endpoint, job endpoints,
+  Pydantic schemas, background handler registration
+- **Modified**: `video_analysis/__init__.py` — v0.43.0
+- **Modified**: `pyproject.toml` — v0.43.0
+- **Modified**: `README.md` — feature list, module table, config vars
+
 ## 0.42.0 (2026-06-27) — API-First Evolution: List Videos Endpoint & Bug Fixes
 
 ### 🌐 REST API Enhancements

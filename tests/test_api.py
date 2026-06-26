@@ -132,6 +132,8 @@ class TestApiEndpointExistence:
         paths = app.openapi().get("paths", {})
         expected = [
             "/api/videos/process",
+            "/api/jobs/{job_id}",
+            "/api/jobs",
             "/api/videos",
             "/api/videos/{video_id}",
             "/api/videos/{video_id}/query",
@@ -279,23 +281,23 @@ class TestChapters:
 
 
 class TestProcessVideo:
-    """Tests for POST /api/videos/process."""
+    """Tests for POST /api/videos/process (async job queue mode)."""
 
     def test_process_without_url(self, client):
-        """Missing URL should return 400."""
+        """Missing URL/file should return 400."""
         response = client.post(
             "/api/videos/process",
             json={},
         )
-        assert response.status_code in (400, 422)
+        assert response.status_code == 400
 
     def test_process_invalid_file_path(self, client):
-        """Non-existent file path should not crash."""
+        """Non-existent file path should return 400 (not crash)."""
         response = client.post(
             "/api/videos/process",
-            json={"url": "file:///nonexistent/video.mp4"},
+            data={"file_path": "/nonexistent/video.mp4"},
         )
-        assert response.status_code in (400, 422, 500)
+        assert response.status_code == 404
 
 
 class TestFrames:
@@ -326,6 +328,8 @@ class TestOpenAPISchema:
         paths = schema["paths"]
         expected_paths = [
             "/api/videos/process",
+            "/api/jobs/{job_id}",
+            "/api/jobs",
             "/api/videos",
             "/api/videos/{video_id}",
             "/api/videos/{video_id}/query",
