@@ -1,6 +1,62 @@
-# Changelog
-
-## 0.54.0 (2026-06-27) — InternVideo3 SOTA Video MLLM Backend
+|# Changelog
+|
+|## 0.56.0 (2026-06-27) — Research Phase: Next-Generation Video Reasoning & RAG |
+|
+|### 🔬 Deep Research — 4 Parallel Tracks (docs/research/)
+|
+|Track 1 — **Next-Generation Video Reasoning & RAG** (`v0.56.0-next-generation-video-reasoning-rag.md`):
+|- Event-Causal RAG (arXiv:2605.06185): State-Event-State graph RAG with dual-store
+|  memory (semantic + causal-topological retrieval) — the #1 recommendation for v0.56.0
+|- Video Streaming Thinking (arXiv:2603.12262): "Watch and think simultaneously" with
+|  amortized reasoning latency over streaming chunks — 15.7× faster than Video-R1
+|- VideoStir (arXiv:2604.05418, ACL 2026): Spatio-temporal graph + intent-aware RAG
+|- DynFrame SD-GRPO (arXiv:2605.26680): Learnable frame sampling with separate RL rewards
+|  for "where to look" vs "how to answer"
+|- CARE (arXiv:2606.19927): Competence-aware reward shaping for adaptive reasoning length
+|- Robust-TO v2 (arXiv:2606.26904): Per-frame trust scoring with confidence-cost GRPO
+|- VideoKR (arXiv:2606.05259, ICML 2026): 315K video reasoning training corpus (SFT→GRPO)
+|
+|Track 2 — **Video MLLM Fine-Tuning on Consumer GPUs** (`v0.56.0-video-mllm-fine-tuning-research.md`):
+|- LoRA/QLoRA/DoRA adapter approaches for 2B-8B video MLLMs on RTX 4070 12GB
+|- DPO/GRPO/ORPO preference optimization for video reasoning
+|- APT-Tune (arXiv:2606.18586): 11M LoRA params on Qwen3-VL-2B for causal physics
+|- SFT→GRPO pipeline with new 2026 datasets (Streamo-Instruct-465K, Live-CC-5M)
+|- FEASIBLE: LoRA SFT on 2B models comfortably; 8B with QLoRA + gradient checkpointing
+|
+|Track 3 — **Multi-Modal Knowledge Graphs & Video Scene Graphs**
+|  (`multimodal_kg_video_scene_graph_advances_2026.md`, 817 lines):
+|- DSFlash (CVPR 2026): Real-time panoptic scene graphs at 56 FPS on RTX 3090
+|- SceneGraphVLM (arXiv:2605.13667): Compact VLM scene graph generation + RL rewards
+|- EgoGraph (arXiv:2602.23709): Training-free temporal KG for ultra-long egocentric video
+|- Synthetic Visual Genome 2 (arXiv:2602.23543): Large-scale spatio-temporal SGG data
+|- FocusGraph (arXiv:2603.04349): Graph-structured frame selection for long-video QA
+|- 9 high-impact, VRAM-grounded recommendations for knowledge_graph.py + scene_graph.py
+|
+|Track 4 — **Pipeline Optimization & Production Deployment**
+|  (`v0.56.0-video-ai-pipeline-optimization-h2-2026.md`, 1151 lines):
+|- GPU memory: expandable segments + torch.compile = 2-3× throughput on 12GB VRAM
+|- Model quantization: FP8 for heavy MLLMs, INT4/GGUF for medium, dynamic precision
+|- Frame feature caching: DINOv2 perceptual dedup + Fre-Res frequency-domain compression
+|- Lazy loading: CUDA graphs + strategic warm-up for predictable model transitions
+|- Resource-aware scheduling: prevent OOM on concurrent pipeline + API server
+|- Full config recommendations for each optimization
+|
+|### 📁 Files Changed
+|
+|| File | Description |
+||------|-------------|
+|| `docs/research/v0.56.0-next-generation-video-reasoning-rag.md` | 302 lines — primary research doc with 8 papers, gap analysis, recommended direction |
+|| `docs/research/v0.56.0-video-mllm-fine-tuning-research.md` | 623 lines — LoRA/QLoRA/DPO/GRPO fine-tuning survey for RTX 4070 |
+|| `docs/research/multimodal_kg_video_scene_graph_advances_2026.md` | 817 lines — VidSGG, KG, entity linking, event detection survey |
+|| `docs/research/v0.56.0-video-ai-pipeline-optimization-h2-2026.md` | 1151 lines — GPU memory, quantization, caching, scheduling optimization |
+|
+|### 🧪 Tests: 973/973 passing (unchanged)
+|
+|**Next:** Implement Event-Causal RAG module + Streaming Thinking as v0.57.0
+|
+|---
+|
+|## 0.55.0 (2026-06-27) — Video MLLM Direct REST API
 
 ### 🧠 InternVideo3-8B Video MLLM Backend (`video_analysis/backends/internvideo3.py`)
 
