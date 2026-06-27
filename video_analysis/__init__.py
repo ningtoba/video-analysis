@@ -22,6 +22,7 @@ Modules:
 ||| orchestra: Hierarchical multi-agent video reasoning orchestrator — HiCrew-inspired planning layer, specialist sub-agents, evidence synthesis (v0.51.0)
 ||| knowledge_graph: Persistent video knowledge graph — SQLite-backed cross-video entity & relationship store (v0.52.0)
 ||| pipeline_health: Pipeline health monitoring — automated anomaly detection, drift tracking, alerting, composite health scoring (v0.52.0)
+||| internvideo3: InternVideo3-8B video MLLM backend — SOTA open-weight video understanding with MCR reasoning & M^2LA KV-cache compression (v0.54.0)
 """
 
 from video_analysis import (
@@ -51,7 +52,7 @@ from video_analysis import (
 
 # api and stream_chat modules are imported on demand
 
-__version__ = "0.53.0"
+__version__ = "0.54.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

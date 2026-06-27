@@ -33,7 +33,7 @@
 |- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6 — +4.6% detection, +5.1% recognition over v5), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
 |- **🧠 Persistent Video Knowledge Graph** (v0.52.0) — SQLite-backed cross-video entity & relationship store that builds persistent knowledge across all analyzed videos; tracks people, objects, actions, and concepts with frequency counters, typed relationships, cross-video search, and chronological timeline; injectable as LLM context for context-aware queries
 |- **🩺 Pipeline Health Monitor** (v0.52.0) — automated pipeline health monitoring with z-score-based anomaly detection, severity-graded alerting (info/warning/error/critical), composite health scoring, and persistent run history; provides concise health summaries and LLM-friendly context for prompt injection
-|- **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) or **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)** for video-native scene description, summarization, and Q&A
+||- **🧠 Quad-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M), VideoChat-Flash 2B (MIT, ICLR 2026), **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)**, or **InternVideo3-8B (OpenGVLab, June 2026, SOTA open-weight video MLLM — 73.8 Video-MME, MCR reasoning, M^2LA KV-cache compression)**
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
 - **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
@@ -170,10 +170,11 @@ User Question
 || `telemetry` | `video_analysis/telemetry.py` | OpenTelemetry distributed tracing — pipeline, RAG, and API spans with OTLP export (v0.49.0) |
 |rate_limiter|`video_analysis/rate_limiter.py`|In-memory token bucket rate limiter for REST API (v0.49.0)|
 |error_handlers|`video_analysis/error_handlers.py`|Structured JSON error responses for REST API (v0.49.0)|
-||client|`video_analysis/client.py`|Python API client SDK for the REST API (v0.49.0)|
-||agent_confidence|`video_analysis/agent_confidence.py`|Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence weighting, tiered weighting (v0.50.0)|
-||report|`video_analysis/report.py`|Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)|
-||knowledge_graph|`ui/knowledge_graph.py`|Gradio Knowledge Graph Explorer tab — entity browsing, timeline, relationships, LLM context (v0.53.0)|
+|||client|`video_analysis/client.py`|Python API client SDK for the REST API (v0.49.0)|
+|||agent_confidence|`video_analysis/agent_confidence.py`|Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence weighting, tiered weighting (v0.50.0)|
+|||report|`video_analysis/report.py`|Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)|
+|||knowledge_graph|`ui/knowledge_graph.py`|Gradio Knowledge Graph Explorer tab — entity browsing, timeline, relationships, LLM context (v0.53.0)|
+|||internvideo3|`video_analysis/backends/internvideo3.py`|InternVideo3-8B video MLLM backend — SOTA open-weight with MCR reasoning, M^2LA, 73.8 Video-MME (v0.54.0)|
 
 ## 💻 Tech Stack
 
@@ -195,7 +196,8 @@ User Question
 | **Video Import** | yt-dlp | Downloads from YouTube, Vimeo, Twitch, and 1000+ sites |
 | **LLM** | DeepSeek-V4-Flash (via Hermes CLI) or any OpenAI-compatible API (vLLM, Ollama, llama.cpp, TGI) via `LLM_PROVIDER=openai`
 | **GPU** | RTX 4070 (CUDA 13.3) | All models run with GPU acceleration |
-| **Live Stream** | FFmpeg `-re` capture | RTMP/RTSP/HLS with auto-reconnect and sliding window (v0.40.0) |
+|| **Live Stream** | FFmpeg `-re` capture | RTMP/RTSP/HLS with auto-reconnect and sliding window (v0.40.0) |
+|| **Video MLLM** | SmolVLM2 / VideoChat-Flash / Qwen3-VL-30B-A3B FP8 / **InternVideo3-8B (vLLM)** | Quad-backend for scene description, summarization, video-native Q&A |
 
 ## 🔧 Configuration
 
@@ -229,10 +231,13 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `ACTION_MODEL_NAME` | `microsoft/xclip-base-patch16-zero-shot` | X-CLIP model for action recognition |
 | `VIDEO_MLLM_ENABLED` | `false` | Enable VideoChat-Flash 2B / Qwen3-VL-30B-A3B video MLLM (~5.4 GB VRAM) |
 | `VIDEO_MLLM_MODEL` | `OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448` | Video MLLM model name (overridable, e.g. Qwen/Qwen3-VL-30B-A3B-Instruct-FP8) |
-| `VIDEO_MLLM_BACKEND` | `auto` | Video MLLM backend (auto/videochat_flash/smolvlm2/qwen3_vl) |
+|| `VIDEO_MLLM_BACKEND` | `auto` | Video MLLM backend (auto/videochat_flash/smolvlm2/qwen3_vl/internvideo3) |
 | `VIDEO_MLLM_MODEL_SIZE` | `2.2B` | SmolVLM2 model size (2.2B/500M/256M) |
 | `VIDEO_MLLM_AS_DESCRIBER` | `false` | Use MLLM for scene descriptions (replaces OpenCLIP) |
-| `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
+|| `VIDEO_MLLM_AS_CHAT_BACKEND` | `false` | Use MLLM as video-native Q&A backend |
+|| `INTERNVIDEO3_VLLM_URL` | `http://localhost:8001` | InternVideo3 vLLM server URL (v0.54.0) |
+|| `INTERNVIDEO3_FP8` | `true` | Enable FP8 quantization for InternVideo3 (v0.54.0) |
+|| `INTERNVIDEO3_THINKING` | `false` | Enable MCR thinking mode for InternVideo3 (v0.54.0) |
 | `LLM_PROVIDER` | `hermes` | LLM backend (hermes, openai, auto) — v0.39.0 |
 | `OPENAI_API_BASE` | `http://localhost:11434/v1` | OpenAI-compatible API URL |
 | `OPENAI_API_KEY` | (empty) | API key (can be empty for local servers) |
@@ -473,7 +478,8 @@ Dashboard panels:
 |
 - [x] **Robust Agent Confidence Framework** (v0.50.0) — Robust-TO inspired per-frame trustworthiness scoring, per-source evidence confidence adjustment, three-tier evidence weighting with weighted combination and consensus, transparent wrapper with untrustworthy frame filtering
 - [x] **Structured Video Report** (v0.50.0) — comprehensive JSON schema report generator with VideoMetadata, TimelineSummary, SceneReport, TranscriptReport, ObjectCatalog, ActionSummary, RAGStats; JSON serialisation, save/load, markdown rendering, LLM-friendly chunk context
-- [x] **REST API: Knowledge Graph Endpoints** (v0.53.0) — 6 new endpoints exposing the KnowledgeGraph (stats, entities, timeline, relationships, video entities, LLM context) for programmatic cross-video entity querying
-- [x] **REST API: Pipeline Health Endpoints** (v0.53.0) — 4 new endpoints exposing PipelineHealthMonitor (runs report, summary, alerts, alert acknowledge) for automated health checks and observability
-- [x] **Gradio Knowledge Graph Explorer Tab** (v0.53.0) — Tab 10 in the Gradio UI for visual entity browsing, timeline exploration, entity type filtering, relationship visualization, and LLM context injection
-MIT
+|- [x] **REST API: Knowledge Graph Endpoints** (v0.53.0) — 6 new endpoints exposing the KnowledgeGraph (stats, entities, timeline, relationships, video entities, LLM context) for programmatic cross-video entity querying
+|- [x] **REST API: Pipeline Health Endpoints** (v0.53.0) — 4 new endpoints exposing PipelineHealthMonitor (runs report, summary, alerts, alert acknowledge) for automated health checks and observability
+|- [x] **Gradio Knowledge Graph Explorer Tab** (v0.53.0) — Tab 10 in the Gradio UI for visual entity browsing, timeline exploration, entity type filtering, relationship visualization, and LLM context injection
+|- [x] **InternVideo3-8B Backend** (v0.54.0) — SOTA open-weight video MLLM with MCR reasoning, M^2LA KV-cache compression, 73.8 Video-MME, three deployment modes (vLLM server/offline/transformers)
+|MIT

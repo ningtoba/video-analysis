@@ -1,18 +1,24 @@
 """
 Video MLLM (Multimodal Large Language Model) module.
 
-Supports three backends:
-- **VideoChat-Flash** (OpenGVLab, ICLR 2026) — a hierarchical compression
-  video MLLM that supports long-context video understanding with only 16
-  tokens per frame.  The 2B variant (``OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448``)
-  fits in ~5.4 GB BF16 on a 12 GB RTX 4070 with comfortable headroom.
-- **SmolVLM2** (HuggingFaceTB) — a family of compact vision-language models
-  (2.2B, 500M, 256M) using standard ``AutoModelForImageTextToText`` from
-  transformers (no trust_remote_code).  Uses ``decord`` for video decoding.
-- **Qwen3-VL-30B-A3B** (Qwen Team, Apache 2.0) — Mixture-of-Experts VLM with
-  30B total / 3B active params, FP8 quantization, 128K context, hybrid
-  thinking/non-thinking mode.  Deployed via vLLM server (recommended),
-  vLLM offline inference, or transformers fallback.
+|Supports four backends:
+|- **VideoChat-Flash** (OpenGVLab, ICLR 2026) — a hierarchical compression
+|  video MLLM that supports long-context video understanding with only 16
+|  tokens per frame.  The 2B variant (``OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448``)
+|  fits in ~5.4 GB BF16 on a 12 GB RTX 4070 with comfortable headroom.
+|- **SmolVLM2** (HuggingFaceTB) — a family of compact vision-language models
+|  (2.2B, 500M, 256M) using standard ``AutoModelForImageTextToText`` from
+|  transformers (no trust_remote_code).  Uses ``decord`` for video decoding.
+|- **Qwen3-VL-30B-A3B** (Qwen Team, Apache 2.0) — Mixture-of-Experts VLM with
+|  30B total / 3B active params, FP8 quantization, 128K context, hybrid
+|  thinking/non-thinking mode.  Deployed via vLLM server (recommended),
+|  vLLM offline inference, or transformers fallback.
+|- **InternVideo3-8B** (OpenGVLab, June 2026, arXiv:2606.12195) — the
+|  strongest open-weight video MLLM as of mid-2026, with Multimodal
+|  Contextual Reasoning (MCR) for iterative evidence accumulation and
+|  M^2LA KV-cache compression (1.84× faster decode). Best Video-MME
+|  score (73.8) among open-weight 8B-class models.  Fits ~10GB at FP8
+|  or ~6GB at INT4 on 12GB RTX 4070.
 
 Provides:
 - ``describe_scene(frames)`` — richer scene descriptions than OpenCLIP labels
@@ -42,7 +48,7 @@ SMOLVLM2_MODEL_PATHS = {
     "256M": "HuggingFaceTB/SmolVLM2-256M-Video-Instruct",
 }
 
-BackendType = Literal["auto", "videochat_flash", "smolvlm2", "qwen3_vl"]
+BackendType = Literal["auto", "videochat_flash", "smolvlm2", "qwen3_vl", "internvideo3"]
 ModelSizeType = Literal["2.2B", "500M", "256M"]
 
 
@@ -111,6 +117,8 @@ class VideoMLLM:
             return self._load_smolvlm2()
         elif backend == "qwen3_vl":
             return self._load_qwen3_vl()
+        elif backend == "internvideo3":
+            return self._load_internvideo3()
         else:
             return self._load_videochat_flash()
 
@@ -122,8 +130,20 @@ class VideoMLLM:
             return "smolvlm2"
         elif self.backend == "qwen3_vl":
             return "qwen3_vl"
+        elif self.backend == "internvideo3":
+            return "internvideo3"
         elif self.backend == "auto":
-            # Try Qwen3-VL first (check if vLLM server is available)
+            # Try InternVideo3 first (SOTA open-weight model)
+            try:
+                from video_analysis.backends.internvideo3 import InternVideo3Backend
+
+                ib = InternVideo3Backend()
+                if ib._check_vllm_server():
+                    logger.info("Auto backend: using InternVideo3 (vLLM server)")
+                    return "internvideo3"
+            except Exception:
+                pass
+            # Try Qwen3-VL next (check if vLLM server is available)
             try:
                 from video_analysis.backends.qwen3_vl import Qwen3VLBackend
 
@@ -272,6 +292,64 @@ class VideoMLLM:
             self._available = False
             return False
 
+    def _load_internvideo3(self) -> bool:
+        """Load InternVideo3-8B backend.
+
+        Delegates to InternVideo3Backend from video_analysis.backends.internvideo3,
+        which handles vLLM server, vLLM offline, and transformers backends.
+        InternVideo3 (arXiv:2606.12195, June 2026) is the strongest open-weight
+        video MLLM with MCR reasoning and M^2LA KV-cache compression.
+        """
+        try:
+            from video_analysis.backends.internvideo3 import InternVideo3Backend
+
+            # Determine FP8 mode from config
+            use_fp8 = os.environ.get("INTERNVIDEO3_FP8", "true").lower() in (
+                "true",
+                "1",
+                "yes",
+            )
+            thinking_mode = os.environ.get(
+                "INTERNVIDEO3_THINKING", "false"
+            ).lower() in (
+                "true",
+                "1",
+                "yes",
+            )
+            vllm_url = os.environ.get("INTERNVIDEO3_VLLM_URL")
+
+            logger.info(
+                "Loading InternVideo3 backend " "(model=%s, fp8=%s, thinking=%s)",
+                self.model_name,
+                use_fp8,
+                thinking_mode,
+            )
+            self._internvideo3 = InternVideo3Backend(
+                model_name=self.model_name,
+                use_fp8=use_fp8,
+                thinking_mode=thinking_mode,
+                vllm_server_url=vllm_url,
+            )
+            loaded = self._internvideo3.load()
+            if loaded:
+                self._resolved_backend = "internvideo3"
+                logger.info("InternVideo3 backend loaded successfully")
+            else:
+                logger.warning("InternVideo3 backend failed to load")
+                self._available = False
+            return loaded
+        except ImportError as e:
+            logger.warning(
+                f"InternVideo3 backend not available: {e}. "
+                "Install with: pip install vllm  # for vLLM mode"
+            )
+            self._available = False
+            return False
+        except Exception as e:
+            logger.warning(f"Failed to load InternVideo3 backend: {e}")
+            self._available = False
+            return False
+
     def unload(self):
         """Unload the model from GPU memory.
 
@@ -295,6 +373,11 @@ class VideoMLLM:
         if hasattr(self, "_qwen3_vl") and self._qwen3_vl is not None:
             self._qwen3_vl.unload()
             self._qwen3_vl = None
+            self._resolved_backend = None
+
+        if hasattr(self, "_internvideo3") and self._internvideo3 is not None:
+            self._internvideo3.unload()
+            self._internvideo3 = None
             self._resolved_backend = None
 
     # ------------------------------------------------------------------
@@ -401,6 +484,8 @@ class VideoMLLM:
                 return self._smolvlm2_generate(prompt, frames=frames)
             elif self._resolved_backend == "qwen3_vl":
                 return self._qwen3_vl.describe_scene(frames, prompt=prompt)
+            elif self._resolved_backend == "internvideo3":
+                return self._internvideo3.describe_scene(frames, prompt=prompt)
             else:
                 # VideoChat-Flash path
                 inputs = self._processor(
@@ -478,6 +563,24 @@ class VideoMLLM:
                         shutil.rmtree(temp_dir, ignore_errors=True)
             elif self._resolved_backend == "qwen3_vl":
                 return self._qwen3_vl.summarize_video(str(video), num_frames=num_frames)
+            elif self._resolved_backend == "internvideo3":
+                iv3_frame_paths = self._decode_video_frames(
+                    str(video), num_frames=num_frames
+                )
+                if iv3_frame_paths is None:
+                    return None
+                try:
+                    return self._internvideo3.summarize_video(
+                        iv3_frame_paths, max_tokens=512
+                    )
+                finally:
+                    import shutil
+
+                    temp_dir = (
+                        Path(iv3_frame_paths[0]).parent if iv3_frame_paths else None
+                    )
+                    if temp_dir and temp_dir.exists():
+                        shutil.rmtree(temp_dir, ignore_errors=True)
             else:
                 # VideoChat-Flash path
                 inputs = self._processor(
@@ -543,6 +646,10 @@ class VideoMLLM:
             elif self._resolved_backend == "qwen3_vl":
                 return self._qwen3_vl.answer(
                     query, frames=frames, video_path=video_path
+                )
+            elif self._resolved_backend == "internvideo3":
+                return self._internvideo3.answer(
+                    query, frame_paths=frames or [], max_tokens=512
                 )
             else:
                 # VideoChat-Flash path

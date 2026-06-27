@@ -1,6 +1,77 @@
 # Changelog
 
-## 0.53.0 (2026-06-27) — REST API Integration for Knowledge Graph & Pipeline Health Monitor
+## 0.54.0 (2026-06-27) — InternVideo3 SOTA Video MLLM Backend
+
+### 🧠 InternVideo3-8B Video MLLM Backend (`video_analysis/backends/internvideo3.py`)
+
+Integrates **InternVideo3** (arXiv:2606.12195, June 2026) — the strongest
+open-weight video MLLM as of mid-2026 — as a new Video MLLM backend.
+InternVideo3 builds on Qwen3-VL-8B with two key innovations:
+
+1. **Multimodal Contextual Reasoning (MCR):** closed-loop long-video
+   understanding as iterative evidence accumulation — the model watches,
+   reasons, accumulates evidence, and re-watches selectively.
+2. **M^2LA (Multi-Modal Memory-Latency Adapter):** token-preserving KV-cache
+   compression achieving 1.84× faster decode at 32K tokens with no quality loss.
+
+**Benchmark leadership (open-weight 8B-class):**
+- **Video-MME: 73.8** (best; Qwen3-VL-8B: 71.4, Eagle2.5: 72.4)
+- **MLVU: 77.3** (best; Qwen3-VL-8B: 57.6)
+- **EgoSchema: 76.6** (best; Qwen3-VL-8B: 69.8)
+- **VRBench: 69.4** (best; Qwen3-VL-8B: 59.4)
+
+**Backend interface (`InternVideo3Backend`):**
+- Three deployment modes tried in priority order:
+  1. **vLLM server** (OpenAI-compatible API, recommended for production) —
+     connects to an existing vLLM server, configurable via `INTERNVIDEO3_VLLM_URL`
+     env var (default: `http://localhost:8001`)
+  2. **vLLM offline inference** — in-process via vLLM `LLM` class with FP8
+     quantization support
+  3. **Transformers fallback** — direct HuggingFace `AutoModelForImageTextToText`
+- Full public API: `describe_scene()`, `answer()`, `summarize_video()`,
+  `load()`, `unload()`
+- FP8 mode via `INTERNVIDEO3_FP8` env var (default: `true`)
+- MCR thinking mode via `INTERNVIDEO3_THINKING` env var (default: `false`)
+- Built-in GPU memory management (load/unload via `unload()`)
+
+### 🔗 VideoMLLM Integration
+
+- `VideoMLLM` now supports a 4th backend: `BackendType = "internvideo3"`
+- Auto-backend resolution tries InternVideo3 vLLM server first (before
+  Qwen3-VL, SmolVLM2, and VideoChat-Flash) when available
+- `describe_scene`, `answer`, and `summarize_video` all route through
+  InternVideo3 when selected
+- `unload()` cleans up InternVideo3 GPU memory
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VIDEO_MLLM_BACKEND` | `auto` | Set to `internvideo3` for InternVideo3-8B |
+| `INTERNVIDEO3_VLLM_URL` | `http://localhost:8001` | vLLM server URL |
+| `INTERNVIDEO3_FP8` | `true` | Enable FP8 quantization |
+| `INTERNVIDEO3_THINKING` | `false` | Enable MCR thinking mode |
+
+### 📁 Files Changed
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `video_analysis/backends/internvideo3.py` | ~520 | New InternVideo3-8B backend with vLLM server/offline/transformers modes |
+| `video_analysis/backends/__init__.py` | +1 | Package docstring update |
+| `video_analysis/video_mllm.py` | ~80 | New `internvideo3` backend type, loading, routing, and unload |
+| `video_analysis/__init__.py` | 2 | Version bump to 0.54.0, new module docs |
+| `pyproject.toml` | 1 | Version bump |
+| `tests/test_internvideo3.py` | ~170 | 13 tests: import, instantiation, env vars, message building, version check, backend resolution |
+| `tests/test_basic.py` | 3 | Version check updates (0.53.0 → 0.54.0) |
+| `tests/test_metrics.py` | 1 | Version check update |
+| `tests/test_qwen3_vl.py` | 1 | Version check update |
+| `tests/test_federation.py` | 1 | Version check update |
+| `tests/test_streaming.py` | 1 | Version check update |
+| `tests/test_curator.py` | 1 | Version check update |
+
+### 🧪 Tests: 962/962 passing (0 failures, +23 new)
+
+---
 
 ### 🌐 REST API: Knowledge Graph Endpoints (`video_analysis/api.py`)
 
