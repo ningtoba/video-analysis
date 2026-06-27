@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.60.0 (2026-06-27) — Adaptive Pipeline Stage Scaling & Resource Management
+
+### 🎯 Adaptive Pipeline Scaler (`video_analysis/adaptive_scaler.py`)
+
+New intelligent pipeline scaler that dynamically adjusts per-stage quality and
+resource usage based on video properties and system state:
+
+- **`AdaptivePipelineScaler`** — analyses video (duration, resolution, FPS)
+  and available GPU VRAM (via pynvml), then computes optimal per-stage settings
+- **3 explicit scaling policies + auto mode:**
+  - `conservative` — low frame rate (0.1 fps), 640px analysis size, higher YOLO
+    threshold, tiny OCR tier; ideal for long videos and tight VRAM budgets
+  - `balanced` (default equivalent) — 0.5 fps, 960px, standard thresholds
+  - `performance` — 2.0 fps, 1280px, lower YOLO threshold; ideal for short
+    high-resolution bursts
+  - `auto` — selects policy based on video duration and resolution:
+    - ≥10 minutes → `conservative` (long videos keep VRAM buffer)
+    - ≤1 minute + 1080p+ → `performance` (short burst of high-quality analysis)
+    - otherwise → `balanced`
+- **VRAM-aware auto-downgrade:** when estimated VRAM usage exceeds 95% of free
+  VRAM, the policy is forced to `conservative`; at >85% on `performance`, it
+  downgrades to `balanced`
+- **Stage-level pruning:** under critical VRAM pressure, expensive optional
+  stages (action recognition, MLLM describer, face recognition) are disabled
+- **Long-video optimisation:** videos >30 min get aggressive DINOv2 compression
+  (threshold 0.95) and lower JPEG quality (75), with heavy stages auto-disabled
+- **Short high-res boost:** videos ≤1 min at ≥1080p get increased analysis
+  frame size (1280px) for maximum detail on short clips
+- **Video properties** extracted via ffprobe (width, height, duration, FPS)
+- **`ScalingResult.to_dict()`** — returns config overrides that can be applied
+  directly to the pipeline's Config object
+- **Comprehensive reasoning** — each scaling decision is logged with a
+  human-readable explanation
+
+### 🔧 Pipeline Integration (`video_analysis/pipeline.py`)
+
+- `VideoPipeline.process()` calls `AdaptivePipelineScaler.analyze()` after
+  determining duration (Step 1.5), applies per-stage overrides to `self.config`
+  for the duration of the run
+- Graceful fallback: scaling failures log a warning and continue with defaults
+- Integration works alongside existing `processing_mode` (audio_only/video_full)
+  and `skipped_stages` — scaling only runs when visual stages are enabled
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ADAPTIVE_SCALING_ENABLED` | `true` | Enable adaptive pipeline scaling (v0.60.0) |
+| `ADAPTIVE_SCALING_POLICY` | `auto` | Scaling policy: `conservative`, `balanced`, `performance`, or `auto` |
+
+### 🧪 Tests (`tests/test_adaptive_scaler.py`)
+
+- **33 new tests** covering:
+  - `get_video_properties()` — real ffprobe detection (short/long/audio/missing)
+  - `select_video_aware_policy()` — all boundary transitions and policy logic
+  - `estimate_vram_usage()` — conservative < balanced < performance, optional stages
+  - `get_free_vram_gb()` — graceful fallback when no GPU/pynvml
+  - `ScalingResult.to_dict()` — None omission and full inclusion
+  - `AdaptivePipelineScaler.analyze()` — all 4 policies with real video fixtures
+  - VRAM pressure auto-downgrade (high pressure → balanced, critical → conservative)
+  - Stage pruning under VRAM pressure
+  - Short video high-res boost
+  - Long video aggressive compression
+  - Disabled stages respected
+  - Graceful handling when VRAM detection unavailable
+
+### 📚 Documentation
+
+- `CHANGELOG.md` — v0.60.0 section with all changes
+- `README.md` — updated with Adaptive Pipeline Scaling feature entry, new
+  config fields, `ADAPTIVE_SCALING_ENABLED`/`ADAPTIVE_SCALING_POLICY` in config table
+- Version bumped to `0.60.0` in `pyproject.toml`, `video_analysis/__init__.py`
+
+---
+
 ## 0.59.0 (2026-06-27) — Webhook Notification System & Infrastructure Tests
 
 ### 🔔 Webhook Notification System (`video_analysis/webhook.py`)

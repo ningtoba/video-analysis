@@ -96,4 +96,4 @@ from video_analysis.streaming_think import (
     ThoughtState,
 )  # noqa: E402, F401
 
-__version__ = "0.59.0"
+__version__ = "0.60.0"

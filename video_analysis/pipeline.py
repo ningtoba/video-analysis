@@ -245,6 +245,54 @@ class VideoPipeline:
         duration = self._get_duration(video_path)
         logger.info(f"Duration: {duration:.1f}s")
 
+        # Step 1.5: Adaptive pipeline scaling (v0.60.0)
+        # Dynamically adjust per-stage quality/resolution based on video properties
+        # and available GPU VRAM.
+        scaling_result = None
+        if (
+            self.config.adaptive_scaling_enabled
+            and "scene_detection" not in skipped_stages
+        ):
+            try:
+                from video_analysis.adaptive_scaler import AdaptivePipelineScaler
+
+                scaler = AdaptivePipelineScaler(
+                    default_policy=self.config.adaptive_scaling_policy
+                )
+                enabled = {
+                    "whisper": True,
+                    "yolo": "object_detection" not in skipped_stages,
+                    "clip": "clip_classification" not in skipped_stages,
+                    "xclip": self.config.action_recognition_enabled,
+                    "video_mllm": self.config.video_mllm_enabled,
+                    "face_recognition": self.config.face_recognition_enabled,
+                    "dino": self.config.dino_frame_compression,
+                    "ocr": self.config.ocr_enabled and "ocr" not in skipped_stages,
+                    "diarization": self.config.diarize_enabled,
+                }
+                scaling_result = scaler.analyze(video_path, enabled)
+                scaling_overrides = scaling_result.to_dict()
+
+                # Apply overrides to self.config for this run
+                for key, value in scaling_overrides.items():
+                    if hasattr(self.config, key):
+                        old_val = getattr(self.config, key)
+                        setattr(self.config, key, value)
+                        logger.info(
+                            "Adaptive scaling: %s %.4s -> %.4s",
+                            key,
+                            str(old_val),
+                            str(value),
+                        )
+
+                for reason in scaling_result.reasoning:
+                    logger.info("Scaling reason: %s", reason)
+
+            except Exception as exc:
+                logger.warning(
+                    "Adaptive scaling failed (%s) — continuing with defaults", exc
+                )
+
         # Step 2: Extract audio
         audio_path = self._extract_audio(video_path, video_id)
         logger.info(f"Audio extracted: {audio_path}")

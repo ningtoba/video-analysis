@@ -374,6 +374,16 @@ class Config:
     webhook_urls: List[str] = field(default_factory=list)
     webhook_timeout: float = 5.0  # seconds
 
+    # Adaptive Pipeline Scaling (v0.60.0)
+    # Dynamically adjusts per-stage quality/resolution based on video properties
+    # and available GPU VRAM. Overridden by ADAPTIVE_SCALING_POLICY env var.
+    adaptive_scaling_enabled: bool = bool(
+        os.environ.get("ADAPTIVE_SCALING_ENABLED", "true").lower() == "true"
+    )
+    adaptive_scaling_policy: str = os.environ.get(
+        "ADAPTIVE_SCALING_POLICY", "auto"
+    )  # "conservative", "balanced", "performance", "auto"
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"

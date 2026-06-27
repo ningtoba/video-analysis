@@ -33,4 +33,4 @@ def test_version_check():
     """Verify version is bumped to 0.46.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.59.0"
+    assert __version__ == "0.60.0"
