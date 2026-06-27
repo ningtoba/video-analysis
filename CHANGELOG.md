@@ -1,5 +1,83 @@
 # Changelog
 
+## 0.52.0 (2026-06-27) — Persistent Video Knowledge Graph & Pipeline Health Monitoring
+
+### 🧠 Persistent Video Knowledge Graph (`video_analysis/knowledge_graph.py`)
+
+A comprehensive SQLite-backed cross-video entity & relationship store that
+builds persistent knowledge from all analyzed videos, enabling long-term
+video knowledge management, cross-video reasoning, and semantic browsing.
+
+- **`EntityRecord`** — persistent entity with name, type (person/object/action/
+  location/concept/event), frequency counter, first/last seen timestamps,
+  JSON metadata, and associated video IDs list
+- **`RelationshipRecord`** — typed relationships between entities (co_occurs,
+  appears_with, temporal_sequence, parent/child, same_as) with strength
+  counter and last seen tracking
+- **`VideoRecord`** — metadata about each indexed video (filename, duration,
+  entity count, indexing timestamp)
+- **`KnowledgeGraph`** — thread-safe SQLite-backed store with:
+  - `add_entity()` / `add_entities_batch()` — auto-deduplicates by name+type,
+    increments frequency, tracks video associations
+  - `search_entities()` — filter by name substring, type, minimum frequency
+  - `get_top_entities()` — most frequent entities across all videos
+  - `add_relationship()` / `get_relationships()` — bidirectional entity graph
+  - `get_videos_for_entity()` / `get_entities_for_video()` — cross-video lookup
+  - `get_timeline()` — chronological video timeline with top-entity previews
+  - `cross_video_search()` — text search across all entity names/types
+  - `get_knowledge_context()` — compact LLM-friendly markdown summary for
+    injection into RAG prompts, giving the LLM awareness of all known entities
+  - `stats()` — entity count, relationship count, video count, type breakdown,
+    database size, last indexed video
+  - `vacuum()` / `clear()` / `close()` — maintenance operations
+- **Auto-schema creation** — WAL journaling, foreign keys, performance indexes
+- **Zero external dependencies** — pure Python + sqlite3 (stdlib)
+
+### 🩺 Pipeline Health Monitor (`video_analysis/pipeline_health.py`)
+
+Automated pipeline health monitoring with anomaly detection, drift tracking,
+severity-graded alerting, and composite health scoring. Inspired by modern
+MLOps observability patterns (whylogs, Evidently AI, Datadog ML monitoring).
+
+- **`PipelineRun`** — per-run record with video_id, duration, success flag,
+  per-stage timings, per-stage success, OCR/detection/transcript confidence
+- **`PipelineHealthMonitor`** — SQLite-backed thread-safe monitor with:
+  - `record_run()` — records a pipeline run and automatically checks all
+    tracked metrics for anomalies against a rolling baseline
+  - `_check_metric_anomaly()` — z-score-based anomaly detection comparing
+    the latest value against a rolling window baseline (configurable window
+    size, z-score threshold, minimum data points)
+  - `_create_alert()` — auto-generates alerts with severity (info/warning/
+    error/critical) proportional to z-score magnitude; duplicate suppression
+    via configurable cooldown window
+  - `compute_health_score()` — composite 0.0-1.0 score factoring success rate
+    (40%), alert severity (30%), duration stability (15%), confidence metrics
+    (15%)
+  - `get_health_report()` — full report with run history, metric snapshots,
+    active alerts, degraded metrics list
+  - `get_health_summary()` — concise dict for API/UI consumption
+  - `get_health_context()` — LLM-friendly markdown for prompt injection
+  - `get_active_alerts()` — filterable by minimum severity
+  - `acknowledge_alert()` / `acknowledge_all_alerts()` — alert lifecycle
+  - `clear_runs()` / `clear_alerts()` / `vacuum()` — maintenance operations
+- **Configurable**: window_size, z_score_threshold, min_data_points,
+  alert_cooldown_s, alert_expiry_s
+- **Zero external dependencies** — pure Python + sqlite3 (stdlib)
+
+### 📦 Files Changed
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `video_analysis/knowledge_graph.py` | 437 | Persistent cross-video knowledge graph |
+| `video_analysis/pipeline_health.py` | 570 | Pipeline health monitor with anomaly detection |
+| `video_analysis/__init__.py` | 8 | Package exports for new modules, version bump |
+| `tests/test_knowledge_graph.py` | 324 | 40 tests: entities, relationships, videos, cross-video queries, stats, thread safety |
+| `tests/test_pipeline_health.py` | 296 | 35 tests: run recording, anomaly detection, alerts, health score, thread safety |
+
+### 🧪 Tests: 929/929 passing (0 failures)
+
+---
+
 ## 0.51.0 (2026-06-27) — Hierarchical Multi-Agent Video Reasoning Orchestrator
 
 ### 🧠 HiCrew-Inspired Multi-Agent Architecture (`video_analysis/orchestra.py`)

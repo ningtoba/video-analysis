@@ -426,7 +426,7 @@ class TestReportGenerator:
 class TestReportGeneratorPipelineVersion:
     def test_custom_pipeline_version(self):
         generator = ReportGenerator(
-            config=Config(data_dir=tempfile.mkdtemp()), pipeline_version="0.51.0"
+            config=Config(data_dir=tempfile.mkdtemp()), pipeline_version="0.52.0"
         )
         index = VideoIndex(
             video_id="ver_test",
@@ -435,7 +435,7 @@ class TestReportGeneratorPipelineVersion:
             filepath="/v/test.mp4",
         )
         report = generator.from_video_index(index, processing_time=42.5)
-        assert report.video.pipeline_version == "0.51.0"
+        assert report.video.pipeline_version == "0.52.0"
         assert report.video.processing_time_seconds == 42.5
 
 

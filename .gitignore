@@ -46,3 +46,4 @@ data/chroma/
 
 # Data directory
 /data/
+.worktrees/
