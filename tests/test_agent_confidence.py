@@ -1,5 +1,5 @@
 """
-Tests for the Confidence-Aware Robust Agent Framework (v0.50.0).
+Tests for the Confidence-Aware Robust Agent Framework (v0.51.0).
 
 Matches the subagent-produced API of video_analysis/agent_confidence.py.
 """

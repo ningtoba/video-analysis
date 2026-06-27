@@ -300,6 +300,11 @@ class Config:
         "tiered"  # "tiered" or "continuous"; overridden by AGENT_CONFIDENCE_WEIGHT_MODE
     )
 
+    # Hierarchical Multi-Agent Orchestrator (v0.51.0 — HiCrew-inspired multi-agent)
+    orchestra_enabled: bool = False  # overridden by ORCHESTRA_ENABLED env var
+    orchestra_max_agents: int = 5  # max specialist agents per query
+    orchestra_confidence_threshold: float = 0.5  # early stopping confidence threshold
+
     # Camera Tab (v0.41.0 — webcam/live camera capture & analysis)
     camera_enabled: bool = False  # overridden by CAMERA_ENABLED env var
 
@@ -500,6 +505,26 @@ class Config:
         ac_weight_env = os.environ.get("AGENT_CONFIDENCE_WEIGHT_MODE", "").lower()
         if ac_weight_env in ("tiered", "continuous"):
             self.agent_confidence_weight_mode = ac_weight_env
+        # Override orchestra config from env vars (v0.51.0)
+        orch_env = os.environ.get("ORCHESTRA_ENABLED", "").lower()
+        if orch_env in ("true", "1", "yes"):
+            self.orchestra_enabled = True
+        orch_max_env = os.environ.get("ORCHESTRA_MAX_AGENTS", "")
+        if orch_max_env:
+            try:
+                val = int(orch_max_env)
+                if 1 <= val <= 20:
+                    self.orchestra_max_agents = val
+            except ValueError:
+                pass
+        orch_conf_env = os.environ.get("ORCHESTRA_CONFIDENCE_THRESHOLD", "")
+        if orch_conf_env:
+            try:
+                val = float(orch_conf_env)
+                if 0.0 <= val <= 1.0:
+                    self.orchestra_confidence_threshold = val
+            except ValueError:
+                pass
         # Override camera_enabled from env var (v0.41.0)
         camera_env = os.environ.get("CAMERA_ENABLED", "").lower()
         if camera_env in ("true", "1", "yes"):

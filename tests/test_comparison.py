@@ -53,7 +53,7 @@ def sample_report():
     return EvalReport(
         run_id="test001",
         timestamp=1000000.0,
-        version="0.50.0",
+        version="0.51.0",
         config_snapshot={"embedding_model": "BGE-VL", "top_k_retrieval": 10},
         results=[
             EvalTaskResult(
@@ -87,7 +87,7 @@ def second_report():
     return EvalReport(
         run_id="test002",
         timestamp=2000000.0,
-        version="0.50.0",
+        version="0.51.0",
         config_snapshot={"embedding_model": "BGE-VL", "top_k_retrieval": 15},
         results=[
             EvalTaskResult(
@@ -131,7 +131,7 @@ class TestEvalReportStore:
         loaded = store.load_report("test001")
         assert loaded is not None
         assert loaded.run_id == "test001"
-        assert loaded.version == "0.50.0"
+        assert loaded.version == "0.51.0"
         assert len(loaded.results) == 2
         assert loaded.results[0].task_name == "retrieval_precision"
         assert loaded.results[1].metrics[0].value == 0.02
@@ -201,7 +201,7 @@ class TestEvalReportStore:
 
         # Check version comparison
         assert "version_comparison" in result
-        assert result["version_comparison"]["test001"] == "0.50.0"
+        assert result["version_comparison"]["test001"] == "0.51.0"
 
     def test_compare_reports_partial_match(self, temp_config, sample_report):
         """Compare with one valid and one invalid report ID."""
@@ -368,7 +368,7 @@ class TestComparisonUI:
         result = _refresh_report_list(temp_config)
         assert "test001" in result  # Run ID present
         assert "FAIL" in result  # Sample report has failing CER metric
-        assert "v0.50.0" in result
+        assert "v0.51.0" in result
 
     def test_run_compare_empty_ids(self, temp_config):
         """Empty input returns instructional message."""

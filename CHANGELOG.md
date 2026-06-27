@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.51.0 (2026-06-27) — Hierarchical Multi-Agent Video Reasoning Orchestrator
+
+### 🧠 HiCrew-Inspired Multi-Agent Architecture (`video_analysis/orchestra.py`)
+
+A complete hierarchical multi-agent video reasoning system inspired by
+HiCrew (arXiv:2604.21444, hierarchical multi-agent collaboration) and
+Orchestra-o1 (arXiv:2606.13707, omnimodal agent orchestration). Sits
+above the existing flat `VideoUnderstandingAgent` as a dynamic,
+LLM-powered planning layer.
+
+- **`HybridTree`** — temporal-semantic hierarchical tree that organizes pipeline
+  scene data into relevance-guided clusters, preserving temporal topology while
+  grouping semantically similar scenes (greedy clustering with 30s temporal gap
+  threshold and configurable max cluster size)
+- **`HybridNode`** — tree node with scene_id, label, level, children, time range,
+  and recursive leaf/max_depth properties; supports `find_scene()`, `get_leaf_paths()`
+- **`RouterAgent`** — LLM-powered (or rule-based fallback) question analysis that
+  detects required modalities (visual/text/temporal/action/entity/summary),
+  determines complexity (simple/multi-hop/analytical), and generates a `RoutePlan`
+  with ordered `TaskItem`s and dependency chains
+- **7 Specialist Sub-Agents** — each wrapping a specific `AgentTools` capability:
+  - `VisualAnalyst` — Video MLLM frame analysis with intent-driven prompts (Question-Aware Captioning)
+  - `RAGSearcher` — RAG retrieval with query refinement
+  - `TranscriptAnalyst` — transcript search + temporal grounding
+  - `ObjectDetectorAgent` — YOLO detection with entity tracking
+  - `OCRAgent` — OCR text extraction from frames
+  - `ConfidenceAuditor` — evidence cross-validation using v0.50.0 `EvidenceTrustScorer`
+  - `SummarizerAgent` — structured video summarization with transcript highlights
+- **`EvidenceSynthesizer`** — weighted evidence combination using v0.50.0
+  `EvidenceWeighter` (tiered/continuous), producing `SynthesisResult` with source
+  attribution, confidence breakdown, and combined answer
+- **`MultiAgentOrchestrator`** — top-level orchestrator with 3-phase execution:
+  1. Route Planning (LLM/rule-based → `RoutePlan`)
+  2. Parallel Agent Execution (`ThreadPoolExecutor`, dependency-aware, early stopping)
+  3. Evidence Synthesis (`EvidenceSynthesizer`)
+- **Parallel execution** — independent agents run concurrently via `ThreadPoolExecutor`
+  (up to 4 workers); dependent chains respect ordering; early stopping when
+  aggregated confidence exceeds threshold
+- **Config**: `ORCHESTRA_ENABLED` (false), `ORCHESTRA_MAX_AGENTS` (5),
+  `ORCHESTRA_CONFIDENCE_THRESHOLD` (0.5)
+- **33 tests**: `test_orchestra.py` covering HybridTree, RoutePlan, RouterAgent,
+  SpecialistAgent base, RAGSearcher query refinement, EvidenceSynthesizer,
+  MultiAgentOrchestrator, and module import verification
+
+### 📚 Documentation
+
+- Research doc at `docs/research/v0.51.0-hierarchical-multi-agent-orchestration.md`
+
+---
+
 ## 0.50.0 (2026-06-27) — Robust Agent Confidence & Structured Video Reports
 
 ### 🛡️ Robust-TO Inspired Agent Confidence Framework (`video_analysis/agent_confidence.py`)
