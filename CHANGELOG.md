@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.50.0 (2026-06-27) — Robust Agent Confidence & Structured Video Reports
+
+### 🛡️ Robust-TO Inspired Agent Confidence Framework (`video_analysis/agent_confidence.py`)
+
+A comprehensive per-evidence confidence scoring framework inspired by
+Robust-TO (arXiv:2606.26904, NTU Singapore, June 2026), which identifies the
+"Blind Trust Problem" — video reasoning models assume all frames are equally
+reliable, suffering 15-30% accuracy drops under realistic perturbations.
+
+- **`FrameQualityScorer`** — per-frame trustworthiness assessment combining
+  four metrics: Laplacian variance (blur), mean brightness, frame-difference
+  motion magnitude, and Canny edge-density (occlusion); outputs a combined
+  trustworthiness score (0.0–1.0); batch mode with inter-frame motion tracking
+- **`EvidenceTrustScorer`** — per-source evidence confidence adjustment:
+  - `score_rag_chunk()` — chunk-type multipliers + temporal proximity bonus
+  - `score_detection()` — YOLO confidence × frame trustworthiness
+  - `score_transcript_segment()` — speaker overlap penalty
+  - `score_ocr_result()` — blur-adjusted OCR text confidence (PaddleOCR format)
+  - `score_mllm_response()` — response-length × frame quality × frame count
+- **`EvidenceWeighter`** — three-tier evidence weighting (high ≥0.8, medium ≥0.5,
+  low <0.5) with weighted combination, consensus scoring, and max confidence
+- **`RobustAgentFrame`** — transparent wrapper around VideoUnderstandingAgent
+  that integrates trust-based filtering into every tool invocation
+- **Config**: `AGENT_CONFIDENCE_ENABLED` (false), `AGENT_CONFIDENCE_MIN_TRUST`
+  (0.3), `AGENT_CONFIDENCE_WEIGHT_MODE` (tiered|continuous)
+
+### 📊 Structured Video Report Generator (`video_analysis/report.py`)
+
+A comprehensive JSON-schema video report generation system. Produces structured
+reports from pipeline analysis results with full type annotations.
+
+- **`VideoReport`** — top-level schema (v1.0) with 15+ dataclass fields:
+  `VideoMetadata`, `TimelineSummary`, `SceneReport`, `TranscriptReport`,
+  `ObjectCatalog`, `ActionSummary`, `OCRSummary`, `FaceSummary`,
+  `ChapterSummary`, `CurationSummary`, `RAGStats`, `QualityMetrics`
+- **`ReportGenerator`** — builds reports from `VideoIndex` or ChromaDB by
+  video_id; serialises to/from JSON with full dataclass round-trip; saves/loads
+  from disk; renders human-readable markdown summaries
+- **`summary_text()`** — full markdown report with scene breakdowns, speaker
+  statistics, object frequency, silent periods, and timeline
+- **`to_chunk_context()`** — compact LLM-friendly context for RAG injection
+- **Helper functions**: `_fmt_duration()` (HH:MM:SS), `_fmt_size()` (KB/MB/GB)
+- **Checksum**: fast SHA-256 of first 64KB + file size for content addressing
+
+### 📋 New Config Fields
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENT_CONFIDENCE_ENABLED` | `false` | Enable Robust-TO confidence-aware agent |
+| `AGENT_CONFIDENCE_MIN_TRUST` | `0.3` | Min frame trust; below is skipped |
+| `AGENT_CONFIDENCE_WEIGHT_MODE` | `tiered` | Evidence weighting mode |
+
+### 🧪 Tests
+
+- 36 new tests: `test_agent_confidence.py` (22 tests) covering FrameQualityScorer,
+  EvidenceTrustScorer, and EvidenceWeighter; `test_report.py` (28 tests) covering
+  VideoReport dataclasses, ReportGenerator (from_video_index, to_json round-trip,
+  save/load, summary_text, to_chunk_context), checksum computation, and formatting helpers
+- **789/789 tests passing** (0 failures, 29 deselected benchmark/slow/gpu/integration)
+
+---
+
 ## 0.49.0 (2026-06-27) — Production Telemetry & API Hardening
 
 ### 🕵️ OpenTelemetry Distributed Tracing (`video_analysis/telemetry.py`)

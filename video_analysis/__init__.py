@@ -17,7 +17,8 @@ Modules:
 - rate_limiter: In-memory token bucket rate limiter for the REST API (v0.49.0)
 - error_handlers: Structured JSON error responses for the REST API (v0.49.0)
 - job_queue: In-process async job queue for background video processing (v0.43.0)
-- monitor ui: Gradio Monitoring Dashboard with system metrics, evaluation runner, and job queue viewer (v0.46.0)
+| agent_confidence: Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence scoring, tiered weighting (v0.50.0)
+| report: Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)
 """
 
 from video_analysis import (
@@ -47,7 +48,7 @@ from video_analysis import (
 
 # api and stream_chat modules are imported on demand
 
-__version__ = "0.49.0"
+__version__ = "0.50.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

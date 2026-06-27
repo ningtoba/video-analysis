@@ -289,6 +289,17 @@ class Config:
     agent_enabled: bool = False  # overridden by AGENT_ENABLED env var
     agent_max_tools: int = 5  # max tool invocations per query
 
+    # Confidence-Aware Agent (v0.50.0 — per-evidence confidence scoring, Robust-TO inspired)
+    agent_confidence_enabled: bool = (
+        False  # overridden by AGENT_CONFIDENCE_ENABLED env var
+    )
+    agent_confidence_min_trust: float = (
+        0.3  # frames below this trustworthiness are skipped
+    )
+    agent_confidence_weight_mode: str = (
+        "tiered"  # "tiered" or "continuous"; overridden by AGENT_CONFIDENCE_WEIGHT_MODE
+    )
+
     # Camera Tab (v0.41.0 — webcam/live camera capture & analysis)
     camera_enabled: bool = False  # overridden by CAMERA_ENABLED env var
 
@@ -303,6 +314,21 @@ class Config:
     telemetry_enabled: bool = bool(
         os.environ.get("TELEMETRY_ENABLED", "true").lower() == "true"
     )
+
+    # Robust Agent Confidence (v0.50.0 — Robust-TO inspired per-evidence confidence scoring)
+    # When enabled, the agent assesses per-frame trustworthiness (blur, brightness, motion,
+    # occlusion) and weights evidence accordingly before synthesis. Frames below the
+    # minimum trust threshold are skipped, avoiding the "Blind Trust Problem" where
+    # the agent treats degraded frames as equally reliable.
+    agent_confidence_enabled: bool = bool(
+        os.environ.get("AGENT_CONFIDENCE_ENABLED", "false").lower() == "true"
+    )
+    agent_confidence_min_trust: float = float(
+        os.environ.get("AGENT_CONFIDENCE_MIN_TRUST", "0.3")
+    )  # frames below this trustworthiness are skipped
+    agent_confidence_weight_mode: str = os.environ.get(
+        "AGENT_CONFIDENCE_WEIGHT_MODE", "tiered"
+    )  # "tiered" (high/medium/low) or "continuous"
 
     # Rate Limiting (v0.49.0)
     rate_limit_enabled: bool = bool(
@@ -459,6 +485,21 @@ class Config:
         agent_env = os.environ.get("AGENT_ENABLED", "").lower()
         if agent_env in ("true", "1", "yes"):
             self.agent_enabled = True
+        # Override agent_confidence config from env vars (v0.50.0)
+        ac_env = os.environ.get("AGENT_CONFIDENCE_ENABLED", "").lower()
+        if ac_env in ("true", "1", "yes"):
+            self.agent_confidence_enabled = True
+        ac_trust_env = os.environ.get("AGENT_CONFIDENCE_MIN_TRUST", "")
+        if ac_trust_env:
+            try:
+                val = float(ac_trust_env)
+                if 0.0 <= val <= 1.0:
+                    self.agent_confidence_min_trust = val
+            except ValueError:
+                pass
+        ac_weight_env = os.environ.get("AGENT_CONFIDENCE_WEIGHT_MODE", "").lower()
+        if ac_weight_env in ("tiered", "continuous"):
+            self.agent_confidence_weight_mode = ac_weight_env
         # Override camera_enabled from env var (v0.41.0)
         camera_env = os.environ.get("CAMERA_ENABLED", "").lower()
         if camera_env in ("true", "1", "yes"):

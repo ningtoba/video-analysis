@@ -496,7 +496,7 @@ def test_version_bumped():
     """Verify version is bumped to 0.40.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.49.0"
+    assert __version__ == "0.50.0"
 
 
 # ---------------------------------------------------------------------------

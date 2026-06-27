@@ -166,9 +166,11 @@ User Question
 || `curator` | `video_analysis/curator.py` | Autonomous Video Curator — closed-loop MCR exploration agent (v0.45.0) |
 || `comparison` | `ui/comparison.py` | Cross-report eval comparison dashboard — historical browser, metric diff, regression tracking (v0.48.0) |
 || `telemetry` | `video_analysis/telemetry.py` | OpenTelemetry distributed tracing — pipeline, RAG, and API spans with OTLP export (v0.49.0) |
-| `rate_limiter` | `video_analysis/rate_limiter.py` | In-memory token bucket rate limiter for REST API (v0.49.0) |
-| `error_handlers` | `video_analysis/error_handlers.py` | Structured JSON error responses for REST API (v0.49.0) |
-| `client` | `video_analysis/client.py` | Python API client SDK for the REST API (v0.49.0) |
+|rate_limiter|`video_analysis/rate_limiter.py`|In-memory token bucket rate limiter for REST API (v0.49.0)|
+|error_handlers|`video_analysis/error_handlers.py`|Structured JSON error responses for REST API (v0.49.0)|
+|client|`video_analysis/client.py`|Python API client SDK for the REST API (v0.49.0)|
+|agent_confidence|`video_analysis/agent_confidence.py`|Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence scoring, tiered weighting (v0.50.0)|
+|report|`video_analysis/report.py`|Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)|
 
 ## 💻 Tech Stack
 
@@ -275,10 +277,13 @@ Set via environment variables or edit `video_analysis/config.py`:
 ||| `CURATOR_CURIOSITY` | `0.5` | Exploration aggressiveness for curator (0.0-1.0) |
 ||| `CURATOR_MAX_ITERATIONS` | `15` | Max MCR closed-loop iterations |
 |||| `CURATOR_OUTPUT_DIR` | (auto) | Output directory for curation reports |
-||| `TELEMETRY_ENABLED` | `true` | Enable OpenTelemetry tracing (no-op without packages) (v0.49.0) |
-||| `RATE_LIMIT_ENABLED` | `true` | Enable API rate limiting (v0.49.0) |
-|| `RATE_LIMIT_CAPACITY` | `100` | Max burst requests per client (v0.49.0) |
-|| `RATE_LIMIT_RATE` | `1.6667` | Token refill rate per second (100/minute) (v0.49.0) |
+| `TELEMETRY_ENABLED` | `true` | Enable OpenTelemetry tracing (no-op without packages) (v0.49.0) |
+| `RATE_LIMIT_ENABLED` | `true` | Enable API rate limiting (v0.49.0) |
+| `RATE_LIMIT_CAPACITY` | `100` | Max burst requests per client (v0.49.0) |
+| `RATE_LIMIT_RATE` | `1.6667` | Token refill rate per second (100/minute) (v0.49.0) |
+| `AGENT_CONFIDENCE_ENABLED` | `false` | Enable Robust-TO inspired per-frame trust assessment & evidence weighting (v0.50.0) |
+| `AGENT_CONFIDENCE_MIN_TRUST` | `0.3` | Minimum frame trustworthiness; frames below are skipped (v0.50.0) |
+| `AGENT_CONFIDENCE_WEIGHT_MODE` | `tiered` | Evidence weighting mode: tiered (high/medium/low) or continuous (v0.50.0) |
 
 ## 🧪 Running Tests
 
@@ -463,5 +468,8 @@ Dashboard panels:
 ||- [x] **Video Content Chaptering** — NLTK TextTiling-based topic segmentation with LLM/fallback title generation, chapter report generation, agent chapter context integration |
 |- [x] **Live Stream Analysis (RTMP/RTSP/HLS)** — real-time capture via FFmpeg `-re` with auto-reconnect, sliding window, and URL-based auto-detection (v0.40.0)
 |
+|- [ ] **Robust Agent Confidence Framework** (v0.50.0) — Robust-TO inspired per-frame trustworthiness scoring, per-source evidence confidence adjustment, three-tier evidence weighting with weighted combination and consensus, transparent wrapper with untrustworthy frame filtering
+| | |
+|- [ ] **Structured Video Report** (v0.50.0) — comprehensive JSON schema report generator with VideoMetadata, TimelineSummary, SceneReport, TranscriptReport, ObjectCatalog, ActionSummary, RAGStats; JSON serialisation, save/load, markdown rendering, LLM-friendly chunk context
 |
 MIT
