@@ -35,6 +35,7 @@
 ||- **🧩 Event-Causal RAG** (v0.57.0) — semantic event-level video segmentation with State-Event-State (SES) graphs and bidirectional causal-topological retrieval (arXiv:2605.06185); 3-tier segmentation (LLM → transcript-coherence → temporal-grid), DualStoreMemory for fused semantic + causal retrieval, forward/backward causal path analysis
 ||- **🔌 Event-Causal RAG Production Wiring** (v0.58.0) — event-level retrieval integrated into the chat pipeline (VideoRAG.event_retrieve()), auto-indexing during video processing (event_index_video() called after index_video()), and persistent KnowledgeGraph storage for events and causal/temporal relations; new Gradio "⏱ Events" tab for timeline visualization and event-level querying; config flags: EVENT_CAUSAL_RAG_INDEX_ON_PROCESS (default true), EVENT_CAUSAL_RAG_IN_CHAT (default false)
 ||- **💭 Streaming Thinking** (v0.57.0) — amortized reasoning during real-time video streaming (arXiv:2603.12262); per-chunk entity accumulation, causal prediction (forward thinking), causal explanation (backward thinking), question generation, and incremental answer engine for live RTMP/RTSP/HLS streams
+||- **🔔 Webhook Notifications** (v0.59.0) — event-driven HTTP POST callbacks on pipeline.complete, eval.complete, and health.alert/health.critical events; configurable via WEBHOOK_URL env var (comma-separated URLs) or Config fields; zero external dependencies — pure Python stdlib
 |- **🩺 Pipeline Health Monitor** (v0.52.0) — automated pipeline health monitoring with z-score-based anomaly detection, severity-graded alerting (info/warning/error/critical), composite health scoring, and persistent run history; provides concise health summaries and LLM-friendly context for prompt injection
 ||- **🧠 Quad-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M), VideoChat-Flash 2B (MIT, ICLR 2026), **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)**, or **InternVideo3-8B (OpenGVLab, June 2026, SOTA open-weight video MLLM — 73.8 Video-MME, MCR reasoning, M^2LA KV-cache compression)**
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
@@ -295,6 +296,8 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `AGENT_CONFIDENCE_ENABLED` | `false` | Enable Robust-TO inspired per-frame trust assessment & evidence weighting (v0.50.0) |
 | `AGENT_CONFIDENCE_MIN_TRUST` | `0.3` | Minimum frame trustworthiness; frames below are skipped (v0.50.0) |
 | `AGENT_CONFIDENCE_WEIGHT_MODE` | `tiered` | Evidence weighting mode: tiered (high/medium/low) or continuous (v0.50.0) |
+| `WEBHOOK_URL` | (empty) | Comma-separated webhook URLs for event-driven HTTP callbacks (v0.59.0) |
+| `WEBHOOK_TIMEOUT` | `5.0` | Timeout in seconds for webhook POST requests (v0.59.0) |
 
 ## 🧪 Running Tests
 

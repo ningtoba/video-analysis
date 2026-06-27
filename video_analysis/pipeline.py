@@ -414,6 +414,26 @@ class VideoPipeline:
         except Exception:
             pass
 
+        # Fire webhook: pipeline.complete (v0.59.0)
+        try:
+            from video_analysis.webhook import get_webhook_dispatcher
+
+            wh = get_webhook_dispatcher(self.config)
+            if wh.enabled:
+                wh.fire(
+                    "pipeline.complete",
+                    {
+                        "video_id": video_id,
+                        "filename": video_path.name,
+                        "duration": duration,
+                        "processing_mode": self.config.processing_mode,
+                        "scene_count": len(scenes),
+                        "transcript_segments": len(transcript_segments),
+                    },
+                )
+        except Exception:
+            pass
+
         return index
 
     def _get_duration(self, video_path: Path) -> float:

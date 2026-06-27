@@ -246,6 +246,29 @@ class EvaluationRunner:
         except Exception:
             pass  # best-effort persistence
 
+        # Fire webhook: eval.complete (v0.59.0)
+        try:
+            from video_analysis.webhook import get_webhook_dispatcher
+
+            wh = get_webhook_dispatcher(self.config)
+            if wh.enabled:
+                passed = report.passed
+                total = len(report.results)
+                wh.fire(
+                    "eval.complete",
+                    {
+                        "run_id": report.run_id,
+                        "passed": passed,
+                        "total_tasks": total,
+                        "passed_tasks": sum(1 for r in report.results if r.all_passed),
+                        "failed_tasks": sum(
+                            1 for r in report.results if not r.all_passed
+                        ),
+                    },
+                )
+        except Exception:
+            pass
+
         return report
 
 

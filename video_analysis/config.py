@@ -4,6 +4,7 @@ Configuration for the video analysis platform.
 
 from pathlib import Path
 from dataclasses import dataclass, field
+from typing import List
 import os
 
 
@@ -369,6 +370,10 @@ class Config:
         os.environ.get("RATE_LIMIT_RATE", "1.6667")  # 100/minute
     )
 
+    # Webhook config (v0.59.0)
+    webhook_urls: List[str] = field(default_factory=list)
+    webhook_timeout: float = 5.0  # seconds
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"
@@ -381,6 +386,18 @@ class Config:
         env_val = os.environ.get("ACTION_RECOGNITION_ENABLED", "").lower()
         if env_val in ("true", "1", "yes"):
             self.action_recognition_enabled = True
+        # Override webhook config from env vars (v0.59.0)
+        wh_url_env = os.environ.get("WEBHOOK_URL", "")
+        if wh_url_env:
+            self.webhook_urls = [u.strip() for u in wh_url_env.split(",") if u.strip()]
+        wh_timeout_env = os.environ.get("WEBHOOK_TIMEOUT", "")
+        if wh_timeout_env:
+            try:
+                val = float(wh_timeout_env)
+                if val > 0:
+                    self.webhook_timeout = val
+            except ValueError:
+                pass
         # Override video_mllm_enabled from env var
         mllm_env = os.environ.get("VIDEO_MLLM_ENABLED", "").lower()
         if mllm_env in ("true", "1", "yes"):

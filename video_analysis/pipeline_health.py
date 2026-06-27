@@ -514,6 +514,31 @@ class PipelineHealthMonitor:
             message,
         )
 
+        # Fire webhook for critical alerts (v0.59.0)
+        if severity in ("critical", "error"):
+            try:
+                from video_analysis.webhook import get_webhook_dispatcher
+
+                wh = get_webhook_dispatcher()
+                if wh.enabled:
+                    event = (
+                        "health.critical" if severity == "critical" else "health.alert"
+                    )
+                    wh.fire(
+                        event,
+                        {
+                            "alert_id": alert_id,
+                            "severity": severity,
+                            "title": title,
+                            "message": message,
+                            "metric_name": metric_name,
+                            "value": snapshot.value,
+                            "z_score": snapshot.z_score,
+                        },
+                    )
+            except Exception:
+                pass
+
         return HealthAlert(
             alert_id=alert_id,
             severity=severity,

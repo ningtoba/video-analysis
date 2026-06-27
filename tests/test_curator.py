@@ -581,4 +581,4 @@ class TestCuratorModule:
         """Check that test source references the current version."""
         import video_analysis
 
-        assert video_analysis.__version__ == "0.58.0"
+        assert video_analysis.__version__ == "0.59.0"

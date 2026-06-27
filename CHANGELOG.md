@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.59.0 (2026-06-27) — Webhook Notification System & Infrastructure Tests
+
+### 🔔 Webhook Notification System (`video_analysis/webhook.py`)
+
+New event-driven webhook notification system for pipeline, evaluation, and
+health events — fire-and-forget HTTP POST callbacks to configurable URLs:
+
+- **`WebhookDispatcher`** — thread-safe dispatcher with configurable URL list,
+  per-URL timeout and retry (1 retry, 5s timeout), thread pool delivery
+- **`WebhookConfig`** — per-webhook URL configuration with custom headers,
+  timeout, and retry policy
+- **`get_webhook_dispatcher(config)`** — singleton dispatcher that lazy-initialises
+  from Config fields
+- **5 event types:**
+  - `pipeline.complete` — video processing finished (video_id, filename, duration, scene_count, transcript_segments)
+  - `pipeline.error` — video processing failed
+  - `eval.complete` — evaluation run completed (run_id, passed/total/failed tasks)
+  - `health.alert` — error-severity health anomaly detected
+  - `health.critical` — critical-severity health anomaly detected
+- **Wired into production:**
+  - `VideoPipeline.process()` fires `pipeline.complete` after every successful run
+  - `EvaluationRunner.run_all()` fires `eval.complete` after every evaluation run
+  - `PipelineHealthMonitor._create_alert()` fires `health.alert`/`health.critical`
+    for error/critical severity alerts
+- Zero external dependencies — pure Python stdlib (`urllib.request`, `threading`)
+- Config via `WEBHOOK_URL` env var (comma-separated URLs) and `WEBHOOK_TIMEOUT`
+- Config fields: `webhook_urls: List[str]`, `webhook_timeout: float`
+
+### 🧪 Infrastructure Unit Tests
+
+New dedicated test files for previously untested core infrastructure modules:
+
+| File | Tests | Module | Description |
+|------|-------|--------|-------------|
+| `tests/test_rate_limiter.py` | 11 | `TokenBucketLimiter` | init defaults, consume (under/over), get_remaining, reset, refill over time, multiple clients, custom params, zero rate, custom key, concurrent safety |
+| `tests/test_error_handlers.py` | 16 | Error handlers | ErrorDetail model, StandardHTTPError, register handlers, validation errors, value/type/key/file/permission error handling, unhandled exceptions, middleware passthrough, no-auth-header |
+| `tests/test_frame_compression.py` | 15 | `DINOv2FrameCompressor` | init defaults, device detection, load/unload lifecycle, empty/single/multiple frames, mock high/low similarity, threshold behavior, unload safety |
+| `tests/test_webhook.py` | 22 | Webhook system | WebhookConfig validation, URL management, fire blocking with real HTTP server, payload format, headers, multi-URL delivery, singletons, thread safety, event constants |
+
+**Total: 64 new tests** — bringing project-wide coverage to ~1,114 tests.
+
+### 📚 Documentation
+
+- `CHANGELOG.md` — v0.59.0 section with all changes
+- `README.md` — updated with Webhook Notification System feature entry, new config fields,
+  new test infrastructure documentation
+- Version bumped to `0.59.0` in `pyproject.toml`, `video_analysis/__init__.py`
+
+---
+
 ## 0.58.0 (2026-06-27) — Event-Causal RAG Production Wiring & Knowledge Graph Integration
 
 ### 🔌 Production Wiring (`video_analysis/rag.py`)
