@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.53.0 (2026-06-27) — REST API Integration for Knowledge Graph & Pipeline Health Monitor
+
+### 🌐 REST API: Knowledge Graph Endpoints (`video_analysis/api.py`)
+
+Exposes the v0.52.0 persistent knowledge graph via the FastAPI REST API,
+enabling programmatic access to cross-video entity data, relationships,
+and LLM-friendly context injection.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/kg/stats` | Summary statistics (entity/relationship/video counts, type breakdown, DB size) |
+| `GET /api/kg/entities` | Search entities by name query, entity type, or list all with frequency filter |
+| `GET /api/kg/timeline` | Chronological timeline of all indexed videos with top-entity previews |
+| `GET /api/kg/entities/{entity_id}/relationships` | Bidirectional relationships for a specific entity |
+| `GET /api/kg/videos/{video_id}/entities` | All entities associated with a specific video |
+| `GET /api/kg/context` | LLM-friendly markdown summary for prompt injection |
+
+### 🌐 REST API: Pipeline Health Monitor Endpoints (`video_analysis/api.py`)
+
+Exposes the v0.52.0 pipeline health monitor via the REST API, enabling
+automated health checks, alert management, and observability integration.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health/runs` | Full health report with recent runs, composite score, active alerts, degraded metrics |
+| `GET /api/health/summary` | Concise health summary for dashboards and alerting |
+| `GET /api/health/alerts` | Active alerts with optional minimum severity filter |
+| `POST /api/health/alerts/{alert_id}/acknowledge` | Acknowledge/dismiss a specific alert |
+
+### 🔗 Pipeline Integration
+
+- **`_process_video_handler`** — now auto-records pipeline runs in the
+  `PipelineHealthMonitor` and indexes entities into the `KnowledgeGraph`
+  after each successful video processing job
+- Both operations are wrapped in try/except — failures log and continue
+  without failing the pipeline job
+
+### 🖥️ Gradio Knowledge Graph Explorer Tab (Tab 10: 🧠 Knowledge Graph)
+
+New Gradio tab (`ui/knowledge_graph.py`) for visual exploration of the
+persistent knowledge graph:
+
+- **Stats card** — entity/relationship/video counts, database size, type breakdown
+- **Video timeline** — chronological list of all indexed videos with entity previews
+- **Entity search** — filter by type (person/object/action/location/concept/event)
+  or free-text name query
+- **Strongest relationships** — top cross-entity relationships ranked by strength
+- **LLM context snippet** — formatted knowledge context for prompt engineering
+- **Refresh button** — one-click reload of all panels
+
+### 📁 Files Changed
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `video_analysis/api.py` | +350 | KG + Health Pydantic schemas, lazy-init singletons, 10 new REST endpoints, pipeline integration |
+| `ui/knowledge_graph.py` | 310 | New Gradio Knowledge Graph Explorer tab with stats, entities, timeline, relationships, context |
+| `ui/app.py` | +2 | Import and inject KG Explorer as Tab 10 |
+| `video_analysis/__init__.py` | 1 | Version bump to 0.53.0 |
+| `pyproject.toml` | 1 | Version bump |
+| `tests/test_api_kg_health.py` | 220 | 10 new tests: KG stats/entities/timeline/relationships/context, health runs/summary/alerts/acknowledge |
+
+### 🧪 Tests: 939/939 passing (0 failures)
+
+---
+
 ## 0.52.0 (2026-06-27) — Persistent Video Knowledge Graph & Pipeline Health Monitoring
 
 ### 🧠 Persistent Video Knowledge Graph (`video_analysis/knowledge_graph.py`)

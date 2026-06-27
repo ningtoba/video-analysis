@@ -33,6 +33,7 @@ from ui.workflow import inject_workflow_tab
 from ui.camera import inject_camera_tab
 from ui.monitor import inject_monitor_tab
 from ui.comparison import inject_comparison_tab
+from ui.knowledge_graph import inject_knowledge_graph_tab
 
 logger = logging.getLogger(__name__)
 
@@ -540,6 +541,9 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
             # ============ TAB 9: EVAL COMPARISON (Cross-Report Analysis) ============
             inject_comparison_tab(config)
+
+            # ============ TAB 10: KNOWLEDGE GRAPH (Entity Explorer) ============
+            inject_knowledge_graph_tab(app, config)
 
         # ==================== EVENT HANDLERS ====================
 

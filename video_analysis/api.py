@@ -50,7 +50,31 @@ from video_analysis.job_queue import (
 )
 from video_analysis.evaluation import EvalReportStore
 
+# v0.53.0: KG and Health Monitor lazy singleton instances
+_kg_instance: Any = None
+_health_instance: Any = None
+
 logger = logging.getLogger(__name__)
+
+
+def _get_kg(config: "Config") -> Any:
+    """Lazy-init the KnowledgeGraph singleton."""
+    global _kg_instance
+    if _kg_instance is None:
+        from video_analysis.knowledge_graph import KnowledgeGraph
+
+        _kg_instance = KnowledgeGraph(config)
+    return _kg_instance
+
+
+def _get_health(config: "Config") -> Any:
+    """Lazy-init the PipelineHealthMonitor singleton."""
+    global _health_instance
+    if _health_instance is None:
+        from video_analysis.pipeline_health import PipelineHealthMonitor
+
+        _health_instance = PipelineHealthMonitor(config)
+    return _health_instance
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +256,105 @@ class VideoListResponse(BaseModel):
     count: int = Field(0, description="Number of videos in the library")
     videos: List[Dict[str, Any]] = Field(
         default_factory=list, description="List of video summaries"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Graph schemas (v0.53.0)
+# ---------------------------------------------------------------------------
+
+
+class KGTimelineItem(BaseModel):
+    """A single item in the knowledge graph timeline."""
+
+    video_id: str = Field("", description="Video identifier")
+    filename: str = Field("", description="Video filename")
+    duration_seconds: float = Field(0.0, description="Duration in seconds")
+    entity_count: int = Field(0, description="Number of entities in this video")
+    indexed_at: float = Field(0.0, description="Unix timestamp of indexing")
+    top_entities: List[str] = Field(
+        default_factory=list, description="Top entity names"
+    )
+
+
+class KGEntityResponse(BaseModel):
+    """An entity record in the knowledge graph."""
+
+    id: int = Field(..., description="Entity ID")
+    name: str = Field("", description="Entity name")
+    entity_type: str = Field("", description="Entity type (person/object/action/etc)")
+    frequency: int = Field(0, description="Number of times seen")
+    video_ids: List[str] = Field(
+        default_factory=list, description="Videos this entity appears in"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Entity metadata"
+    )
+
+
+class KGRelationshipResponse(BaseModel):
+    """A relationship record in the knowledge graph."""
+
+    id: int = Field(..., description="Relationship ID")
+    source_name: str = Field("", description="Source entity name")
+    target_name: str = Field("", description="Target entity name")
+    relation_type: str = Field("", description="Relationship type")
+    strength: int = Field(0, description="Relationship strength")
+
+
+class KGStatsResponse(BaseModel):
+    """Knowledge graph summary statistics."""
+
+    entity_count: int = Field(0, description="Total entities")
+    relationship_count: int = Field(0, description="Total relationships")
+    video_count: int = Field(0, description="Total videos indexed")
+    type_breakdown: Dict[str, int] = Field(
+        default_factory=dict, description="Entity count per type"
+    )
+    database_size_bytes: int = Field(0, description="Database file size")
+    last_indexed_video: Optional[Dict[str, Any]] = Field(
+        None, description="Last indexed video info"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pipeline Health Monitor schemas (v0.53.0)
+# ---------------------------------------------------------------------------
+
+
+class HealthRunResponse(BaseModel):
+    """A single pipeline run record."""
+
+    run_id: int = Field(..., description="Run ID")
+    video_id: str = Field("", description="Video identifier")
+    timestamp: float = Field(0.0, description="Unix timestamp")
+    duration_s: float = Field(0.0, description="Duration in seconds")
+    success: bool = Field(True, description="Whether the run succeeded")
+    stage_timings: Dict[str, float] = Field(
+        default_factory=dict, description="Per-stage timings"
+    )
+    ocr_confidence: Optional[float] = Field(None, description="OCR confidence")
+    detection_confidence: Optional[float] = Field(
+        None, description="Detection confidence"
+    )
+    transcript_confidence: Optional[float] = Field(
+        None, description="Transcript confidence"
+    )
+
+
+class HealthReportResponse(BaseModel):
+    """Full health report for a pipeline."""
+
+    run_count: int = Field(0, description="Total runs")
+    runs: List[HealthRunResponse] = Field(
+        default_factory=list, description="Recent runs"
+    )
+    health_score: float = Field(0.0, description="Composite health score (0-1)")
+    active_alerts: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Active alerts"
+    )
+    degraded_metrics: List[str] = Field(
+        default_factory=list, description="Degraded metric names"
     )
 
 
@@ -679,6 +802,23 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
             )
 
             local_rag.index_video(video_index)
+
+            # v0.53.0: Record pipeline run in health monitor
+            try:
+                _get_health(cfg).record_run(
+                    video_id=video_index.video_id,
+                    duration_s=0.0,
+                    success=True,
+                    stage_timings={},
+                )
+            except Exception:
+                logger.exception("Failed to record pipeline run in health monitor")
+
+            # v0.53.0: Index entities into knowledge graph
+            try:
+                _get_kg(cfg).add_video_index(video_index)
+            except Exception:
+                logger.exception("Failed to index video into knowledge graph")
 
             result = {
                 "video_id": video_index.video_id,
@@ -1313,6 +1453,186 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
                 detail=f"No reports found for IDs: {run_ids}",
             )
         return result
+
+    # ------------------------------------------------------------------
+    # Knowledge Graph API endpoints (v0.53.0)
+    # ------------------------------------------------------------------
+
+    @router.get(
+        "/api/kg/stats",
+        response_model=KGStatsResponse,
+        summary="Knowledge graph summary statistics",
+    )
+    async def api_kg_stats():
+        """Get summary statistics about the knowledge graph."""
+        kg = _get_kg(cfg)
+        stats = kg.stats()
+        return KGStatsResponse(**stats)
+
+    @router.get(
+        "/api/kg/entities",
+        summary="Search entities in the knowledge graph",
+    )
+    async def api_kg_search_entities(
+        query: str = Query("", description="Optional name or type filter"),
+        entity_type: Optional[str] = Query(None, description="Filter by entity type"),
+        limit: int = Query(50, description="Max entities to return"),
+        min_frequency: int = Query(1, description="Minimum frequency filter"),
+    ):
+        kg = _get_kg(cfg)
+        if query:
+            entities = kg.cross_video_search(query, limit=limit)
+        elif entity_type:
+            entities = kg.search_entities(entity_type=entity_type, limit=limit)
+        else:
+            entities = kg.get_top_entities(limit=limit, min_frequency=min_frequency)
+        return [
+            KGEntityResponse(
+                id=e.id,
+                name=e.name,
+                entity_type=e.entity_type,
+                frequency=e.frequency,
+                video_ids=list(e.video_ids),
+                metadata=e.metadata,
+            )
+            for e in entities
+        ]
+
+    @router.get(
+        "/api/kg/timeline",
+        response_model=List[KGTimelineItem],
+        summary="Knowledge graph video timeline",
+    )
+    async def api_kg_timeline(limit: int = Query(50, description="Max timeline items")):
+        kg = _get_kg(cfg)
+        return [KGTimelineItem(**item) for item in kg.get_timeline(limit=limit)]
+
+    @router.get(
+        "/api/kg/entities/{entity_id}/relationships",
+        response_model=List[KGRelationshipResponse],
+        summary="Get relationships for an entity",
+    )
+    async def api_kg_entity_relationships(
+        entity_id: int,
+        relation_type: Optional[str] = Query(
+            None, description="Filter by relationship type"
+        ),
+        limit: int = Query(50, description="Max relationships"),
+    ):
+        kg = _get_kg(cfg)
+        entity = kg.get_entity(entity_id)
+        if entity is None:
+            raise HTTPException(
+                status_code=404, detail=f"Entity #{entity_id} not found"
+            )
+        rels = kg.get_relationships(entity_id, relation_type=relation_type, limit=limit)
+        results = []
+        for r in rels:
+            src = kg.get_entity(r.source_id)
+            tgt = kg.get_entity(r.target_id)
+            results.append(
+                KGRelationshipResponse(
+                    id=r.id,
+                    source_name=src.name if src else f"#{r.source_id}",
+                    target_name=tgt.name if tgt else f"#{r.target_id}",
+                    relation_type=r.relation_type,
+                    strength=r.strength,
+                )
+            )
+        return results
+
+    @router.get(
+        "/api/kg/videos/{video_id}/entities",
+        response_model=List[KGEntityResponse],
+        summary="Get all entities for a video",
+    )
+    async def api_kg_video_entities(video_id: str):
+        kg = _get_kg(cfg)
+        entities = kg.get_entities_for_video(video_id)
+        return [
+            KGEntityResponse(
+                id=e.id,
+                name=e.name,
+                entity_type=e.entity_type,
+                frequency=e.frequency,
+                video_ids=list(e.video_ids),
+                metadata=e.metadata,
+            )
+            for e in entities
+        ]
+
+    @router.get(
+        "/api/kg/context",
+        summary="Get LLM-friendly knowledge context snippet",
+    )
+    async def api_kg_context():
+        kg = _get_kg(cfg)
+        return {"context": kg.get_knowledge_context()}
+
+    # ------------------------------------------------------------------
+    # Pipeline Health Monitor API endpoints (v0.53.0)
+    # ------------------------------------------------------------------
+
+    @router.get(
+        "/api/health/runs",
+        response_model=HealthReportResponse,
+        summary="Get pipeline health report",
+    )
+    async def api_health_report(
+        limit: int = Query(20, description="Number of recent runs to include")
+    ):
+        h = _get_health(cfg)
+        report = h.get_health_report(limit=limit)
+        return HealthReportResponse(
+            run_count=len(report.get("runs", [])),
+            runs=[
+                HealthRunResponse(
+                    run_id=r.get("run_id", 0),
+                    video_id=r.get("video_id", ""),
+                    timestamp=r.get("timestamp", 0.0),
+                    duration_s=r.get("duration_s", 0.0),
+                    success=r.get("success", True),
+                    stage_timings=r.get("stage_timings", {}),
+                    ocr_confidence=r.get("ocr_confidence"),
+                    detection_confidence=r.get("detection_confidence"),
+                    transcript_confidence=r.get("transcript_confidence"),
+                )
+                for r in report.get("runs", [])
+            ],
+            health_score=report.get("health_score", 0.0),
+            active_alerts=report.get("active_alerts", []),
+            degraded_metrics=report.get("degraded_metrics", []),
+        )
+
+    @router.get(
+        "/api/health/summary",
+        summary="Get concise health summary",
+    )
+    async def api_health_summary():
+        h = _get_health(cfg)
+        return h.get_health_summary()
+
+    @router.get(
+        "/api/health/alerts",
+        summary="Get active health alerts",
+    )
+    async def api_health_alerts(
+        min_severity: Optional[str] = Query(
+            None, description="Minimum severity (info/warning/error/critical)"
+        ),
+    ):
+        h = _get_health(cfg)
+        alerts = h.get_active_alerts(min_severity=min_severity)
+        return {"count": len(alerts), "alerts": alerts}
+
+    @router.post(
+        "/api/health/alerts/{alert_id}/acknowledge",
+        summary="Acknowledge a health alert",
+    )
+    async def api_health_acknowledge_alert(alert_id: str):
+        h = _get_health(cfg)
+        h.acknowledge_alert(alert_id)
+        return {"status": "acknowledged", "alert_id": alert_id}
 
     return router
 
