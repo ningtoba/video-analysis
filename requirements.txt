@@ -24,6 +24,9 @@ mcp>=1.28.0
 # Prometheus metrics / production monitoring
 prometheus-client>=0.25.0
 
+# System metrics / monitoring dashboard (ui/monitor.py)
+psutil>=7.0.0
+
 # Scene understanding
 open-clip-torch>=2.30.0
 
@@ -48,4 +51,3 @@ scenedetect>=0.7.0
 # Optional — benchmark / test infrastructure:
 # pytest-timeout>=2.3.0
 # pytest-benchmark>=4.0.0
-

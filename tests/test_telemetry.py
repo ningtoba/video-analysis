@@ -486,13 +486,13 @@ class TestVideoAnalysisClient:
 
         health = HealthInfo(
             status="ok",
-            version="0.53.0",
+            version="0.54.0",
             gpu_available=True,
             models_loaded={},
             uptime_seconds=42.0,
         )
         assert health.status == "ok"
-        assert health.version == "0.53.0"
+        assert health.version == "0.54.0"
 
         video = VideoInfo(video_id="test123", filename="test.mp4")
         assert video.video_id == "test123"
@@ -516,7 +516,7 @@ class TestVideoAnalysisClient:
         report = EvaluationReport(
             run_id="r1",
             timestamp="2026-06-27T12:00:00",
-            version="0.53.0",
+            version="0.54.0",
             tasks=[],
             summary={"total": 3, "passed": 3},
         )

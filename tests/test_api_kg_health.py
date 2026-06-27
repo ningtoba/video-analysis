@@ -1,4 +1,4 @@
-"""Tests for Knowledge Graph & Pipeline Health Monitor REST API endpoints (v0.53.0).
+"""Tests for Knowledge Graph & Pipeline Health Monitor REST API endpoints (v0.54.0).
 
 Tests the new endpoints added to video_analysis/api.py:
 - GET /api/kg/stats
@@ -77,7 +77,7 @@ def kg_client(kg_app: FastAPI) -> TestClient:
 
 
 # =========================================================================
-# Knowledge Graph API tests (v0.53.0)
+# Knowledge Graph API tests (v0.54.0)
 # =========================================================================
 
 
@@ -280,7 +280,7 @@ class TestKGAPI:
 
 
 # =========================================================================
-# Pipeline Health Monitor API tests (v0.53.0)
+# Pipeline Health Monitor API tests (v0.54.0)
 # =========================================================================
 
 

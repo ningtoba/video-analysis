@@ -6,12 +6,49 @@ on:
   pull_request:
     branches: [master]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
 jobs:
+  quality:
+    name: Quality (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Cache ruff
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ruff
+          key: ruff-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ruff-
+
+      - name: Run ruff check
+        run: ruff check --fix --check .
+
   test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
       fail-fast: false
 
     steps:
@@ -36,12 +73,46 @@ jobs:
 
       - name: Install test dependencies
         run: |
-          pip install pytest pytest-timeout ruff
+          pip install pytest pytest-timeout pytest-asyncio ruff
 
-      - name: Run ruff check
-        run: ruff check .
+      - name: Run unit tests (no GPU, no integration, no benchmark)
+        run: pytest tests/ -v -m "not gpu and not integration and not benchmark and not slow"
+        env:
+          CI: true
 
-      - name: Run tests (CPU-only)
-        run: pytest tests/ -v -m "not gpu"
+  integration:
+    name: Integration tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-timeout pytest-asyncio ruff pytest-benchmark
+
+      - name: Run integration and slow tests (CPU-only)
+        run: pytest tests/ -v -m "not gpu and not benchmark"
         env:
           CI: true

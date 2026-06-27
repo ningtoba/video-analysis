@@ -1,6 +1,68 @@
 # Changelog
 
-## 0.53.0 (2026-06-27) — REST API Integration for Knowledge Graph & Pipeline Health Monitor
+## 0.54.0 (2026-06-27) — Multi-Agent Orchestrator API, MCP Tools & CI/CD Hardening
+
+### 🌐 REST API: Multi-Agent Orchestrator Endpoints (`video_analysis/api.py`)
+
+Exposes the v0.51.0 hierarchical multi-agent orchestrator via two new REST API
+endpoints for programmatic multi-video question answering:
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/orchestra/query` | Multi-agent Q&A on a single video — returns structured results with evidence, reasoning trace, agent counts, and execution timings |
+| `POST /api/orchestra/cross-video` | Parallel multi-agent Q&A across multiple videos — runs the same question against N videos concurrently with per-video results |
+
+Both endpoints use lazy imports with graceful 501 handling when the orchestra
+module is not available (no import-time dependency on heavy models).
+
+### 🧰 MCP Tool Exposure for Orchestrator (`video_analysis/mcp_server.py`)
+
+Three new MCP tools expose the orchestrator for agentic workflows:
+
+- **`multi_agent_query`** — queries the MultiAgentOrchestrator to answer
+  video questions with multi-agent reasoning (RouterAgent + Specialist
+  Sub-Agents + EvidenceSynthesizer)
+- **`cross_video_search`** — searches across multiple videos in parallel
+  using the orchestrator's evidence synthesis
+- **`orchestrator_result`** — returns structured orchestrator results with
+  agent breakdowns, evidence, and reasoning traces
+
+All tools use lazy init and graceful fallback when orchestra is unavailable.
+
+### 🚀 CI/CD Improvements
+
+- **`ci.yml`**: Added Python 3.13 and 3.14 to the test matrix. Tests now split
+  into separate `unit` and `integration` jobs running in parallel. Ruff check
+  runs as a standalone `quality` job with pip cache optimizations.
+- **`release.yml`**: New GitHub Actions release workflow triggered on tag push
+  (`v*`). Builds, runs full test suite, then creates a GitHub Release with
+  auto-generated changelog notes.
+- **`.pre-commit-config.yaml`**: Added pre-commit hooks for ruff linting + fix,
+  trailing-whitespace removal, and end-of-file-fixer.
+
+### 📦 Dependencies
+
+- `psutil>=6.0.0` added to `requirements.txt` — used by the monitoring
+  dashboard (`ui/monitor.py`).
+
+### 📁 Files Changed
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `video_analysis/api.py` | +130 | 2 new orchestrator API endpoints with structured responses |
+| `video_analysis/mcp_server.py` | +75 | 3 new orchestrator MCP tools (lazy init, graceful fallback) |
+| `tests/test_api_orchestra.py` | 210 | 9 new tests for orchestrator REST endpoints |
+| `.github/workflows/ci.yml` | +60 | Split into unit/integration/quality jobs, Python 3.13/3.14 |
+| `.github/workflows/release.yml` | 45 | New release workflow with auto-changelog |
+| `.pre-commit-config.yaml` | 20 | Pre-commit hooks: ruff, whitespace, EOF |
+| `requirements.txt` | +1 | Added psutil dependency |
+| `video_analysis/__init__.py` | 1 | Version bump to 0.54.0 |
+| `pyproject.toml` | 1 | Version bump |
+| `Dockerfile` | 1 | Version label update |
+
+### 🧪 Tests: 969/969 passing (0 failures)
+
+---
 
 ### 🌐 REST API: Knowledge Graph Endpoints (`video_analysis/api.py`)
 

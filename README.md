@@ -170,10 +170,11 @@ User Question
 || `telemetry` | `video_analysis/telemetry.py` | OpenTelemetry distributed tracing — pipeline, RAG, and API spans with OTLP export (v0.49.0) |
 |rate_limiter|`video_analysis/rate_limiter.py`|In-memory token bucket rate limiter for REST API (v0.49.0)|
 |error_handlers|`video_analysis/error_handlers.py`|Structured JSON error responses for REST API (v0.49.0)|
-||client|`video_analysis/client.py`|Python API client SDK for the REST API (v0.49.0)|
-||agent_confidence|`video_analysis/agent_confidence.py`|Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence weighting, tiered weighting (v0.50.0)|
-||report|`video_analysis/report.py`|Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)|
-||knowledge_graph|`ui/knowledge_graph.py`|Gradio Knowledge Graph Explorer tab — entity browsing, timeline, relationships, LLM context (v0.53.0)|
+|||client|`video_analysis/client.py`|Python API client SDK for the REST API (v0.49.0)|
+|||agent_confidence|`video_analysis/agent_confidence.py`|Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence weighting, tiered weighting (v0.50.0)|
+|||report|`video_analysis/report.py`|Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)|
+|||knowledge_graph|`ui/knowledge_graph.py`|Gradio Knowledge Graph Explorer tab — entity browsing, timeline, relationships, LLM context (v0.53.0)|
+|||orchestra_api|`video_analysis/api.py`|Multi-Agent Orchestrator REST API endpoints — single-video and cross-video Q&A (v0.54.0)|
 
 ## 💻 Tech Stack
 
@@ -475,5 +476,8 @@ Dashboard panels:
 - [x] **Structured Video Report** (v0.50.0) — comprehensive JSON schema report generator with VideoMetadata, TimelineSummary, SceneReport, TranscriptReport, ObjectCatalog, ActionSummary, RAGStats; JSON serialisation, save/load, markdown rendering, LLM-friendly chunk context
 - [x] **REST API: Knowledge Graph Endpoints** (v0.53.0) — 6 new endpoints exposing the KnowledgeGraph (stats, entities, timeline, relationships, video entities, LLM context) for programmatic cross-video entity querying
 - [x] **REST API: Pipeline Health Endpoints** (v0.53.0) — 4 new endpoints exposing PipelineHealthMonitor (runs report, summary, alerts, alert acknowledge) for automated health checks and observability
-- [x] **Gradio Knowledge Graph Explorer Tab** (v0.53.0) — Tab 10 in the Gradio UI for visual entity browsing, timeline exploration, entity type filtering, relationship visualization, and LLM context injection
+|- [x] **Gradio Knowledge Graph Explorer Tab** (v0.53.0) — Tab 10 in the Gradio UI for visual entity browsing, timeline exploration, entity type filtering, relationship visualization, and LLM context injection
+|- [x] **Multi-Agent Orchestrator REST API** (v0.54.0) — POST /api/orchestra/query for single-video multi-agent Q&A, POST /api/orchestra/cross-video for parallel multi-video Q&A with concurrent agent execution
+|- [x] **MCP Tools for Orchestrator** (v0.54.0) — multi_agent_query, cross_video_search, and orchestrator_result MCP tools exposing hierarchical multi-agent reasoning for agentic workflows
+|- [x] **CI/CD Matrix Expansion** (v0.54.0) — Python 3.13/3.14 added to test matrix, split unit/integration/quality jobs, release workflow with auto-generated changelog, pre-commit hooks
 MIT

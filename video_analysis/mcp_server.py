@@ -541,6 +541,308 @@ async def list_federation_peers() -> str:
     )
 
 
+# ── Orchestrator Tools (v0.51.0 — Multi-Agent Video Reasoning) ─────────
+#
+# These tools expose the MultiAgentOrchestrator which uses hierarchical
+# multi-agent reasoning for complex video understanding.  Gracefully
+# degrades if the orchestra module is not available.
+
+
+try:
+    from video_analysis.orchestra import (
+        MultiAgentOrchestrator,
+        get_orchestrator,
+        OrchestratorResult,
+    )
+
+    _HAS_ORCHESTRA = True
+except ImportError:  # pragma: no cover
+    _HAS_ORCHESTRA = False
+    MultiAgentOrchestrator = None  # type: ignore[assignment]
+    get_orchestrator = None  # type: ignore[assignment]
+    OrchestratorResult = None  # type: ignore[assignment]
+    logger.info(
+        "orchestra module not available — orchestrator tools will return fallback messages"
+    )
+
+
+def _build_orchestrator_result_dict(result: "OrchestratorResult") -> dict:
+    """Convert OrchestratorResult to a plain dict for JSON serialisation."""
+    return {
+        "query": result.query,
+        "answer": result.answer,
+        "confidence": result.confidence,
+        "agents_used": result.agents_used,
+        "plan_duration_s": round(result.plan_duration, 2),
+        "execution_duration_s": round(result.execution_duration, 2),
+        "total_duration_s": round(result.duration_seconds, 2),
+        "evidence": [
+            {
+                "source": e.get("source", "?"),
+                "text": str(e.get("text", ""))[:500],
+                "confidence": e.get("confidence", 0.0),
+                "success": e.get("success", False),
+            }
+            for e in result.evidence
+        ],
+        "reasoning": result.reasoning,
+        "agent_breakdown": result.agent_breakdown,
+    }
+
+
+@mcp.tool(
+    description="Query the Multi-Agent Orchestrator to answer video questions with "
+    "hierarchical multi-agent reasoning. Agents include VisualAnalyst, "
+    "RAGSearcher, TranscriptAnalyst, ObjectDetectorAgent, and "
+    "SummarizerAgent. Returns a structured answer with agent breakdowns."
+)
+async def multi_agent_query(
+    video_path: str,
+    question: str,
+    video_id: str = "",
+) -> str:
+    """Answer a question about a video using multi-agent orchestration.
+
+    The orchestrator decomposes the question, dispatches specialist agents
+    in parallel where possible, and synthesises evidence from all agents.
+
+    Args:
+        video_path: Path to the video file on disk.
+        question: Natural-language question about the video content.
+        video_id: Optional video ID (derived from filename if omitted).
+    """
+    if not _HAS_ORCHESTRA:
+        return json.dumps(
+            {
+                "error": "Orchestra module not available. Install video-analysis with "
+                "orchestra dependencies.",
+                "status": "unavailable",
+            },
+            indent=2,
+        )
+
+    pipeline, rag, _ = _ensure_services()
+    vid = video_id or Path(video_path).stem
+    path = Path(video_path)
+    if not path.exists():
+        return json.dumps(
+            {"error": f"Video file not found: {video_path}", "status": "error"},
+            indent=2,
+        )
+
+    try:
+        orch = get_orchestrator(
+            config=_config,
+            rag=rag,
+            video_path=str(path),
+            video_id=vid,
+        )
+        result = orch.query(question)
+        result_dict = _build_orchestrator_result_dict(result)
+        result_dict["status"] = "ok"
+        result_dict["video_id"] = vid
+        return json.dumps(result_dict, indent=2)
+    except Exception as exc:
+        logger.exception("multi_agent_query failed")
+        return json.dumps(
+            {
+                "error": str(exc),
+                "video_path": video_path,
+                "question": question,
+                "status": "error",
+            },
+            indent=2,
+        )
+
+
+@mcp.tool(
+    description="Search across multiple videos using the orchestrator's evidence "
+    "synthesis. Extracts relevant scenes from each video and combines "
+    "them via multi-agent reasoning for a cross-video answer."
+)
+async def cross_video_search(
+    query: str,
+    video_ids: str,
+    top_k_per_video: int = 3,
+) -> str:
+    """Search across multiple videos with orchestrator evidence synthesis.
+
+    For each video_id, retrieves the top-k relevant scenes and uses the
+    EvidenceSynthesizer to combine findings into a unified answer.
+
+    Args:
+        query: Natural-language query spanning multiple videos.
+        video_ids: Comma-separated list of video IDs.
+        top_k_per_video: Number of top scenes to retrieve per video (default: 3).
+    """
+    if not _HAS_ORCHESTRA:
+        return json.dumps(
+            {
+                "error": "Orchestra module not available. Install video-analysis with "
+                "orchestra dependencies.",
+                "status": "unavailable",
+            },
+            indent=2,
+        )
+
+    pipeline, rag, _ = _ensure_services()
+    ids = [v.strip() for v in video_ids.split(",") if v.strip()]
+    if not ids:
+        return json.dumps(
+            {"error": "At least one video_id is required", "status": "error"},
+            indent=2,
+        )
+
+    try:
+        from video_analysis.orchestra import EvidenceSynthesizer
+
+        synthesizer = EvidenceSynthesizer(config=_config)
+        all_evidence: dict[str, dict[str, Any]] = {}
+
+        for vid in ids:
+            try:
+                results = rag.search_all(query, top_k=top_k_per_video)
+                # Filter results to this video
+                video_results = [r for r in results if r.video_id == vid]
+                if video_results:
+                    combined_text = "\n".join(
+                        f"[{r.timestamp:.1f}s] {r.text[:300]}" for r in video_results
+                    )
+                    all_evidence[f"rag_searcher_{vid}"] = {
+                        "success": True,
+                        "data": f"Results for {vid}:\n{combined_text}",
+                        "confidence": max(
+                            (getattr(r, "score", 0.5) for r in video_results),
+                            default=0.5,
+                        ),
+                    }
+                else:
+                    all_evidence[f"rag_searcher_{vid}"] = {
+                        "success": True,
+                        "data": f"No relevant results found in {vid}.",
+                        "confidence": 0.3,
+                    }
+            except Exception as exc:
+                all_evidence[f"rag_searcher_{vid}"] = {
+                    "success": False,
+                    "data": "",
+                    "confidence": 0.0,
+                    "error": str(exc),
+                }
+
+        synthesis = synthesizer.synthesize(query, all_evidence)
+
+        return json.dumps(
+            {
+                "query": query,
+                "video_ids": ids,
+                "answer": synthesis.answer,
+                "confidence": synthesis.confidence,
+                "agent_breakdown": synthesis.agent_breakdown,
+                "videos_results": len(all_evidence),
+                "status": "ok",
+            },
+            indent=2,
+        )
+    except Exception as exc:
+        logger.exception("cross_video_search failed")
+        return json.dumps(
+            {
+                "error": str(exc),
+                "query": query,
+                "video_ids": ids,
+                "status": "error",
+            },
+            indent=2,
+        )
+
+
+@mcp.tool(
+    description="Return a structured orchestrator result with full agent breakdowns, "
+    "evidence, reasoning path, and confidence scores. Useful for inspecting "
+    "the internal state of a multi-agent query after it has been run."
+)
+async def orchestrator_result(
+    video_path: str,
+    question: str,
+    video_id: str = "",
+) -> str:
+    """Run a multi-agent query and return the full structured result.
+
+    Unlike ``multi_agent_query`` which returns a compact summary, this
+    tool returns the complete ``OrchestratorResult`` including the
+    reasoning path, all evidence entries, plan details, and the agent
+    breakdown dict — suitable for programmatic consumption or debugging.
+
+    Args:
+        video_path: Path to the video file on disk.
+        question: Natural-language question about the video content.
+        video_id: Optional video ID (derived from filename if omitted).
+    """
+    if not _HAS_ORCHESTRA:
+        return json.dumps(
+            {
+                "error": "Orchestra module not available. Install video-analysis with "
+                "orchestra dependencies.",
+                "status": "unavailable",
+            },
+            indent=2,
+        )
+
+    pipeline, rag, _ = _ensure_services()
+    vid = video_id or Path(video_path).stem
+    path = Path(video_path)
+    if not path.exists():
+        return json.dumps(
+            {"error": f"Video file not found: {video_path}", "status": "error"},
+            indent=2,
+        )
+
+    try:
+        orch = get_orchestrator(
+            config=_config,
+            rag=rag,
+            video_path=str(path),
+            video_id=vid,
+        )
+        result = orch.query(question)
+        result_dict = _build_orchestrator_result_dict(result)
+
+        # Add extra fields available on OrchestratorResult
+        result_dict["status"] = "ok"
+        result_dict["video_id"] = vid
+        result_dict["markdown"] = result.to_markdown()
+
+        # Include the RoutePlan if available
+        if result.plan is not None:
+            result_dict["plan"] = {
+                "complexity": result.plan.complexity,
+                "modalities": list(result.plan.modalities),
+                "tasks": [
+                    {
+                        "agent_type": t.agent_type,
+                        "description": t.description,
+                        "completed": t.completed,
+                        "confidence": t.confidence,
+                    }
+                    for t in result.plan.tasks
+                ],
+            }
+
+        return json.dumps(result_dict, indent=2)
+    except Exception as exc:
+        logger.exception("orchestrator_result failed")
+        return json.dumps(
+            {
+                "error": str(exc),
+                "video_path": video_path,
+                "question": question,
+                "status": "error",
+            },
+            indent=2,
+        )
+
+
 # ── Entry point ───────────────────────────────────────────────────────
 
 

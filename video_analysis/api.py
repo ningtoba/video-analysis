@@ -260,6 +260,84 @@ class VideoListResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Orchestrator schemas (v0.51.0 — Multi-Agent Video Reasoning)
+# ---------------------------------------------------------------------------
+
+
+class OrchestratorQueryRequest(BaseModel):
+    """Request body for POST /api/orchestra/query."""
+
+    video_path: str = Field(..., description="Path to the video file on disk")
+    question: str = Field(
+        ..., min_length=1, description="Natural-language question about the video"
+    )
+    video_id: str = Field(
+        "", description="Optional video ID (derived from filename if omitted)"
+    )
+    stream: bool = Field(False, description="If true, stream tokens via SSE")
+
+
+class OrchestratorEvidenceItem(BaseModel):
+    """A single evidence entry from an orchestrator agent."""
+
+    source: str = Field("", description="Agent source name")
+    text: str = Field("", description="Evidence text")
+    confidence: float = Field(0.0, description="Confidence score")
+    success: bool = Field(False, description="Whether the agent succeeded")
+
+
+class OrchestratorQueryResponse(BaseModel):
+    """Response from POST /api/orchestra/query."""
+
+    query: str = Field(..., description="The original question")
+    answer: str = Field(..., description="The synthesised answer")
+    confidence: float = Field(0.0, description="Overall confidence score")
+    agents_used: int = Field(0, description="Number of agents involved")
+    plan_duration_s: float = Field(
+        0.0, description="Planning phase duration in seconds"
+    )
+    execution_duration_s: float = Field(
+        0.0, description="Execution phase duration in seconds"
+    )
+    total_duration_s: float = Field(0.0, description="Total processing time in seconds")
+    evidence: List[OrchestratorEvidenceItem] = Field(
+        default_factory=list, description="Evidence from all agents"
+    )
+    reasoning: List[str] = Field(default_factory=list, description="Reasoning trace")
+    agent_breakdown: Dict[str, float] = Field(
+        default_factory=dict, description="Per-agent confidence scores"
+    )
+    video_id: str = Field("", description="Video identifier")
+    status: str = Field("ok", description="Response status")
+
+
+class CrossVideoQueryRequest(BaseModel):
+    """Request body for POST /api/orchestra/cross-video."""
+
+    query: str = Field(
+        ..., min_length=1, description="Natural-language query spanning multiple videos"
+    )
+    video_ids: List[str] = Field(
+        ..., min_length=1, description="List of video IDs to search across"
+    )
+    top_k_per_video: int = Field(3, ge=1, le=20, description="Top results per video")
+
+
+class CrossVideoQueryResponse(BaseModel):
+    """Response from POST /api/orchestra/cross-video."""
+
+    query: str = Field(..., description="The original query")
+    video_ids: List[str] = Field(default_factory=list, description="Videos searched")
+    answer: str = Field("", description="Synthesised cross-video answer")
+    confidence: float = Field(0.0, description="Overall confidence score")
+    agent_breakdown: Dict[str, float] = Field(
+        default_factory=dict, description="Per-video confidence scores"
+    )
+    videos_results: int = Field(0, description="Number of video results processed")
+    status: str = Field("ok", description="Response status")
+
+
+# ---------------------------------------------------------------------------
 # Knowledge Graph schemas (v0.53.0)
 # ---------------------------------------------------------------------------
 
@@ -1633,6 +1711,326 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         h = _get_health(cfg)
         h.acknowledge_alert(alert_id)
         return {"status": "acknowledged", "alert_id": alert_id}
+
+    # ------------------------------------------------------------------
+    # Multi-Agent Orchestrator API endpoints (v0.54.0)
+    # ------------------------------------------------------------------
+
+    @router.post(
+        "/api/orchestra/query",
+        summary="Multi-agent question answering via orchestrator",
+        description=(
+            "Uses the hierarchical multi-agent orchestrator to answer a "
+            "question about a specific video, returning structured results "
+            "with evidence from specialist sub-agents."
+        ),
+    )
+    async def api_orchestra_query(
+        video_id: str = Query(..., description="Video ID to query against"),
+        question: str = Query(
+            ..., min_length=1, description="Natural language question"
+        ),
+    ):
+        try:
+            from video_analysis.orchestra import get_orchestrator
+
+            orch = get_orchestrator(
+                rag=_RAG,
+                video_id=video_id,
+            )
+            result = orch.query(question)
+            return {
+                "video_id": video_id,
+                "question": question,
+                "answer": result.answer,
+                "confidence": getattr(result, "confidence", 0.0),
+                "agents_used": getattr(result, "agents_used", 0),
+                "evidence": getattr(result, "evidence", []),
+                "reasoning": getattr(result, "reasoning", []),
+                "plan_duration": getattr(result, "plan_duration", 0.0),
+                "execution_duration": getattr(result, "execution_duration", 0.0),
+            }
+        except ImportError:
+            raise HTTPException(
+                status_code=501,
+                detail="Multi-agent orchestrator not available (orchestra module)",
+            )
+        except Exception as e:
+            logger.exception("Orchestrator query failed")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Orchestrator query failed: {e}",
+            )
+
+    @router.post(
+        "/api/orchestra/cross-video",
+        summary="Cross-video query across multiple videos",
+        description=(
+            "Runs the same question against multiple videos in parallel "
+            "using the multi-agent orchestrator, with combined evidence synthesis."
+        ),
+    )
+    async def api_orchestra_cross_video(
+        video_ids: str = Query(
+            ...,
+            description="Comma-separated list of video IDs to query",
+        ),
+        question: str = Query(
+            ..., min_length=1, description="Natural language question"
+        ),
+    ):
+        try:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from video_analysis.orchestra import get_orchestrator
+
+            ids = [v.strip() for v in video_ids.split(",") if v.strip()]
+            if not ids:
+                raise HTTPException(
+                    status_code=400, detail="At least one video_id required"
+                )
+
+            results: list[dict[str, Any]] = []
+            with ThreadPoolExecutor(max_workers=min(len(ids), 4)) as executor:
+
+                def _query_video(vid: str) -> dict[str, Any]:
+                    try:
+                        orch = get_orchestrator(
+                            rag=_RAG,
+                            video_id=vid,
+                        )
+                        r = orch.query(question)
+                        return {
+                            "video_id": vid,
+                            "success": True,
+                            "answer": r.answer,
+                            "confidence": getattr(r, "confidence", 0.0),
+                        }
+                    except Exception as e:
+                        return {
+                            "video_id": vid,
+                            "success": False,
+                            "error": str(e),
+                        }
+
+                futures = {executor.submit(_query_video, vid): vid for vid in ids}
+                for future in as_completed(futures):
+                    results.append(future.result())
+
+            # Sort by video_id for deterministic output
+            results.sort(key=lambda x: x.get("video_id", ""))
+            return {
+                "question": question,
+                "video_count": len(ids),
+                "results": results,
+            }
+        except ImportError:
+            raise HTTPException(
+                status_code=501,
+                detail="Multi-agent orchestrator not available (orchestra module)",
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Cross-video orchestrator query failed")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Cross-video query failed: {e}",
+            )
+
+    # ------------------------------------------------------------------
+    # Orchestrator JSON-body endpoints (v0.54.0) — alternative to Query-param
+    # variants above. Accepts POST with JSON body using Pydantic schemas.
+    # ------------------------------------------------------------------
+
+    @router.post(
+        "/api/orchestra/query-json",
+        response_model=OrchestratorQueryResponse,
+        summary="Multi-agent question answering (JSON body)",
+        description=(
+            "Same as ``POST /api/orchestra/query`` but accepts a JSON request "
+            "body (``OrchestratorQueryRequest``) instead of query parameters. "
+            "Returns a fully structured orchestrator response with agent breakdowns."
+        ),
+    )
+    async def api_orchestra_query_json(body: OrchestratorQueryRequest):
+        """Multi-agent question answering with JSON body input.
+
+        Accepts ``video_path``, ``question``, optional ``video_id``,
+        and ``stream`` flag. Returns structured orchestrator results.
+        """
+        try:
+            from video_analysis.orchestra import get_orchestrator
+
+            vid = body.video_id or Path(body.video_path).stem
+
+            # Check video file exists
+            path = Path(body.video_path)
+            if not path.exists():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Video file not found: {body.video_path}",
+                )
+
+            orch = get_orchestrator(
+                rag=_get_rag(),
+                video_path=str(path),
+                video_id=vid,
+            )
+
+            if body.stream:
+                from video_analysis.orchestra import OrchestratorResult
+
+                async def _orchestra_event_generator() -> AsyncGenerator[str, None]:
+                    try:
+                        loop = asyncio.get_event_loop()
+                        result: OrchestratorResult = await loop.run_in_executor(
+                            None, orch.query, body.question
+                        )
+                        yield f"data: {json.dumps({'token': result.answer[:200]})}\n\n"
+                        yield f"data: {json.dumps({'confidence': result.confidence})}\n\n"
+                        yield "data: [DONE]\n\n"
+                    except Exception as exc:
+                        yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+                        yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    _orchestra_event_generator(),
+                    media_type="text/event-stream",
+                )
+
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, orch.query, body.question)
+
+            return OrchestratorQueryResponse(
+                query=result.query,
+                answer=result.answer,
+                confidence=result.confidence,
+                agents_used=result.agents_used,
+                plan_duration_s=round(result.plan_duration, 2),
+                execution_duration_s=round(result.execution_duration, 2),
+                total_duration_s=round(result.duration_seconds, 2),
+                evidence=[
+                    OrchestratorEvidenceItem(
+                        source=e.get("source", "?"),
+                        text=str(e.get("text", ""))[:500],
+                        confidence=e.get("confidence", 0.0),
+                        success=e.get("success", False),
+                    )
+                    for e in result.evidence
+                ],
+                reasoning=result.reasoning,
+                agent_breakdown=result.agent_breakdown,
+                video_id=vid,
+                status="ok",
+            )
+        except ImportError:
+            raise HTTPException(
+                status_code=501,
+                detail="Multi-agent orchestrator not available (orchestra module)",
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Orchestrator query-json failed")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Orchestrator query failed: {e}",
+            )
+
+    @router.post(
+        "/api/orchestra/cross-video-json",
+        response_model=CrossVideoQueryResponse,
+        summary="Cross-video query (JSON body)",
+        description=(
+            "Same as ``POST /api/orchestra/cross-video`` but accepts a JSON "
+            "request body (``CrossVideoQueryRequest``) with ``video_ids`` as "
+            "a JSON array of strings. Returns synthesised evidence across videos."
+        ),
+    )
+    async def api_orchestra_cross_video_json(body: CrossVideoQueryRequest):
+        """Cross-video query with JSON body input."""
+        try:
+            rag_instance = _get_rag()
+            loop = asyncio.get_event_loop()
+
+            def _run_cross_video() -> dict[str, Any]:
+                try:
+                    from video_analysis.orchestra import EvidenceSynthesizer
+                    from video_analysis.orchestra import get_orchestrator
+
+                    synthesizer = EvidenceSynthesizer(config=cfg)
+                    all_evidence: dict[str, dict[str, Any]] = {}
+
+                    for vid in body.video_ids:
+                        try:
+                            chunks = rag_instance.search_all(
+                                body.query, top_k=body.top_k_per_video
+                            )
+                            video_results = [c for c in chunks if c.video_id == vid]
+                            if video_results:
+                                combined_text = "\n".join(
+                                    f"[{c.timestamp:.1f}s] {c.text[:300]}"
+                                    for c in video_results
+                                )
+                                all_evidence[f"rag_searcher_{vid}"] = {
+                                    "success": True,
+                                    "data": f"Results for {vid}:\n{combined_text}",
+                                    "confidence": max(
+                                        (
+                                            getattr(c, "score", 0.5)
+                                            for c in video_results
+                                        ),
+                                        default=0.5,
+                                    ),
+                                }
+                            else:
+                                all_evidence[f"rag_searcher_{vid}"] = {
+                                    "success": True,
+                                    "data": f"No relevant results found in {vid}.",
+                                    "confidence": 0.3,
+                                }
+                        except Exception as exc:
+                            all_evidence[f"rag_searcher_{vid}"] = {
+                                "success": False,
+                                "data": "",
+                                "confidence": 0.0,
+                                "error": str(exc),
+                            }
+
+                    synthesis = synthesizer.synthesize(body.query, all_evidence)
+                    return CrossVideoQueryResponse(
+                        query=body.query,
+                        video_ids=body.video_ids,
+                        answer=synthesis.answer,
+                        confidence=synthesis.confidence,
+                        agent_breakdown=synthesis.agent_breakdown,
+                        videos_results=len(all_evidence),
+                        status="ok",
+                    ).model_dump()
+                except Exception as exc:
+                    logger.exception("Cross-video synthesis failed")
+                    return CrossVideoQueryResponse(
+                        query=body.query,
+                        video_ids=body.video_ids,
+                        answer=f"Synthesis failed: {exc}",
+                        confidence=0.0,
+                        videos_results=0,
+                        status="error",
+                    ).model_dump()
+
+            result = await loop.run_in_executor(None, _run_cross_video)
+            return result
+        except ImportError:
+            raise HTTPException(
+                status_code=501,
+                detail="Multi-agent orchestrator not available (orchestra module)",
+            )
+        except Exception as e:
+            logger.exception("Cross-video query-json failed")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Cross-video query failed: {e}",
+            )
 
     return router
 
