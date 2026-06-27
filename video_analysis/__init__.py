@@ -42,6 +42,8 @@ from video_analysis import (
     llm_provider,
     stream_chat,
     curator,
+    event_rag,
+    streaming_think,
 )
 
 # face module is optional (requires insightface) — import on demand only
@@ -52,7 +54,7 @@ from video_analysis import (
 
 # api and stream_chat modules are imported on demand
 
-__version__ = "0.54.0"
+__version__ = "0.57.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (
@@ -73,4 +75,23 @@ from video_analysis.pipeline_health import (
     PipelineRun,
     HealthAlert,
     HealthReport,
+)  # noqa: E402, F401
+
+# Re-export event-causal RAG and streaming thinking (v0.57.0)
+from video_analysis.event_rag import (
+    EventCausalRAG,
+    Event,
+    SESGraph,
+    EventSegmenter,
+    DualStoreMemory,
+    SemanticStore,
+    CausalTopologicalStore,
+    RetrievalResult,
+    CausalPath,
+)  # noqa: E402, F401
+
+from video_analysis.streaming_think import (
+    StreamingThinkingPipeline,
+    StreamingThought,
+    ThoughtState,
 )  # noqa: E402, F401

@@ -1,5 +1,86 @@
 # Changelog
 
+## 0.57.0 (2026-06-27) — Event-Causal RAG & Streaming Thinking
+
+### 🧠 Event-Causal RAG (`video_analysis/event_rag.py`)
+
+Implements **Event-Causal RAG** (arXiv:2605.06185) — semantic event
+segmentation, State-Event-State (SES) graphs, and bidirectional
+causal-topological retrieval for long-video understanding.
+
+**New module (`event_rag.py`, ~1250 lines):**
+
+- **`EventSegmenter`** — 3-tier segmentation strategy:
+  1. **LLM-based** — uses configured LLM provider to analyse scene
+     descriptions and transcript, producing event boundaries with titles,
+     state descriptions, and entities
+  2. **Transcript-coherence** — groups consecutive scenes based on transcript
+     topic continuity (keyword overlap detection)
+  3. **Temporal-grid fallback** — merges scenes into fixed-duration events
+     (default 60s)
+- **`SESGraph`** — State-Event-State graph construction:
+  - State nodes (before/after descriptions) and event nodes
+  - Temporal edges (chronological ordering) and causal edges
+    (where state_after ≈ state_before)
+- **`DualStoreMemory`** — bidirectional retrieval:
+  - `SemanticStore`: dense embedding retrieval from event descriptions
+    (ChromaDB-backed, with in-memory TF-IDF fallback)
+  - `CausalTopologicalStore`: graph BFS for forward (prediction) and
+    backward (explanation) event retrieval
+- **`EventCausalRAG`** — main orchestrator wrapping all components:
+  `segment_video()` → `build_ses_graph()` → `index_events()` →
+  `retrieve()` / `retrieve_forward()` / `retrieve_backward()`
+
+**Design:** All components are training-free — use existing MLLM/LLM backends.
+
+### 💭 Streaming Thinking (`video_analysis/streaming_think.py`)
+
+Implements **Video Streaming Thinking (VST)** (arXiv:2603.12262) — amortized
+reasoning during real-time video streaming, "watch and think simultaneously".
+
+**New module (`streaming_think.py`, ~590 lines):**
+
+- **`ThoughtState`** — accumulated reasoning across chunks (entities,
+  causal observations, partial answers, question tracking)
+- **`StreamingThought`** — per-chunk thinking step with:
+  - Entity accumulation and trend analysis
+  - **Forward thinking** (causal prediction): "What might happen next?"
+  - **Backward thinking** (causal explanation): "How does this relate?"
+  - Question generation: "What knowledge gaps exist?"
+- **`StreamingThinkingPipeline`** — wraps `StreamingPipeline` with thinking:
+  - `process_with_thinking()` / `process_live_with_thinking()`
+  - `answer()` — answer queries from accumulated streaming context
+    (LLM-backed with context-based fallback)
+  - `get_timeline()` — structured thought timeline export
+  - `final_thoughts()` / `reset()`
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EVENT_CAUSAL_RAG_ENABLED` | `false` | Enable Event-Causal RAG module |
+| `EVENT_SEGMENTATION_STRATEGY` | `auto` | Segmentation: auto, llm, transcript, temporal |
+| `EVENT_CAUSAL_TOP_K` | `10` | Max events from bidirectional retrieval |
+| `EVENT_CAUSAL_SEMANTIC_WEIGHT` | `0.5` | Semantic vs causal store weight |
+| `EVENT_MAX_DURATION_SECONDS` | `300` | Max event duration |
+| `STREAMING_THINKING_ENABLED` | `false` | Enable Streaming Thinking |
+| `STREAMING_THINKING_INTERVAL` | `1` | Think on every Nth chunk |
+
+### 🧪 Tests
+
+- **62 new tests** across 2 test files:
+  - `tests/test_event_rag.py` — 31 tests (Event dataclass, segmentation
+    strategies, SES graph, dual-store retrieval, LLM integration)
+  - `tests/test_streaming_think.py` — 31 tests (thinking pipeline,
+    entity accumulation, causal prediction/explanation, answer engine)
+
+### 📚 Documentation
+
+- `docs/research/v0.57.0-event-causal-rag-streaming-thinking.md` — research
+  synthesis and implementation notes
+
+---
+
 ## 0.54.0 (2026-06-27) — InternVideo3 SOTA Video MLLM Backend
 
 ### 🧠 InternVideo3-8B Video MLLM Backend (`video_analysis/backends/internvideo3.py`)

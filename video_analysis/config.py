@@ -335,6 +335,23 @@ class Config:
         "AGENT_CONFIDENCE_WEIGHT_MODE", "tiered"
     )  # "tiered" (high/medium/low) or "continuous"
 
+    # Event-Causal RAG (v0.57.0 — arXiv:2605.06185, arXiv:2604.05418)
+    event_causal_rag_enabled: bool = (
+        False  # overridden by EVENT_CAUSAL_RAG_ENABLED env var
+    )
+    event_segmentation_strategy: str = "auto"  # "auto", "llm", "transcript", "temporal"
+    event_causal_top_k: int = 10  # max events to return from bidirectional retrieval
+    event_causal_semantic_weight: float = (
+        0.5  # weight for semantic store vs causal store
+    )
+    event_max_duration_seconds: float = 300.0  # max event duration in seconds
+
+    # Streaming Thinking (v0.57.0 — arXiv:2603.12262 amortized streaming reasoning)
+    streaming_thinking_enabled: bool = (
+        False  # overridden by STREAMING_THINKING_ENABLED env var
+    )
+    streaming_thinking_interval: int = 1  # think on every Nth chunk
+
     # Rate Limiting (v0.49.0)
     rate_limit_enabled: bool = bool(
         os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
@@ -627,6 +644,17 @@ class Config:
                     self.mmr_top_k = val
             except ValueError:
                 pass
+        # Override event-causal RAG config from env vars (v0.57.0)
+        ev_rag_env = os.environ.get("EVENT_CAUSAL_RAG_ENABLED", "").lower()
+        if ev_rag_env in ("true", "1", "yes"):
+            self.event_causal_rag_enabled = True
+        ev_strat_env = os.environ.get("EVENT_SEGMENTATION_STRATEGY", "").lower()
+        if ev_strat_env in ("auto", "llm", "transcript", "temporal"):
+            self.event_segmentation_strategy = ev_strat_env
+        # Override streaming thinking config from env vars (v0.57.0)
+        st_env = os.environ.get("STREAMING_THINKING_ENABLED", "").lower()
+        if st_env in ("true", "1", "yes"):
+            self.streaming_thinking_enabled = True
         for d in [
             self.data_dir,
             self.video_dir,

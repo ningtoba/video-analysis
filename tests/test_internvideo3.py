@@ -137,7 +137,7 @@ def test_version_check():
     """Verify version is bumped to 0.54.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.54.0"
+    assert __version__ == "0.57.0"
 
 
 def test_build_multimodal_messages():
