@@ -140,6 +140,43 @@ class EvaluationComparison:
     improvements: List[Dict[str, Any]]
 
 
+@dataclass
+class MLLMBackendInfo:
+    """Status of a single MLLM backend."""
+
+    name: str = ""
+    available: bool = False
+    loaded: bool = False
+    requires_server: bool = False
+
+
+@dataclass
+class MLLMBackendsResult:
+    """Response from GET /api/mllm/backends."""
+
+    configured_backend: str = "auto"
+    resolved_backend: Optional[str] = None
+    backends: List[MLLMBackendInfo] = field(default_factory=list)
+
+
+@dataclass
+class MLLMDescribeResult:
+    """Result from POST /api/mllm/describe or /api/mllm/summarize."""
+
+    description: str = ""
+    backend: str = ""
+    error: Optional[str] = None
+
+
+@dataclass
+class MLLMQueryResult:
+    """Result from POST /api/mllm/query."""
+
+    answer: str = ""
+    backend: str = ""
+    error: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Client Errors
 # ---------------------------------------------------------------------------
@@ -783,6 +820,161 @@ class VideoAnalysisClient:
             regressions=data.get("regressions", []),
             improvements=data.get("improvements", []),
         )
+
+    # ------------------------------------------------------------------
+    # Video MLLM Direct API (v0.55.0)
+    # ------------------------------------------------------------------
+
+    def get_mllm_backends(self) -> MLLMBackendsResult:
+        """List available MLLM backends and their status.
+
+        Returns:
+            An :class:`MLLMBackendsResult` with backend status info.
+        """
+        data = self._get("/api/mllm/backends")
+        backends = [
+            MLLMBackendInfo(
+                name=b.get("name", ""),
+                available=b.get("available", False),
+                loaded=b.get("loaded", False),
+                requires_server=b.get("requires_server", False),
+            )
+            for b in data.get("backends", [])
+        ]
+        return MLLMBackendsResult(
+            configured_backend=data.get("configured_backend", "auto"),
+            resolved_backend=data.get("resolved_backend"),
+            backends=backends,
+        )
+
+    def mllm_describe(
+        self,
+        frames: List[str],
+        prompt: str = "Describe what's happening in these frames in detail.",
+        max_tokens: int = 256,
+    ) -> MLLMDescribeResult:
+        """Describe frames using the video MLLM.
+
+        Args:
+            frames: List of frame file paths to describe.
+            prompt: Optional custom prompt.
+            max_tokens: Max tokens in response.
+
+        Returns:
+            An :class:`MLLMDescribeResult` with the description.
+        """
+        data = self._post(
+            "/api/mllm/describe",
+            json={
+                "frames": frames,
+                "prompt": prompt,
+                "max_tokens": max_tokens,
+            },
+        )
+        return MLLMDescribeResult(
+            description=data.get("description", ""),
+            backend=data.get("backend", ""),
+            error=data.get("error"),
+        )
+
+    def mllm_summarize(
+        self,
+        video_id: str = "",
+        video_path: Optional[str] = None,
+        prompt: str = "Summarize the key content, events, and subjects of this video.",
+        num_frames: int = 32,
+    ) -> MLLMDescribeResult:
+        """Summarize a video using the MLLM.
+
+        Args:
+            video_id: Indexed video ID.
+            video_path: Local video file path.
+            prompt: Custom summary prompt.
+            num_frames: Number of frames to sample.
+
+        Returns:
+            An :class:`MLLMDescribeResult` with the summary.
+        """
+        data = self._post(
+            "/api/mllm/summarize",
+            json={
+                "video_id": video_id,
+                "video_path": video_path,
+                "prompt": prompt,
+                "num_frames": num_frames,
+            },
+        )
+        return MLLMDescribeResult(
+            description=data.get("description", ""),
+            backend=data.get("backend", ""),
+            error=data.get("error"),
+        )
+
+    def mllm_query(
+        self,
+        query: str,
+        video_id: str = "",
+        video_path: Optional[str] = None,
+        num_frames: int = 16,
+    ) -> MLLMQueryResult:
+        """Ask a visual question via the MLLM (bypassing RAG).
+
+        Args:
+            query: Natural language question.
+            video_id: Indexed video ID.
+            video_path: Local video file path.
+            num_frames: Number of frames to sample.
+
+        Returns:
+            An :class:`MLLMQueryResult` with the answer.
+        """
+        data = self._post(
+            "/api/mllm/query",
+            json={
+                "query": query,
+                "video_id": video_id,
+                "video_path": video_path,
+                "num_frames": num_frames,
+            },
+        )
+        return MLLMQueryResult(
+            answer=data.get("answer", ""),
+            backend=data.get("backend", ""),
+            error=data.get("error"),
+        )
+
+    def mllm_load_backend(
+        self,
+        backend: str = "auto",
+        model_size: str = "2.2B",
+        use_fp8: bool = True,
+    ) -> Dict[str, Any]:
+        """Load a specific MLLM backend onto GPU.
+
+        Args:
+            backend: Backend to load (auto, internvideo3, qwen3_vl, smolvlm2, videochat_flash).
+            model_size: Model size for SmolVLM2.
+            use_fp8: Enable FP8 quantization.
+
+        Returns:
+            Dict with success, backend, resolved_backend, and message keys.
+        """
+        return self._post(
+            "/api/mllm/backends/load",
+            json={
+                "backend": backend,
+                "model_size": model_size,
+                "use_fp8": use_fp8,
+            },
+        )
+
+    def mllm_unload_backend(self) -> Dict[str, Any]:
+        """Unload the current MLLM backend from GPU memory.
+
+        Returns:
+            Dict with success and message keys.
+        """
+        return self._post("/api/mllm/backends/unload")
 
 
 # ---------------------------------------------------------------------------

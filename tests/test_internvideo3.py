@@ -1,4 +1,4 @@
-"""Tests for InternVideo3-8B video MLLM backend (v0.54.0).
+"""Tests for InternVideo3-8B video MLLM backend (v0.55.0).
 
 Covers:
 - Module importability
@@ -134,10 +134,10 @@ def test_video_mllm_backend_resolve_internvideo3():
 
 
 def test_version_check():
-    """Verify version is bumped to 0.54.0."""
+    """Verify version is bumped to 0.55.0."""
     from video_analysis import __version__
 
-    assert __version__ == "0.54.0"
+    assert __version__ == "0.55.0"
 
 
 def test_build_multimodal_messages():

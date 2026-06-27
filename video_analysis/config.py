@@ -177,7 +177,7 @@ class Config:
     )
     video_mllm_model: str = "OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448"
     video_mllm_backend: str = (
-        "auto"  # "auto", "videochat_flash", "smolvlm2", "qwen3_vl"
+        "auto"  # "auto", "videochat_flash", "smolvlm2", "qwen3_vl", "internvideo3"
     )
     video_mllm_model_size: str = "2.2B"  # "2.2B", "500M", "256M" (SmolVLM2 only)
     video_mllm_as_describer: bool = (
@@ -368,7 +368,13 @@ class Config:
             self.video_mllm_as_chat_backend = True
         # Override video_mllm_backend from env var
         backend_env = os.environ.get("VIDEO_MLLM_BACKEND", "").lower()
-        if backend_env in ("auto", "videochat_flash", "smolvlm2", "qwen3_vl"):
+        if backend_env in (
+            "auto",
+            "videochat_flash",
+            "smolvlm2",
+            "qwen3_vl",
+            "internvideo3",
+        ):
             self.video_mllm_backend = backend_env
         # Override video_mllm_model from env var
         model_env = os.environ.get("VIDEO_MLLM_MODEL", "").strip()

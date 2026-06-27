@@ -17,12 +17,13 @@ Modules:
 - rate_limiter: In-memory token bucket rate limiter for the REST API (v0.49.0)
 - error_handlers: Structured JSON error responses for the REST API (v0.49.0)
 - job_queue: In-process async job queue for background video processing (v0.43.0)
-||| agent_confidence: Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence scoring, tiered weighting (v0.50.0)
-||| report: Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)
-||| orchestra: Hierarchical multi-agent video reasoning orchestrator — HiCrew-inspired planning layer, specialist sub-agents, evidence synthesis (v0.51.0)
-||| knowledge_graph: Persistent video knowledge graph — SQLite-backed cross-video entity & relationship store (v0.52.0)
-||| pipeline_health: Pipeline health monitoring — automated anomaly detection, drift tracking, alerting, composite health scoring (v0.52.0)
-||| internvideo3: InternVideo3-8B video MLLM backend — SOTA open-weight video understanding with MCR reasoning & M^2LA KV-cache compression (v0.54.0)
+|||| agent_confidence: Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence scoring, tiered weighting (v0.50.0)
+|||| report: Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)
+|||| orchestra: Hierarchical multi-agent video reasoning orchestrator — HiCrew-inspired planning layer, specialist sub-agents, evidence synthesis (v0.51.0)
+|||| knowledge_graph: Persistent video knowledge graph — SQLite-backed cross-video entity & relationship store (v0.52.0)
+|||| pipeline_health: Pipeline health monitoring — automated anomaly detection, drift tracking, alerting, composite health scoring (v0.52.0)
+|||| internvideo3: InternVideo3-8B video MLLM backend — SOTA open-weight video understanding with MCR reasoning & M^2LA KV-cache compression (v0.54.0)
+- mllm_api: MLLM Direct REST API endpoints for all 4 video backends (v0.55.0)
 """
 
 from video_analysis import (
@@ -52,7 +53,7 @@ from video_analysis import (
 
 # api and stream_chat modules are imported on demand
 
-__version__ = "0.54.0"
+__version__ = "0.55.0"
 
 # Re-export streaming module public API at package level
 from video_analysis.streaming import (

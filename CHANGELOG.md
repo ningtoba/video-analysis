@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.55.0 (2026-06-27) — Video MLLM Direct REST API
+
+### 🌐 MLLM Direct REST API Endpoints (`video_analysis/api.py`)
+
+Exposes all 4 video MLLM backends (InternVideo3, Qwen3-VL, SmolVLM2, VideoChat-Flash)
+via direct REST API endpoints, enabling programmatic access to video-native
+understanding without RAG retrieval.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/mllm/backends` | List all available MLLM backends with status (loaded/available/requires-server) |
+| `POST /api/mllm/backends/load` | Load a specific MLLM backend onto GPU |
+| `POST /api/mllm/backends/unload` | Unload the current MLLM backend from GPU memory |
+| `POST /api/mllm/describe` | Describe specific frames using the MLLM |
+| `POST /api/mllm/summarize` | Generate a full video summary via the MLLM |
+| `POST /api/mllm/query` | Ask a visual question via the MLLM (bypassing RAG) |
+
+Key design decisions:
+- **Direct MLLM access** — bypasses the RAG retrieval pipeline, sending frames
+  directly to the MLLM for video-native understanding
+- **Flexible video selection** — endpoints accept either `video_id` (indexed video)
+  or `video_path` (local file path), resolving from the video directory when needed
+- **Graceful error handling** — returns structured error fields instead of HTTP 500
+  when the MLLM backend is unavailable
+- **OpenAPI documented** — all endpoints appear in auto-generated docs at `/docs`
+
+### 📦 Python Client SDK (`video_analysis/client.py`)
+
+Extended the Python API client with 6 new MLLM methods:
+
+| Method | Description |
+|--------|-------------|
+| `get_mllm_backends()` | List MLLM backends |
+| `mllm_describe(frames, ...)` | Describe frames via MLLM |
+| `mllm_summarize(video_id, ...)` | Summarize video via MLLM |
+| `mllm_query(query, video_id, ...)` | Visual Q&A via MLLM |
+| `mllm_load_backend(backend, ...)` | Load an MLLM backend |
+| `mllm_unload_backend()` | Unload current backend |
+
+New data models: `MLLMBackendInfo`, `MLLMBackendsResult`, `MLLMDescribeResult`,
+`MLLMQueryResult`.
+
+### ⚙️ Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VIDEO_MLLM_BACKEND` | `auto` | Now supports `internvideo3` as a valid value |
+
+### 📁 Files Changed
+
+| File | Description |
+|------|-------------|
+| `video_analysis/api.py` | +7 new MLLM REST endpoints (~300 lines), new Pydantic schemas, lazy VideoMLLM singleton |
+| `video_analysis/client.py` | +6 new MLLM client methods, 4 new data models (~160 lines) |
+| `video_analysis/__init__.py` | Version bump to 0.55.0, new module docs |
+| `video_analysis/config.py` | Added `internvideo3` to valid backend values |
+| `pyproject.toml` | Version bump |
+| `tests/test_mllm_api.py` | ~180 lines, 12+ tests covering all MLLM endpoints, models, OpenAPI docs |
+
+### 🧪 Tests: ~975 passing (+13 new)
+
+---
+
 ## 0.54.0 (2026-06-27) — InternVideo3 SOTA Video MLLM Backend
 
 ### 🧠 InternVideo3-8B Video MLLM Backend (`video_analysis/backends/internvideo3.py`)

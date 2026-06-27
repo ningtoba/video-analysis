@@ -302,6 +302,97 @@ class KGRelationshipResponse(BaseModel):
     strength: int = Field(0, description="Relationship strength")
 
 
+# ---------------------------------------------------------------------------
+# Video MLLM Direct API schemas (v0.55.0)
+# ---------------------------------------------------------------------------
+
+
+class MLLMDescribeRequest(BaseModel):
+    """Request body for POST /api/mllm/describe."""
+
+    frames: List[str] = Field(..., description="List of frame file paths to describe")
+    prompt: str = Field(
+        "Describe what's happening in these frames in detail.",
+        description="Optional custom prompt",
+    )
+    max_tokens: int = Field(256, ge=16, le=2048, description="Max tokens in response")
+
+
+class MLLMDescribeResponse(BaseModel):
+    """Response from POST /api/mllm/describe."""
+
+    description: str = Field("", description="MLLM-generated description")
+    backend: str = Field("", description="Backend used")
+    error: Optional[str] = Field(None, description="Error message if any")
+
+
+class MLLMSummarizeRequest(BaseModel):
+    """Request body for POST /api/mllm/summarize."""
+
+    video_id: str = Field("", description="Indexed video ID (uses stored frames)")
+    video_path: Optional[str] = Field(
+        None, description="Local video file path (alternative to video_id)"
+    )
+    prompt: str = Field(
+        "Summarize the key content, events, and subjects of this video.",
+        description="Optional custom summary prompt",
+    )
+    num_frames: int = Field(32, ge=8, le=128, description="Number of frames to sample")
+
+
+class MLLMQueryRequest(BaseModel):
+    """Request body for POST /api/mllm/query."""
+
+    query: str = Field(..., min_length=1, description="Natural language question")
+    video_id: str = Field("", description="Indexed video ID (uses stored frames)")
+    video_path: Optional[str] = Field(
+        None, description="Local video file path (alternative to video_id)"
+    )
+    num_frames: int = Field(16, ge=4, le=64, description="Number of frames to sample")
+
+
+class MLLMQueryResponse(BaseModel):
+    """Response from POST /api/mllm/query."""
+
+    answer: str = Field("", description="MLLM-generated answer")
+    backend: str = Field("", description="Backend used")
+    error: Optional[str] = Field(None, description="Error message if any")
+
+
+class MLLMBackendStatus(BaseModel):
+    """Status information for a single MLLM backend."""
+
+    name: str = Field(..., description="Backend name")
+    available: bool = Field(False, description="Whether the backend is available")
+    loaded: bool = Field(False, description="Whether the backend is currently loaded")
+    requires_server: bool = Field(
+        False, description="Whether this backend needs an external server"
+    )
+
+
+class MLLMBackendsResponse(BaseModel):
+    """Response from GET /api/mllm/backends."""
+
+    configured_backend: str = Field(
+        "auto", description="Currently configured backend from config"
+    )
+    resolved_backend: Optional[str] = Field(None, description="Actually loaded backend")
+    backends: List[MLLMBackendStatus] = Field(
+        default_factory=list, description="Status of all available backends"
+    )
+
+
+class MLLMLoadRequest(BaseModel):
+    """Request body for POST /api/mllm/backends/load."""
+
+    backend: str = Field(
+        "auto",
+        description="Backend to load: auto, videochat_flash, smolvlm2, qwen3_vl, internvideo3",
+    )
+    model_size: str = Field("2.2B", description="Model size (for SmolVLM2)")
+    use_fp8: bool = Field(True, description="Enable FP8 quantization")
+
+
 class KGStatsResponse(BaseModel):
     """Knowledge graph summary statistics."""
 
@@ -756,6 +847,26 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         if chapter_gen is None:
             chapter_gen = ChapterGenerator(config=cfg)
         return chapter_gen
+
+    # Lazy VideoMLLM singleton (v0.55.0)
+    _mllm_instance: Optional["VideoMLLM"] = None
+
+    def _get_mllm() -> "VideoMLLM":
+        """Lazy-init the VideoMLLM singleton."""
+        nonlocal _mllm_instance
+        if _mllm_instance is None:
+            from video_analysis.video_mllm import VideoMLLM
+
+            _mllm_instance = VideoMLLM(
+                model_name=cfg.video_mllm_model,
+                backend=(cfg.video_mllm_backend if cfg.video_mllm_backend else "auto"),
+                model_size=(
+                    cfg.video_mllm_model_size
+                    if hasattr(cfg, "video_mllm_model_size")
+                    else "2.2B"
+                ),
+            )
+        return _mllm_instance
 
     # ------------------------------------------------------------------
     # Job Queue — internal handlers
@@ -1633,6 +1744,295 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         h = _get_health(cfg)
         h.acknowledge_alert(alert_id)
         return {"status": "acknowledged", "alert_id": alert_id}
+
+    # ------------------------------------------------------------------
+    # Video MLLM Direct API endpoints (v0.55.0)
+    # ------------------------------------------------------------------
+
+    @router.get(
+        "/api/mllm/backends",
+        response_model=MLLMBackendsResponse,
+        summary="List available MLLM backends",
+    )
+    async def api_mllm_backends():
+        """Return the status of all configured MLLM backends."""
+        mllm = _get_mllm()
+        configured = (
+            cfg.video_mllm_backend if hasattr(cfg, "video_mllm_backend") else "auto"
+        )
+        resolved = (
+            mllm._resolved_backend if hasattr(mllm, "_resolved_backend") else None
+        )  # noqa: SLF001
+
+        backends = []
+        for name in ("internvideo3", "qwen3_vl", "smolvlm2", "videochat_flash"):
+            loaded = resolved == name
+            if name == "internvideo3":
+                try:
+                    from video_analysis.backends.internvideo3 import InternVideo3Backend
+
+                    ib = InternVideo3Backend()
+                    avail = ib._check_vllm_server()  # noqa: SLF001
+                except Exception:
+                    avail = False
+            elif name == "qwen3_vl":
+                avail = True  # Always mark as potentially available via vLLM
+            elif name == "smolvlm2":
+                try:
+                    import transformers  # noqa: F401
+                    import decord  # noqa: F401
+
+                    avail = True
+                except ImportError:
+                    avail = False
+            else:
+                try:
+                    import transformers  # noqa: F401
+
+                    avail = True
+                except ImportError:
+                    avail = False
+            backends.append(
+                MLLMBackendStatus(
+                    name=name,
+                    available=avail,
+                    loaded=loaded,
+                    requires_server=(name in ("internvideo3", "qwen3_vl")),
+                )
+            )
+
+        return MLLMBackendsResponse(
+            configured_backend=configured,
+            resolved_backend=resolved,
+            backends=backends,
+        )
+
+    @router.post(
+        "/api/mllm/backends/load",
+        summary="Load an MLLM backend",
+    )
+    async def api_mllm_load(body: MLLMLoadRequest):
+        """Load a specific MLLM backend onto GPU."""
+        valid_backends = (
+            "auto",
+            "videochat_flash",
+            "smolvlm2",
+            "qwen3_vl",
+            "internvideo3",
+        )
+        if body.backend not in valid_backends:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid backend '{body.backend}'. Valid: {', '.join(valid_backends)}",
+            )
+
+        mllm = _get_mllm()
+        if body.backend != "auto":
+            mllm.backend = body.backend  # type: ignore[assignment]
+        if hasattr(mllm, "model_size") and body.model_size:
+            mllm.model_size = body.model_size  # type: ignore[assignment]
+
+        success = mllm.load()
+        return {
+            "success": success,
+            "backend": body.backend,
+            "resolved_backend": getattr(mllm, "_resolved_backend", None),
+            "message": (
+                "Backend loaded successfully" if success else "Failed to load backend"
+            ),
+        }
+
+    @router.post(
+        "/api/mllm/backends/unload",
+        summary="Unload the current MLLM backend",
+    )
+    async def api_mllm_unload():
+        """Unload the current MLLM model from GPU memory."""
+        mllm = _get_mllm()
+        try:
+            mllm.unload()
+            return {
+                "success": True,
+                "message": "MLLM backend unloaded from GPU memory",
+            }
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to unload: {exc}")
+
+    @router.post(
+        "/api/mllm/describe",
+        response_model=MLLMDescribeResponse,
+        summary="Describe frames using the MLLM",
+    )
+    async def api_mllm_describe(body: MLLMDescribeRequest):
+        """Use the video MLLM to describe specific frames.
+
+        Accepts a list of frame file paths and returns an MLLM-generated
+        description of the visual content.
+        """
+        loop = asyncio.get_event_loop()
+        mllm = _get_mllm()
+
+        try:
+            description: Optional[str] = await loop.run_in_executor(
+                None,
+                lambda: mllm.describe_scene(
+                    frames=body.frames,
+                    prompt=body.prompt,
+                ),
+            )
+        except Exception as exc:
+            logger.error("MLLM describe error: %s", exc)
+            return MLLMDescribeResponse(
+                description="",
+                backend=str(getattr(mllm, "_resolved_backend", "") or ""),
+                error=str(exc),
+            )
+
+        return MLLMDescribeResponse(
+            description=description or "",
+            backend=str(getattr(mllm, "_resolved_backend", "") or ""),
+            error=None if description else "MLLM returned no description",
+        )
+
+    @router.post(
+        "/api/mllm/summarize",
+        response_model=MLLMDescribeResponse,
+        summary="Summarize a video using the MLLM",
+    )
+    async def api_mllm_summarize(body: MLLMSummarizeRequest):
+        """Generate a summary of a video using the MLLM.
+
+        Either provide a ``video_id`` (indexed video — uses stored frames)
+        or a ``video_path`` (local file path). The MLLM samples frames
+        and produces a summary.
+        """
+        if not body.video_id and not body.video_path:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide either 'video_id' or 'video_path'",
+            )
+
+        loop = asyncio.get_event_loop()
+        mllm = _get_mllm()
+
+        video_path = body.video_path
+
+        # Resolve video_id to a video path if needed
+        if not video_path and body.video_id:
+            rag_instance = _get_rag()
+            try:
+                info = await loop.run_in_executor(
+                    None, rag_instance.get_library_info, body.video_id
+                )
+                if info is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Video '{body.video_id}' not found",
+                    )
+                # Try to find the video file
+                video_dir = cfg.video_dir if hasattr(cfg, "video_dir") else None
+                if video_dir:
+                    candidates = list(Path(video_dir).glob(f"{body.video_id}.*"))
+                    if candidates:
+                        video_path = str(candidates[0])
+            except HTTPException:
+                raise
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to resolve video path: {exc}"
+                )
+
+        try:
+            summary: Optional[str] = await loop.run_in_executor(
+                None,
+                lambda: mllm.summarize_video(
+                    video_path=video_path or body.video_id,
+                    num_frames=body.num_frames,
+                ),
+            )
+        except Exception as exc:
+            logger.error("MLLM summarize error: %s", exc)
+            return MLLMDescribeResponse(
+                description="",
+                backend=str(getattr(mllm, "_resolved_backend", "") or ""),
+                error=str(exc),
+            )
+
+        return MLLMDescribeResponse(
+            description=summary or "",
+            backend=str(getattr(mllm, "_resolved_backend", "") or ""),
+            error=None if summary else "MLLM returned no summary",
+        )
+
+    @router.post(
+        "/api/mllm/query",
+        response_model=MLLMQueryResponse,
+        summary="Ask a visual question via the MLLM (no RAG)",
+    )
+    async def api_mllm_query(body: MLLMQueryRequest):
+        """Ask a visual question about a video using the MLLM directly.
+
+        This bypasses the RAG retrieval pipeline and sends frames
+        directly to the MLLM for video-native understanding.
+        Either provide a ``video_id`` (indexed video) or a
+        ``video_path`` (local file path).
+        """
+        if not body.video_id and not body.video_path:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide either 'video_id' or 'video_path'",
+            )
+
+        loop = asyncio.get_event_loop()
+        mllm = _get_mllm()
+
+        video_path = body.video_path
+
+        # Resolve video_id to a video path if needed
+        if not video_path and body.video_id:
+            rag_instance = _get_rag()
+            try:
+                info = await loop.run_in_executor(
+                    None, rag_instance.get_library_info, body.video_id
+                )
+                if info is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Video '{body.video_id}' not found",
+                    )
+                video_dir = cfg.video_dir if hasattr(cfg, "video_dir") else None
+                if video_dir:
+                    candidates = list(Path(video_dir).glob(f"{body.video_id}.*"))
+                    if candidates:
+                        video_path = str(candidates[0])
+            except HTTPException:
+                raise
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to resolve video path: {exc}"
+                )
+
+        try:
+            answer: Optional[str] = await loop.run_in_executor(
+                None,
+                lambda: mllm.answer(
+                    query=body.query,
+                    video_path=video_path or body.video_id,
+                ),
+            )
+        except Exception as exc:
+            logger.error("MLLM query error: %s", exc)
+            return MLLMQueryResponse(
+                answer="",
+                backend=str(getattr(mllm, "_resolved_backend", "") or ""),
+                error=str(exc),
+            )
+
+        return MLLMQueryResponse(
+            answer=answer or "",
+            backend=str(getattr(mllm, "_resolved_backend", "") or ""),
+            error=None if answer else "MLLM returned no answer",
+        )
 
     return router
 

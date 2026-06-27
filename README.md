@@ -45,8 +45,9 @@
 - **⚡ GPU Accelerated** — RTX 4070 CUDA support for all models with sequential loading to manage 12GB VRAM
 - **🔒 100% Local** — No API keys, no cloud services, all processing on your hardware
 |- **🧑‍🤝‍🧑 Face Recognition** — InsightFace (SCRFD-10G + ArcFace W50) for face detection, 512-d embeddings, and cross-video person identity matching (optional, ~1.1 GB VRAM)
-|- **🕵️ Autonomous Video Curator** (v0.45.0) — closed-loop MCR video exploration agent that proactively watches videos, discovers entities/objects/scenes, builds structured knowledge, and generates comprehensive curation reports without being asked specific questions; inspired by InternVideo3's Multimodal Contextual Reasoning and HKUDS VideoAgent
-|- **🖥️ CLI Mode** — Process videos, download from URLs, batch process, and query from the terminal
+||- **🕵️ Autonomous Video Curator** (v0.45.0) — closed-loop MCR video exploration agent that proactively watches videos, discovers entities/objects/scenes, builds structured knowledge, and generates comprehensive curation reports without being asked specific questions; inspired by InternVideo3's Multimodal Contextual Reasoning and HKUDS VideoAgent
+||- **📡 MLLM Direct REST API** (v0.55.0) — 6 REST API endpoints exposing all 4 video MLLM backends (InternVideo3, Qwen3-VL, SmolVLM2, VideoChat-Flash) directly: describe frames, summarize videos, and answer visual questions via MLLM without RAG retrieval; load/unload backends on demand; full Python client SDK methods
+||- **🖥️ CLI Mode** — Process videos, download from URLs, batch process, and query from the terminal
 
 ## 🚀 Quick Start
 
