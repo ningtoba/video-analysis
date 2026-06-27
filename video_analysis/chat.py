@@ -322,7 +322,13 @@ class VideoChat:
         _start = _time.perf_counter()
         # Retrieve relevant context — use agentic retrieval if enabled,
         # otherwise use routed retrieval (or standard retrieval)
-        if self.config.agentic_retrieval_enabled:
+        if (
+            self.config.event_causal_rag_enabled
+            and self.config.event_causal_rag_in_chat
+        ):
+            chunks = self.rag.event_retrieve(query, video_id=video_id)
+            _method = "event_causal"
+        elif self.config.agentic_retrieval_enabled:
             chunks = self.rag.agentic_retrieve(query, video_id=video_id)
             _method = "agentic"
         elif (
@@ -426,7 +432,12 @@ class VideoChat:
                 logger.info("Video MLLM QA returned None — falling back to RAG path")
 
         # RAG-based retrieval + LLM (default path)
-        if self.config.agentic_retrieval_enabled:
+        if (
+            self.config.event_causal_rag_enabled
+            and self.config.event_causal_rag_in_chat
+        ):
+            chunks = self.rag.event_retrieve(query, video_id=video_id)
+        elif self.config.agentic_retrieval_enabled:
             chunks = self.rag.agentic_retrieve(query, video_id=video_id)
         elif (
             self.config.query_routing_enabled

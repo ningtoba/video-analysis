@@ -183,6 +183,29 @@ class KnowledgeGraph:
                     indexed_at REAL NOT NULL,
                     metadata TEXT DEFAULT '{}'
                 )""")
+            # Event-Causal RAG event records (v0.58.0)
+            self._conn.execute("""CREATE TABLE IF NOT EXISTS events (
+                    event_id TEXT PRIMARY KEY,
+                    video_id TEXT NOT NULL,
+                    title TEXT DEFAULT '',
+                    description TEXT DEFAULT '',
+                    start_time REAL DEFAULT 0.0,
+                    end_time REAL DEFAULT 0.0,
+                    state_before TEXT DEFAULT '',
+                    state_after TEXT DEFAULT '',
+                    action TEXT DEFAULT '',
+                    entities TEXT DEFAULT '[]',
+                    confidence REAL DEFAULT 0.0
+                )""")
+            # Event-Causal RAG causal relations (v0.58.0)
+            self._conn.execute("""CREATE TABLE IF NOT EXISTS causal_relations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_event_id TEXT NOT NULL,
+                    target_event_id TEXT NOT NULL,
+                    relation_type TEXT DEFAULT 'temporal',
+                    strength REAL DEFAULT 1.0,
+                    metadata TEXT DEFAULT '{}'
+                )""")
             # Indexes for common queries
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)"
@@ -550,6 +573,185 @@ class KnowledgeGraph:
                 (f"%{query}%", f"%{query}%", limit),
             ).fetchall()
             return [self._row_to_entity(r) for r in rows]
+
+    # ── Event-Causal RAG persistence (v0.58.0) ──────────────────────────
+
+    def add_event_record(
+        self,
+        event_id: str,
+        video_id: str,
+        title: str = "",
+        description: str = "",
+        start_time: float = 0.0,
+        end_time: float = 0.0,
+        state_before: str = "",
+        state_after: str = "",
+        action: str = "",
+        entities: Optional[List[str]] = None,
+        confidence: float = 0.0,
+    ) -> None:
+        """Persist a single event record into the knowledge graph."""
+        with self._lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO events
+                   (event_id, video_id, title, description, start_time, end_time,
+                    state_before, state_after, action, entities, confidence)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    event_id,
+                    video_id,
+                    title,
+                    description,
+                    start_time,
+                    end_time,
+                    state_before,
+                    state_after,
+                    action,
+                    json.dumps(entities or []),
+                    confidence,
+                ),
+            )
+            self._conn.commit()
+
+    def add_causal_relation(
+        self,
+        source_event_id: str,
+        target_event_id: str,
+        relation_type: str = "temporal",
+        strength: float = 1.0,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a causal or temporal relationship between two events."""
+        with self._lock:
+            try:
+                self._conn.execute(
+                    """INSERT INTO causal_relations
+                       (source_event_id, target_event_id, relation_type, strength, metadata)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        source_event_id,
+                        target_event_id,
+                        relation_type,
+                        strength,
+                        json.dumps(metadata or {}),
+                    ),
+                )
+                self._conn.commit()
+            except Exception as exc:
+                logger.debug("add_causal_relation skipped: %s", exc)
+
+    def get_events_for_video(self, video_id: str) -> List[Dict[str, Any]]:
+        """Get all events for a video, ordered by start_time."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM events WHERE video_id = ? ORDER BY start_time ASC",
+                (video_id,),
+            ).fetchall()
+            result = []
+            for r in rows:
+                result.append(
+                    {
+                        "event_id": r["event_id"],
+                        "video_id": r["video_id"],
+                        "title": r["title"],
+                        "description": r["description"],
+                        "start_time": r["start_time"],
+                        "end_time": r["end_time"],
+                        "state_before": r["state_before"],
+                        "state_after": r["state_after"],
+                        "action": r["action"],
+                        "entities": json.loads(r["entities"] or "[]"),
+                        "confidence": r["confidence"],
+                    }
+                )
+            return result
+
+    def get_causal_relations(
+        self, video_id: Optional[str] = None, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Get causal/temporal relations between events."""
+        with self._lock:
+            if video_id:
+                rows = self._conn.execute(
+                    """SELECT cr.* FROM causal_relations cr
+                       JOIN events e ON cr.source_event_id = e.event_id
+                       WHERE e.video_id = ?
+                       ORDER BY cr.id DESC LIMIT ?""",
+                    (video_id, limit),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM causal_relations ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+    def delete_events_for_video(self, video_id: str) -> None:
+        """Remove all events and causal relations for a video."""
+        with self._lock:
+            self._conn.execute(
+                """DELETE FROM causal_relations WHERE source_event_id IN
+                   (SELECT event_id FROM events WHERE video_id = ?)
+                   OR target_event_id IN
+                   (SELECT event_id FROM events WHERE video_id = ?)""",
+                (video_id, video_id),
+            )
+            self._conn.execute("DELETE FROM events WHERE video_id = ?", (video_id,))
+            self._conn.commit()
+
+    def persist_events_from_rag(
+        self,
+        rag_instance,
+        video_id: str,
+    ) -> int:
+        """Persist all indexed events and causal relations from EventCausalRAG.
+
+        Returns the number of events persisted.
+        """
+        if not hasattr(rag_instance, "_event_rag_instance"):
+            return 0
+        event_rag = rag_instance._event_rag_instance
+        if event_rag is None:
+            return 0
+        events = getattr(event_rag, "_events", [])
+        if not events:
+            return 0
+
+        count = 0
+        for evt in events:
+            self.add_event_record(
+                event_id=evt.event_id,
+                video_id=evt.video_id,
+                title=evt.title or "",
+                description=evt.description or "",
+                start_time=evt.start_time or 0.0,
+                end_time=evt.end_time or 0.0,
+                state_before=evt.state_before or "",
+                state_after=evt.state_after or "",
+                action=evt.action or "",
+                entities=list(evt.entities) if evt.entities else [],
+                confidence=evt.confidence or 0.0,
+            )
+            count += 1
+
+        # Persist causal/temporal edges from SESGraph
+        ses = getattr(event_rag, "_ses_graph", None)
+        if ses is not None:
+            for src_id, edges in getattr(ses, "forward_edges", {}).items():
+                for tgt_id, rel_type in edges:
+                    self.add_causal_relation(
+                        source_event_id=src_id,
+                        target_event_id=tgt_id,
+                        relation_type=rel_type,
+                        strength=1.0 if rel_type == "causal" else 0.5,
+                    )
+
+        logger.info(
+            "KnowledgeGraph: persisted %d events + causal edges for %s",
+            count,
+            video_id,
+        )
+        return count
 
     # ── Stats ───────────────────────────────────────────────────────────
 

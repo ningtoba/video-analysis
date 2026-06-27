@@ -34,6 +34,7 @@ from ui.camera import inject_camera_tab
 from ui.monitor import inject_monitor_tab
 from ui.comparison import inject_comparison_tab
 from ui.knowledge_graph import inject_knowledge_graph_tab
+from ui.event_timeline import inject_event_timeline_tab
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ PIPELINE_STEPS = [
     "Describing scenes",
     "Generating sprite sheet",
     "Indexing content",
+    "Event segmentation & indexing",
     "Ready for questions",
 ]
 
@@ -545,6 +547,9 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             # ============ TAB 10: KNOWLEDGE GRAPH (Entity Explorer) ============
             inject_knowledge_graph_tab(app, config)
 
+            # ============ TAB 11: EVENT-CAUSAL TIMELINE (v0.58.0) ============
+            inject_event_timeline_tab(app, config)
+
         # ==================== EVENT HANDLERS ====================
 
         # --- Process Video ---
@@ -622,11 +627,27 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 rag.index_video(index)
                 chat_session.reset_history()
 
+                # Persist events to KnowledgeGraph (v0.58.0)
+                try:
+                    if config.event_causal_rag_enabled:
+                        from video_analysis.knowledge_graph import KnowledgeGraph
+
+                        kg = KnowledgeGraph(config)
+                        kg.persist_events_from_rag(rag, index.video_id)
+                        kg.close()
+                except Exception as kg_exc:
+                    logger.warning(
+                        "KG event persistence failed: %s - continuing", kg_exc
+                    )
+
                 status.value = (
-                    '<span class="badge ready">● Ready — ask questions</span>'
+                    '<span class="badge ready">● Ready - ask questions</span>'
                 )
                 yield (
-                    _progress_html(8, f"✅ Complete — {_video_summary(index)}"),
+                    _progress_html(
+                        9 if config.event_causal_rag_enabled else 8,
+                        f"Complete - {_video_summary(index)}",
+                    ),
                     status,
                     True,
                     video_path_str,
@@ -766,11 +787,27 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 rag.index_video(index)
                 chat_session.reset_history()
 
+                # Persist events to KnowledgeGraph (v0.58.0)
+                try:
+                    if config.event_causal_rag_enabled:
+                        from video_analysis.knowledge_graph import KnowledgeGraph
+
+                        kg = KnowledgeGraph(config)
+                        kg.persist_events_from_rag(rag, index.video_id)
+                        kg.close()
+                except Exception as kg_exc:
+                    logger.warning(
+                        "KG event persistence failed: %s - continuing", kg_exc
+                    )
+
                 status.value = (
-                    '<span class="badge ready">● Ready — ask questions</span>'
+                    '<span class="badge ready">● Ready - ask questions</span>'
                 )
                 yield (
-                    _progress_html(8, f"✅ Complete — {_video_summary(index)}"),
+                    _progress_html(
+                        9 if config.event_causal_rag_enabled else 8,
+                        f"Complete - {_video_summary(index)}",
+                    ),
                     status,
                     True,
                     str(downloaded),
@@ -886,16 +923,30 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                 rag.index_video(index)
 
+                # Persist events to KnowledgeGraph (v0.58.0)
+                try:
+                    if config.event_causal_rag_enabled:
+                        from video_analysis.knowledge_graph import KnowledgeGraph
+
+                        kg = KnowledgeGraph(config)
+                        kg.persist_events_from_rag(rag, index.video_id)
+                        kg.close()
+                except Exception as kg_exc:
+                    logger.warning(
+                        "KG event persistence failed: %s - continuing", kg_exc
+                    )
+
                 status.value = (
-                    '<span class="badge ready">● Ready — ask questions</span>'
+                    '<span class="badge ready">● Ready - ask questions</span>'
                 )
 
                 video_path_str = str(downloaded)
+                steps = 9 if config.event_causal_rag_enabled else 8
                 yield (
                     gr.update(visible=True, value=video_path_str),
                     gr.update(
                         value=_progress_html(
-                            8, f"✅ Complete — {_video_summary(index)}"
+                            steps, f"Complete - {_video_summary(index)}"
                         )
                     ),
                     index.video_id,

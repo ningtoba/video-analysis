@@ -359,4 +359,4 @@ class TestFederationModule:
         """Verify version is bumped to 0.33.0."""
         from video_analysis import __version__
 
-        assert __version__ == "0.57.0"
+        assert __version__ == "0.58.0"

@@ -647,6 +647,16 @@ class VideoRAG:
 
         logger.info(f"Indexed {len(chunks)} chunks for {video_index.video_id}")
 
+        # Auto-run event segmentation + indexing (v0.58.0)
+        try:
+            self.event_index_video(video_index)
+        except Exception as ev_exc:
+            logger.warning(
+                "Event-Causal RAG indexing failed for %s: %s - continuing without events",
+                video_index.video_id,
+                ev_exc,
+            )
+
         # Record metrics
         try:
             from video_analysis.metrics import (
@@ -1073,6 +1083,131 @@ class VideoRAG:
                 )
             )
         return sources
+
+    # ------------------------------------------------------------------
+    # Event-Causal RAG integration (v0.58.0 — arXiv:2605.06185)
+    # ------------------------------------------------------------------
+
+    def _get_event_rag(self) -> "EventCausalRAG":  # noqa: F821
+        """Lazy-init EventCausalRAG instance."""
+        if not hasattr(self, "_event_rag_instance") or self._event_rag_instance is None:
+            from video_analysis.event_rag import EventCausalRAG
+
+            self._event_rag_instance = EventCausalRAG(
+                config=self.config, rag_instance=self
+            )
+        return self._event_rag_instance
+
+    def event_retrieve(
+        self,
+        query: str,
+        video_id: Optional[str] = None,
+        top_k: Optional[int] = None,
+        current_event_id: Optional[str] = None,
+    ) -> List[RetrievedChunk]:
+        """Event-level retrieval via EventCausalRAG bidirectional retrieval.
+
+        When event_causal_rag_enabled is True, this method retrieves
+        semantically relevant events and uses causal-topological traversal
+        for forward (prediction) and backward (explanation) reasoning.
+
+        Returns standard RetrievedChunk objects so the downstream chat
+        pipeline works unchanged.
+
+        Args:
+            query: User's question.
+            video_id: Optional filter to a specific video.
+            top_k: Max results.
+            current_event_id: Optional current event for causal traversal.
+
+        Returns:
+            List of RetrievedChunk from event-level retrieval.
+        """
+        if not self.config.event_causal_rag_enabled:
+            return []
+
+        top_k = top_k or self.config.event_causal_top_k
+        event_rag = self._get_event_rag()
+        results = event_rag.retrieve(
+            query=query,
+            current_event_id=current_event_id,
+            top_k=top_k,
+        )
+        if not results:
+            return []
+
+        chunks: List[RetrievedChunk] = []
+        for r in results:
+            event = r.event
+            text = (
+                f"[Event] {event.title}\n"
+                f"Time: {event.start_time:.1f}s - {event.end_time:.1f}s\n"
+                f"State before: {event.state_before or 'N/A'}\n"
+                f"State after: {event.state_after or 'N/A'}\n"
+                f"Entities: {', '.join(event.entities) if event.entities else 'N/A'}\n"
+                f"Action: {event.action or 'N/A'}\n"
+                f"Description: {event.description or ''}\n"
+                f"{'[Causal] ' + (r.path.description if r.path else '') if r.path and r.path.description else ''}"
+            )
+            chunks.append(
+                RetrievedChunk(
+                    chunk_id=event.event_id,
+                    video_id=event.video_id,
+                    text=text,
+                    timestamp=event.start_time,
+                    scene_id=-1,
+                    score=r.score,
+                    frame_path=None,
+                    metadata={
+                        "event_id": event.event_id,
+                        "event_title": event.title,
+                        "retrieval_type": r.retrieval_type,
+                        "causal_path_summary": (r.path.description if r.path else ""),
+                        "entities": list(event.entities) if event.entities else [],
+                    },
+                    chunk_type="event",
+                )
+            )
+
+        # Re-rank with cross-encoder if available
+        try:
+            chunks = self._rerank(query, chunks, top_k)
+        except ImportError:
+            chunks.sort(key=lambda c: c.score, reverse=True)
+            chunks = chunks[:top_k]
+
+        return chunks
+
+    def event_index_video(
+        self,
+        video_index: "VideoIndex",  # noqa: F821
+        video_id: Optional[str] = None,
+    ) -> int:
+        """Segment a processed video into events, build SES graph, and index.
+
+        Called automatically after index_video() when
+        event_causal_rag_index_on_process is True.
+
+        Returns number of events indexed.
+        """
+        if not self.config.event_causal_rag_enabled:
+            return 0
+        if not self.config.event_causal_rag_index_on_process:
+            return 0
+
+        import time as _time
+
+        t0 = _time.perf_counter()
+        event_rag = self._get_event_rag()
+        events = event_rag.segment_video(video_index, video_id=video_id)
+        event_rag.build_ses_graph(events)
+        count = event_rag.index_events(events)
+        duration = _time.perf_counter() - t0
+        logger.info(
+            f"Event-Causal RAG: segmented {len(events)} events, "
+            f"indexed {count} in {duration:.1f}s"
+        )
+        return count
 
     # ------------------------------------------------------------------
     # Scene-Graph-Aware Retrieval (VGent/ViG-RAG inspired)

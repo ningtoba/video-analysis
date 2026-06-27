@@ -339,12 +339,20 @@ class Config:
     event_causal_rag_enabled: bool = (
         False  # overridden by EVENT_CAUSAL_RAG_ENABLED env var
     )
+    # Automatically run event segmentation + indexing during pipeline processing (v0.58.0)
+    event_causal_rag_index_on_process: bool = bool(
+        os.environ.get("EVENT_CAUSAL_RAG_INDEX_ON_PROCESS", "true").lower() == "true"
+    )
     event_segmentation_strategy: str = "auto"  # "auto", "llm", "transcript", "temporal"
     event_causal_top_k: int = 10  # max events to return from bidirectional retrieval
     event_causal_semantic_weight: float = (
         0.5  # weight for semantic store vs causal store
     )
     event_max_duration_seconds: float = 300.0  # max event duration in seconds
+    # Event-Causal RAG in chat retrieval (v0.58.0)
+    event_causal_rag_in_chat: bool = bool(
+        os.environ.get("EVENT_CAUSAL_RAG_IN_CHAT", "false").lower() == "true"
+    )
 
     # Streaming Thinking (v0.57.0 — arXiv:2603.12262 amortized streaming reasoning)
     streaming_thinking_enabled: bool = (
@@ -648,6 +656,14 @@ class Config:
         ev_rag_env = os.environ.get("EVENT_CAUSAL_RAG_ENABLED", "").lower()
         if ev_rag_env in ("true", "1", "yes"):
             self.event_causal_rag_enabled = True
+        ev_rag_index_env = os.environ.get(
+            "EVENT_CAUSAL_RAG_INDEX_ON_PROCESS", ""
+        ).lower()
+        if ev_rag_index_env in ("false", "0", "no"):
+            self.event_causal_rag_index_on_process = False
+        ev_rag_chat_env = os.environ.get("EVENT_CAUSAL_RAG_IN_CHAT", "").lower()
+        if ev_rag_chat_env in ("true", "1", "yes"):
+            self.event_causal_rag_in_chat = True
         ev_strat_env = os.environ.get("EVENT_SEGMENTATION_STRATEGY", "").lower()
         if ev_strat_env in ("auto", "llm", "transcript", "temporal"):
             self.event_segmentation_strategy = ev_strat_env

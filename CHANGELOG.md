@@ -1,5 +1,99 @@
 # Changelog
 
+## 0.58.0 (2026-06-27) — Event-Causal RAG Production Wiring & Knowledge Graph Integration
+
+### 🔌 Production Wiring (`video_analysis/rag.py`)
+
+Integrated **Event-Causal RAG** into the production retrieval pipeline:
+
+- **`VideoRAG.event_retrieve()`** — new event-level retrieval method that
+  delegates to `EventCausalRAG.retrieve()` and returns standard
+  `RetrievedChunk` objects (type=`"event"`), compatible with the downstream
+  chat pipeline. Includes causal-path summaries in chunk metadata.
+- **`VideoRAG._get_event_rag()`** — lazy initialisation of `EventCausalRAG`
+  instance (first call only), keeping import overhead zero until enabled.
+- **`VideoRAG.event_index_video()`** — segments a processed `VideoIndex` into
+  events, builds the SES graph, and indexes into dual-store memory. Called
+  automatically from `index_video()` when `event_causal_rag_index_on_process`
+  is `True` (default).
+- **Auto-indexing during pipeline processing** — `index_video()` now
+  automatically calls `event_index_video()` so every analyzed video gets
+  event-level segmentation without manual steps.
+
+### 💬 Chat Integration (`video_analysis/chat.py`)
+
+- **Event-causal retrieval path** in `VideoChat._ask_rag()` — when both
+  `event_causal_rag_enabled` and `event_causal_rag_in_chat` are `True`, the
+  chat uses `VideoRAG.event_retrieve()` for event-level bidirectional
+  retrieval (forward prediction + backward explanation).
+- **Same integration in `ask_with_history()`** — event-causal path available
+  in both primary chat methods.
+- New config field: `event_causal_rag_in_chat` (default `False`, env var
+  `EVENT_CAUSAL_RAG_IN_CHAT`).
+
+### 🗄️ Knowledge Graph Persistence (`video_analysis/knowledge_graph.py`)
+
+- **`events` table** — persists event records (event_id, video_id, title,
+  description, start/end time, state_before/after, entities, confidence).
+- **`causal_relations` table** — persists causal and temporal edges between
+  events with type (`causal` / `temporal`) and strength.
+- **`KnowledgeGraph.add_event_record()`** — store a single event.
+- **`KnowledgeGraph.add_causal_relation()`** — store a causal/temporal edge.
+- **`KnowledgeGraph.get_events_for_video()`** — retrieve all events for a
+  video, ordered chronologically.
+- **`KnowledgeGraph.get_causal_relations()`** — get causal/temporal edges,
+  optionally filtered by video.
+- **`KnowledgeGraph.persist_events_from_rag()`** — bulk persist all events and
+  SES graph edges from an `EventCausalRAG` instance in one call.
+- **`KnowledgeGraph.delete_events_for_video()`** — remove events + relations
+  when a video is deleted.
+
+### 🖥️ Gradio UI (`ui/event_timeline.py`, `ui/app.py`)
+
+- **New Tab 11 "⏱ Events"** (`ui/event_timeline.py`) — event timeline
+  visualization with:
+  - Event timeline card (title, timestamps, state_before/after, entities,
+    confidence)
+  - Causal / temporal chain visualization (forward causal edges in red,
+    temporal edges in blue)
+  - Streaming thinking placeholder for future live-update display
+  - Event-level query input for asking questions about event causality
+  - Video selector dropdown across all indexed videos
+  - Refresh buttons for videos list and events
+- **Pipeline progress** updated to show "Event segmentation & indexing" as
+  step 9 when event-causal RAG is enabled.
+- **Automatic KG persistence** after every video upload/import (triggered in
+  all three handler paths: upload, URL import, import tab).
+
+### ⚙️ Configuration (`video_analysis/config.py`)
+
+- New `event_causal_rag_index_on_process` flag (default `True`, env var
+  `EVENT_CAUSAL_RAG_INDEX_ON_PROCESS`).
+- New `event_causal_rag_in_chat` flag (default `False`, env var
+  `EVENT_CAUSAL_RAG_IN_CHAT`).
+- Full env var overrides in `Config.__post_init__()`.
+
+### 🧪 Tests (`tests/test_event_rag_integration.py`)
+
+- **31 new integration tests** covering:
+  - Config env var overrides (3 tests)
+  - `VideoRAG.event_retrieve()` — disabled path, chunk output, metadata (4 tests)
+  - `VideoRAG.event_index_video()` — disabled paths, full segmentation (4 tests)
+  - Auto-triggering from `index_video()` (1 test)
+  - `EventCausalRAG` lazy init (1 test)
+  - `KnowledgeGraph` event CRUD (create → read → causal edge → delete) (3 tests)
+  - `KnowledgeGraph.persist_events_from_rag()` (2 tests)
+  - `VideoChat._ask_rag()` with event-causal path (2 tests)
+  - `VideoChat.ask_with_history()` with event-causal path (1 test)
+- Total: 31 new, 0 failures.
+
+### 📚 Documentation
+
+- `CHANGELOG.md` — v0.58.0 section with all changes.
+- `README.md` — updated with Event-Causal RAG production wiring section,
+  event timeline tab description, new config fields.
+- Version bumped to `0.58.0`.
+
 ## 0.57.0 (2026-06-27) — Event-Causal RAG & Streaming Thinking
 
 ### 🧠 Event-Causal RAG (`video_analysis/event_rag.py`)
