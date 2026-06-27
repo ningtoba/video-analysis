@@ -1,5 +1,112 @@
 # Changelog
 
+## 0.49.0 (2026-06-27) — Production Telemetry & API Hardening
+
+### 🕵️ OpenTelemetry Distributed Tracing (`video_analysis/telemetry.py`)
+
+A new telemetry module providing OpenTelemetry-based distributed tracing for
+the entire platform. All operations gracefully degrade to no-ops when
+OpenTelemetry packages are not installed.
+
+- **`TelemetryContext`** — context manager that wraps any operation in a tracing
+  span; supports both sync (`with`), async (`async with`), and automatic error
+  recording on exception
+- **`trace_pipeline`** — decorator for async pipeline functions that creates
+  spans with optional static attributes and return-value capture
+- **`pipeline_span`** — async context manager alternative that gives access to
+  the `TelemetryContext` during execution for dynamic attribute setting
+- **`parent_span_from_headers`** — extracts W3C TraceContext (`traceparent` /
+  `tracestate`) from incoming HTTP headers to continue a remote trace; creates
+  a new root span when headers are missing/invalid (safe fallback)
+- **`get_trace_id()`** — returns the current trace ID as a 32-char hex string
+  for log correlation; generates a random UUID when no active span exists
+- **`force_flush()`** — flushes pending spans to the configured exporter
+- **OTLP export** — configured via standard `OTEL_*` env vars
+  (`OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`); falls back to console
+  exporter for local dev when no endpoint is set
+- **Lazy initialisation** — zero side effects on import; the tracer provider
+  is created on first span creation; all methods are no-ops without
+  opentelemetry packages
+
+### 🚦 Rate Limiting Middleware (`video_analysis/rate_limiter.py`)
+
+In-memory token bucket rate limiter for the REST API, integrated as FastAPI
+middleware in `ui/health.py`.
+
+- **`TokenBucketLimiter`** — per-client token bucket with configurable capacity
+  (burst) and refill rate; uses `asyncio.Lock` for thread safety
+- **Default config**: 100 requests/minute per IP address
+- **Config env vars**: `RATE_LIMIT_ENABLED`, `RATE_LIMIT_CAPACITY`,
+  `RATE_LIMIT_RATE`
+- **429 response** — returns structured JSON with `Retry-After: 60` header
+- **Health endpoint excluded** from rate limiting
+
+### 🎯 Structured Error Responses (`video_analysis/error_handlers.py`)
+
+Consistent JSON error responses across all API endpoints.
+
+- **`StandardHTTPError`** — application-level exception with `status_code`,
+  `detail`, and `error_code` fields
+- **`ErrorDetail`** — Pydantic schema returned for every error: includes
+  `detail`, `error_code`, `status_code`, `timestamp` (ISO-8601), and `path`
+- **`register_error_handlers(app)`** — registers handlers for:
+  - `StandardHTTPError` → configurable 4xx/5xx
+  - FastAPI `HTTPException` → structured 4xx/5xx
+  - Pydantic `ValidationError` → 422 with per-field error details
+  - Any unhandled `Exception` → 500 with sanitised message (traceback logged)
+- **Integrated** into `ui/health.py` at app creation time
+
+### 📦 Python API Client SDK (`video_analysis/client.py`)
+
+A comprehensive Python client library for the REST API.
+
+- **`VideoAnalysisClient`** — synchronous high-level client with methods for:
+  - Health checks (`health()`)
+  - Video management (`list_videos()`, `get_video()`, `delete_video()`)
+  - Video processing (`process_video()`, `upload_video()`, `wait_for_job()`)
+  - Job management (`get_job()`, `list_jobs()`)
+  - Q&A (`query()`, `query_stream()` for SSE token-by-token)
+  - Semantic search (`search()`)
+  - Transcript & chapters (`get_transcript()`, `get_chapters()`)
+  - Frame retrieval (`get_frame()`)
+  - Evaluation reports (`list_evaluations()`, `get_evaluation()`, `compare_evaluations()`)
+- **Data models** — typed dataclasses for all response types
+- **Error handling** — `ConnectionError` for network issues, `APIError` for HTTP
+  errors with status code and detail
+- **Fully documented** with usage examples in docstrings
+
+### 🔧 New Config Fields
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TELEMETRY_ENABLED` | `true` | Enable OpenTelemetry tracing (no-op without packages) |
+| `RATE_LIMIT_ENABLED` | `true` | Enable token bucket rate limiting |
+| `RATE_LIMIT_CAPACITY` | `100` | Max burst (tokens) per client |
+| `RATE_LIMIT_RATE` | `1.6667` | Token refill rate per second (100/minute) |
+
+### 📦 Files Changed
+
+- **New**: `video_analysis/telemetry.py` — OpenTelemetry tracing module (651 lines)
+- **New**: `video_analysis/rate_limiter.py` — token bucket rate limiter (156 lines)
+- **New**: `video_analysis/error_handlers.py` — structured error responses (279 lines)
+- **New**: `video_analysis/client.py` — Python API client SDK (700+ lines)
+- **New**: `tests/test_telemetry.py` — 25+ tests for all 4 new modules
+- **Modified**: `ui/health.py` — integrated error handlers + rate limiting middleware
+- **Modified**: `video_analysis/config.py` — +4 new config fields (telemetry, rate limit)
+- **Modified**: `video_analysis/__init__.py` — v0.49.0, updated module doc
+- **Modified**: `pyproject.toml` — v0.49.0
+- **Modified**: `Dockerfile` — version label 0.48.0 → 0.49.0
+- **Modified**: 7 test files — version checks bumped to 0.49.0
+
+### ✅ Verification
+
+- **723 existing tests passing + new telemetry test suite**
+- No new external dependencies required (all modules use lazy imports)
+- Rate limiter passes: allow, block, independent buckets, reset, refill tests
+- Error handlers pass: all 4 handler types, structured JSON format validation
+- Client SDK passes: model validation, error inheritance, import isolation
+- Telemetry passes: no-op fallback, context managers, decorator, parent span, trace ID
+
 ## 0.48.0 (2026-06-27) — Cross-Report Evaluation Comparison Dashboard
 
 ### 📊 Cross-Report Evaluation Comparison (`ui/comparison.py`)

@@ -298,6 +298,21 @@ class Config:
     curator_max_iterations: int = 15  # overridden by CURATOR_MAX_ITERATIONS env var
     curator_output_dir: str = ""  # overridden by CURATOR_OUTPUT_DIR env var
 
+    # OpenTelemetry Tracing (v0.49.0)
+    # Configured via standard OTEL_* env vars (OTEL_SERVICE_NAME, OTEL_EXPORTER_OTLP_ENDPOINT, etc.)
+    telemetry_enabled: bool = bool(
+        os.environ.get("TELEMETRY_ENABLED", "true").lower() == "true"
+    )
+
+    # Rate Limiting (v0.49.0)
+    rate_limit_enabled: bool = bool(
+        os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
+    )
+    rate_limit_capacity: int = int(os.environ.get("RATE_LIMIT_CAPACITY", "100"))
+    rate_limit_rate: float = float(
+        os.environ.get("RATE_LIMIT_RATE", "1.6667")  # 100/minute
+    )
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"

@@ -20,7 +20,7 @@
 
 ## ✨ Features
 
-- **🌐 Full REST API** (v0.48.0) — comprehensive HTTP API with 16+ endpoints including async video processing via background job queue; list, detail, delete, search, SSE streaming, transcript/chapter retrieval, frame extraction, job status polling, **and evaluation report history/comparison**; auto-generated OpenAPI docs at `/docs`
+- **🌐 Full REST API** (v0.49.0) — comprehensive HTTP API with 16+ endpoints including async video processing via background job queue; list, detail, delete, search, SSE streaming, transcript/chapter retrieval, frame extraction, job status polling, **evaluation report history/comparison**, **rate-limited with structured error responses**, **Python client SDK**; auto-generated OpenAPI docs at `/docs`
 |- **📷 Webcam Capture** (v0.41.0) — real-time webcam capture and frame analysis tab in the Gradio UI; supports live preview, capture & analyze, and continuous monitoring mode
 |- **🧠 MLLM Streaming Q&A** (v0.41.0) — token-by-token SSE streaming for LLM responses from both Hermes CLI and OpenAI-compatible backends; enables real-time chat updates in the Gradio UI and REST API
 |- **📡 Live Stream Analysis** (v0.40.0) — capture and analyze live RTMP/RTSP/HLS streams in real-time with auto-reconnect, sliding window context, and incremental indexing; connect OBS, IP cameras, and streaming platforms directly to the analysis pipeline
@@ -165,6 +165,10 @@ User Question
 || `job_queue` | `video_analysis/job_queue.py` | In-process async job queue — background video processing with status polling |
 || `curator` | `video_analysis/curator.py` | Autonomous Video Curator — closed-loop MCR exploration agent (v0.45.0) |
 || `comparison` | `ui/comparison.py` | Cross-report eval comparison dashboard — historical browser, metric diff, regression tracking (v0.48.0) |
+|| `telemetry` | `video_analysis/telemetry.py` | OpenTelemetry distributed tracing — pipeline, RAG, and API spans with OTLP export (v0.49.0) |
+| `rate_limiter` | `video_analysis/rate_limiter.py` | In-memory token bucket rate limiter for REST API (v0.49.0) |
+| `error_handlers` | `video_analysis/error_handlers.py` | Structured JSON error responses for REST API (v0.49.0) |
+| `client` | `video_analysis/client.py` | Python API client SDK for the REST API (v0.49.0) |
 
 ## 💻 Tech Stack
 
@@ -270,7 +274,11 @@ Set via environment variables or edit `video_analysis/config.py`:
 ||| `CURATOR_ENABLED` | `false` | Enable autonomous MCR video curator (v0.45.0) |
 ||| `CURATOR_CURIOSITY` | `0.5` | Exploration aggressiveness for curator (0.0-1.0) |
 ||| `CURATOR_MAX_ITERATIONS` | `15` | Max MCR closed-loop iterations |
-||| `CURATOR_OUTPUT_DIR` | (auto) | Output directory for curation reports |
+|||| `CURATOR_OUTPUT_DIR` | (auto) | Output directory for curation reports |
+||| `TELEMETRY_ENABLED` | `true` | Enable OpenTelemetry tracing (no-op without packages) (v0.49.0) |
+||| `RATE_LIMIT_ENABLED` | `true` | Enable API rate limiting (v0.49.0) |
+|| `RATE_LIMIT_CAPACITY` | `100` | Max burst requests per client (v0.49.0) |
+|| `RATE_LIMIT_RATE` | `1.6667` | Token refill rate per second (100/minute) (v0.49.0) |
 
 ## 🧪 Running Tests
 

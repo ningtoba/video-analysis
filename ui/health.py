@@ -327,6 +327,58 @@ def create_health_app(config: Config) -> FastAPI:
         description="REST API for the self-hosted video analysis platform",
     )
 
+    # Register structured error handlers (v0.49.0)
+    try:
+        from video_analysis.error_handlers import register_error_handlers
+
+        register_error_handlers(app)
+        logger.info("Structured error handlers registered")
+    except ImportError as exc:
+        logger.debug("Error handlers not available: %s", exc)
+
+    # Register rate limiting middleware (v0.49.0)
+    try:
+        from video_analysis.rate_limiter import TokenBucketLimiter
+
+        _limiter = TokenBucketLimiter(
+            capacity=config.rate_limit_capacity,
+            rate=config.rate_limit_rate,
+        )
+
+        if config.rate_limit_enabled:
+
+            @app.middleware("http")
+            async def rate_limit_middleware(request, call_next):
+                # Skip rate limiting for health endpoint
+                if request.url.path == "/health":
+                    return await call_next(request)
+
+                client_ip = request.client.host if request.client else "unknown"
+
+                if not await _limiter.consume(client_ip):
+                    from fastapi.responses import JSONResponse
+
+                    return JSONResponse(
+                        status_code=429,
+                        content={
+                            "detail": "Rate limit exceeded. Try again later.",
+                            "error_code": "RATE_LIMIT_EXCEEDED",
+                            "status_code": 429,
+                        },
+                        headers={"Retry-After": "60"},
+                    )
+
+                return await call_next(request)
+
+        logger.info(
+            "Rate limiting %s (capacity=%d, rate=%.2f/s)",
+            "enabled" if config.rate_limit_enabled else "disabled",
+            config.rate_limit_capacity,
+            config.rate_limit_rate,
+        )
+    except ImportError as exc:
+        logger.debug("Rate limiter not available: %s", exc)
+
     # Pass the module-level RAG instance to the API router
     try:
         from video_analysis.api import set_rag_instance
