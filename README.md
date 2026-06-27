@@ -20,7 +20,7 @@
 
 ## ✨ Features
 
-- **🌐 Full REST API** (v0.43.0) — comprehensive HTTP API with 13+ endpoints including async video processing via background job queue; list, detail, delete, search, SSE streaming, transcript/chapter retrieval, frame extraction, and job status polling; auto-generated OpenAPI docs at `/docs`
+- **🌐 Full REST API** (v0.48.0) — comprehensive HTTP API with 16+ endpoints including async video processing via background job queue; list, detail, delete, search, SSE streaming, transcript/chapter retrieval, frame extraction, job status polling, **and evaluation report history/comparison**; auto-generated OpenAPI docs at `/docs`
 |- **📷 Webcam Capture** (v0.41.0) — real-time webcam capture and frame analysis tab in the Gradio UI; supports live preview, capture & analyze, and continuous monitoring mode
 |- **🧠 MLLM Streaming Q&A** (v0.41.0) — token-by-token SSE streaming for LLM responses from both Hermes CLI and OpenAI-compatible backends; enables real-time chat updates in the Gradio UI and REST API
 |- **📡 Live Stream Analysis** (v0.40.0) — capture and analyze live RTMP/RTSP/HLS streams in real-time with auto-reconnect, sliding window context, and incremental indexing; connect OBS, IP cameras, and streaming platforms directly to the analysis pipeline
@@ -29,7 +29,7 @@
 |- **🤖 Agentic Video Agent** (v0.36.0) — multi-tool video understanding agent with 7 specialized tools (analyze_frames, detect_objects, OCR, search_transcript, search_rag, temporal_grounding, summarize_video) that dynamically routes questions to the right tools
 |- **📖 Video Chaptering** (v0.37.0) — automatic topic segmentation of transcripts into chapters using NLTK TextTiling, with LLM-generated chapter titles and summaries; generates structured chapter reports and agent-chapter context
 |- **📊 Monitoring Dashboard** (v0.46.0) — real-time system metrics dashboard within the Gradio UI: live pipeline run counters, GPU memory usage, job queue status viewer, and interactive evaluation runner for on-demand benchmark execution
-- **🧪 Evaluation Suite** (v0.47.0) — 5 evaluation tasks (retrieval_precision, scene_boundary_accuracy, ocr_accuracy, action_recognition_quality, frame_compression_efficiency) with 44 dedicated harness tests; benchmark tests gracefully handle missing pytest-benchmark
+- **🧪 Evaluation Suite** (v0.48.0) — 5 evaluation tasks (retrieval_precision, scene_boundary_accuracy, ocr_accuracy, action_recognition_quality, frame_compression_efficiency) with 44 dedicated harness tests; benchmark tests gracefully handle missing pytest-benchmark; **auto-persisted reports** with **cross-report comparison dashboard** (Gradio Tab 9: 📈 Eval Comparison) for regression/improvement tracking across pipeline versions; **3 REST API endpoints** for programmatic access to report history, full reports, and comparisons
 - **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6 — +4.6% detection, +5.1% recognition over v5), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
 |- **🧠 Dual-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M) or VideoChat-Flash 2B (MIT, ICLR 2026) or **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)** for video-native scene description, summarization, and Q&A
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
@@ -164,6 +164,7 @@ User Question
 | `evaluation` | `video_analysis/evaluation.py` | Pipeline evaluation harness — benchmark-driven quality regression detection (v0.44.0) |
 || `job_queue` | `video_analysis/job_queue.py` | In-process async job queue — background video processing with status polling |
 || `curator` | `video_analysis/curator.py` | Autonomous Video Curator — closed-loop MCR exploration agent (v0.45.0) |
+|| `comparison` | `ui/comparison.py` | Cross-report eval comparison dashboard — historical browser, metric diff, regression tracking (v0.48.0) |
 
 ## 💻 Tech Stack
 
@@ -302,10 +303,30 @@ Available tasks:
 |------|-------------|
 | `retrieval_precision` | Top-k retrieval precision on curated synthetic QA pairs |
 | `scene_boundary_accuracy` | Scene detection precision/recall/F1 against ground truth |
+| `ocr_accuracy` | OCR character accuracy (CER + word accuracy) on synthetic text images |
+| `action_recognition_quality` | Action recognition top-1/top-5 accuracy on synthetic motion video |
+| `frame_compression_efficiency` | DINOv2 perceptual frame compression ratios + quality proxy |
 
 Each run produces a timestamped JSON report with pass/fail thresholds.
 Evaluation scores are also exported as Prometheus gauges (`va_evaluation_score`)
 for integration with the Grafana dashboard.
+
+### 📊 Cross-Report Comparison (v0.48.0)
+
+Evaluation reports are automatically saved in `data/eval_reports/`. Use the
+**📈 Eval Comparison** Gradio tab (Tab 9) to browse history and compare
+metrics across runs — spot regressions and improvements at a glance.
+
+```bash
+# REST API — list historical reports
+curl http://localhost:8000/api/evaluations
+
+# REST API — get full report
+curl http://localhost:8000/api/evaluations/{run_id}
+
+# REST API — compare two reports
+curl "http://localhost:8000/api/evaluations/compare?run_ids=a1b2c3d4,e5f6g7h8"
+```
 
 ## 📈 Production Monitoring
 

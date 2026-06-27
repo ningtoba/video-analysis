@@ -32,6 +32,7 @@ from ui.utils import parse_yt_url, queue_html
 from ui.workflow import inject_workflow_tab
 from ui.camera import inject_camera_tab
 from ui.monitor import inject_monitor_tab
+from ui.comparison import inject_comparison_tab
 
 logger = logging.getLogger(__name__)
 
@@ -536,6 +537,9 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
             # ============ TAB 8: MONITOR (Dashboard & Evaluations) ============
             inject_monitor_tab(app, config)
+
+            # ============ TAB 9: EVAL COMPARISON (Cross-Report Analysis) ============
+            inject_comparison_tab(config)
 
         # ==================== EVENT HANDLERS ====================
 

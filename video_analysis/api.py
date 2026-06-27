@@ -48,6 +48,7 @@ from video_analysis.job_queue import (
     JobStatus as JQStatus,
     get_default_manager,
 )
+from video_analysis.evaluation import EvalReportStore
 
 logger = logging.getLogger(__name__)
 
@@ -1239,6 +1240,79 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
             _chat_event_generator(query, cfg),
             media_type="text/event-stream",
         )
+
+    # ------------------------------------------------------------------
+    # GET /api/evaluations — list historical evaluation reports
+    # ------------------------------------------------------------------
+
+    store = EvalReportStore(data_dir=cfg.data_dir if hasattr(cfg, "data_dir") else None)
+
+    @router.get(
+        "/api/evaluations",
+        summary="List historical evaluation reports",
+        description="Returns summaries of saved evaluation reports, newest first.",
+    )
+    async def api_list_evaluations(
+        limit: int = Query(20, ge=1, le=100, description="Max reports to return"),
+        offset: int = Query(0, ge=0, description="Offset for pagination"),
+    ):
+        reports = store.list_reports(limit=limit, offset=offset)
+        return {
+            "total": len(reports),
+            "offset": offset,
+            "limit": limit,
+            "reports": reports,
+        }
+
+    # ------------------------------------------------------------------
+    # GET /api/evaluations/{run_id} — get full evaluation report
+    # ------------------------------------------------------------------
+
+    @router.get(
+        "/api/evaluations/{run_id}",
+        summary="Get full evaluation report by run ID",
+        description="Returns the complete evaluation report with all task results.",
+    )
+    async def api_get_evaluation(run_id: str):
+        report = store.load_report(run_id)
+        if report is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Evaluation report '{run_id}' not found",
+            )
+        return report.to_dict()
+
+    # ------------------------------------------------------------------
+    # GET /api/evaluations/compare — compare multiple reports
+    # ------------------------------------------------------------------
+
+    @router.get(
+        "/api/evaluations/compare",
+        summary="Compare multiple evaluation reports",
+        description=(
+            "Compare metrics across multiple evaluation runs. "
+            "Pass 'run_ids' as a comma-separated list."
+        ),
+    )
+    async def api_compare_evaluations(
+        run_ids: str = Query(
+            ...,
+            description="Comma-separated list of report run IDs to compare",
+        ),
+    ):
+        ids = [r.strip() for r in run_ids.split(",") if r.strip()]
+        if len(ids) < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one run_id required",
+            )
+        result = store.compare_reports(ids)
+        if not result.get("report_ids"):
+            raise HTTPException(
+                status_code=404,
+                detail=f"No reports found for IDs: {run_ids}",
+            )
+        return result
 
     return router
 

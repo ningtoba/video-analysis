@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.48.0 (2026-06-27) — Cross-Report Evaluation Comparison Dashboard
+
+### 📊 Cross-Report Evaluation Comparison (`ui/comparison.py`)
+
+A new Gradio tab (Tab 9: 📈 Eval Comparison) that turns the evaluation
+harness from a CLI-only tool into a visual analytics interface for quality
+monitoring.
+
+- **Historical Report Browser** — lists all saved evaluation reports with
+  pass/fail status, version, and run ID; one-click refresh
+- **Cross-Report Comparison** — enter multiple report IDs (space/comma-separated)
+  to compare metrics side-by-side with regression/improvement highlighting
+- **Task-Level Diff Table** — each task's metrics shown across reports with
+  color-coded pass (🟢) / fail (🔴) indicators
+- **Raw Data Viewer** — scrollable JSON panel for deep inspection
+- **Clear Reports** — one-click cleanup of all historical reports
+
+### 💾 Evaluation Report Persistence (`video_analysis/evaluation.py`)
+
+- **`EvalReportStore`** — persistent JSON-file storage for evaluation reports
+  in `data/eval_reports/`
+  - `save_report()` — persists a report after every evaluation run
+  - `load_report()` — deserializes a full report back into objects
+  - `list_reports()` — paginated summaries, newest first
+  - `compare_reports()` — structured cross-report comparison with per-task
+    metric diffing and version tracking
+- **Auto-save integration** — `EvaluationRunner.run_all()` now automatically
+  persists every evaluation result via `EvalReportStore` (best-effort)
+- **`EvalReport.to_dict()`** — new method for clean JSON-safe serialization
+- **Helper functions** — `_build_summary_from_data()`, `_report_passed_from_data()`,
+  `_report_summary_dict()`, `_dict_to_report()` for robust report deserialization
+
+### 🌐 New REST API Endpoints
+
+- **`GET /api/evaluations`** — list saved evaluation reports (paginated,
+  newest first, with pass/fail summary)
+- **`GET /api/evaluations/{run_id}`** — full evaluation report with all
+  task results and metrics
+- **`GET /api/evaluations/compare?run_ids=a1,b2,c3`** — structured cross-report
+  comparison with per-task metric diffing, version tracking, and
+  regression/improvement detection
+
+### 📦 Files Changed
+
+- **New**: `ui/comparison.py` — cross-report evaluation comparison dashboard
+  (~340 lines, Gradio tab with inline CSS)
+- **New**: `tests/test_comparison.py` — 25 tests covering EvalReportStore,
+  report helpers, comparison UI functions, and CSS structure
+- **Modified**: `video_analysis/evaluation.py` — +EvalReportStore class,
+  +to_dict(), +auto-persist in EvaluationRunner.run_all(), version 0.48.0
+- **Modified**: `video_analysis/api.py` — +3 evaluation API endpoints,
+  +EvalReportStore import
+- **Modified**: `video_analysis/__init__.py` — v0.48.0
+- **Modified**: `pyproject.toml` — v0.48.0
+- **Modified**: `Dockerfile` — version label 0.47.0 → 0.48.0
+- **Modified**: `ui/app.py` — +inject_comparison_tab as Tab 9, import
+- **Modified**: 7 test files — version checks bumped to 0.48.0
+
+### ✅ Verification
+
+- **723 tests passing** (25 new + 698 existing), 9 skipped (benchmarks
+  with missing pytest-benchmark), 0 failures
+- New comparison module fully tested: save/load/list/compare/corrupted file
+  handling, round-trip deserialization, HTML rendering, edge cases
+
 ## 0.47.0 (2026-06-27) — Advanced Evaluation Suite & Benchmark Fixes
 
 ### 🧪 New Evaluation Tasks (`evals/tasks/`)
