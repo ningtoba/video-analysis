@@ -13,28 +13,26 @@ Features:
 - Dark theme, responsive layout
 """
 
-import json
 import logging
-import os
 import shutil
 import uuid
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 import gradio as gr
 
-from video_analysis.config import Config
-from video_analysis.pipeline import VideoPipeline
-from video_analysis.rag import VideoRAG
-from video_analysis.chat import VideoChat
-from video_analysis.models import format_timestamp, VideoIndex
+from ui.camera import inject_camera_tab
+from ui.comparison import inject_comparison_tab
+from ui.event_timeline import inject_event_timeline_tab
+from ui.knowledge_graph import inject_knowledge_graph_tab
+from ui.monitor import inject_monitor_tab
 from ui.utils import parse_yt_url, queue_html
 from ui.workflow import inject_workflow_tab
-from ui.camera import inject_camera_tab
-from ui.monitor import inject_monitor_tab
-from ui.comparison import inject_comparison_tab
-from ui.knowledge_graph import inject_knowledge_graph_tab
-from ui.event_timeline import inject_event_timeline_tab
+from video_analysis.chat import VideoChat
+from video_analysis.config import Config
+from video_analysis.models import VideoIndex, format_timestamp
+from video_analysis.pipeline import VideoPipeline
+from video_analysis.rag import VideoRAG
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +168,7 @@ def _progress_html(step: int, message: str) -> str:
             cls = "active"
         else:
             cls = "pending"
-        html += f'<div class="step"><div class="dot {cls}"></div><span style="color: {"var(--text)" if i <= step else "var(--text-muted)"}; font-size:0.85rem;font-weight:{"600" if i==step else "400"}">{s}</span></div>'
+        html += f'<div class="step"><div class="dot {cls}"></div><span style="color: {"var(--text)" if i <= step else "var(--text-muted)"}; font-size:0.85rem;font-weight:{"600" if i == step else "400"}">{s}</span></div>'
     html += "</div>"
     html += f'<p style="color:var(--text-muted);font-size:0.85rem;margin-top:0.5rem">{message}</p>'
     return html
@@ -234,7 +232,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
         ),
         title="Video Analysis Platform",
     ) as app:
-
         # -- state --
         vid = gr.State("")
         vpath = gr.State("")
@@ -260,7 +257,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                         gr.Markdown("### Upload Video or Paste URL")
                         video_input = gr.Video(
                             label="Drop or select a video file",
-                            sources=["upload", "path"],
+                            sources=["upload"],
                             format="mp4",
                             height=320,
                         )
@@ -290,23 +287,15 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             gr.Markdown("### Analysis Progress")
                             progress_html = gr.HTML("")
 
-                        video_player = gr.Video(
-                            label="Video Player", visible=False, height=400
-                        )
+                        video_player = gr.Video(label="Video Player", visible=False, height=400)
 
                         # Sprite sheet + clip export
                         with gr.Group(visible=False) as export_group:
                             gr.Markdown("### 🎬 Export Clip")
                             with gr.Row():
-                                clip_start = gr.Number(
-                                    label="Start (seconds)", value=0, minimum=0
-                                )
-                                clip_end = gr.Number(
-                                    label="End (seconds)", value=10, minimum=0
-                                )
-                            export_btn = gr.Button(
-                                "✂️ Export Clip", variant="secondary", size="sm"
-                            )
+                                clip_start = gr.Number(label="Start (seconds)", value=0, minimum=0)
+                                clip_end = gr.Number(label="End (seconds)", value=10, minimum=0)
+                            export_btn = gr.Button("✂️ Export Clip", variant="secondary", size="sm")
                             clip_output = gr.Video(
                                 label="Exported Clip",
                                 visible=False,
@@ -330,9 +319,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                         with gr.Row():
                             send_btn = gr.Button("Send ➤", variant="primary", scale=2)
                             clear_chat_btn = gr.Button("Clear Chat", scale=1)
-                        show_sources = gr.Checkbox(
-                            label="Show source citations", value=True
-                        )
+                        show_sources = gr.Checkbox(label="Show source citations", value=True)
 
             # ============ TAB 2: IMPORT (YouTube/URL) ============
             with gr.TabItem("🌐 Import", id="import"):
@@ -421,9 +408,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             lines=2,
                         )
                         with gr.Row():
-                            search_btn = gr.Button(
-                                "🔎 Search All", variant="primary", scale=2
-                            )
+                            search_btn = gr.Button("🔎 Search All", variant="primary", scale=2)
                             search_clear_btn = gr.Button("Clear", scale=1)
                         search_status = gr.HTML(
                             '<p style="color:var(--text-muted);padding:0.5rem 0;">'
@@ -432,8 +417,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     with gr.Column(scale=3):
                         gr.Markdown("### Results")
                         search_results = gr.HTML(
-                            '<p style="color:var(--text-muted);padding:1rem;">'
-                            "No results yet.</p>"
+                            '<p style="color:var(--text-muted);padding:1rem;">No results yet.</p>'
                         )
                         search_detail = gr.HTML("")
             with gr.TabItem("📚 Library", id="library"):
@@ -446,12 +430,8 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                             lines=1,
                         )
                         with gr.Row():
-                            refresh_lib_btn = gr.Button(
-                                "🔄 Refresh Library", size="sm", scale=2
-                            )
-                            delete_all_lib_btn = gr.Button(
-                                "🗑 Delete All", size="sm", scale=1
-                            )
+                            refresh_lib_btn = gr.Button("🔄 Refresh Library", size="sm", scale=2)
+                            delete_all_lib_btn = gr.Button("🗑 Delete All", size="sm", scale=1)
                         library_list = gr.HTML(
                             '<p style="color:var(--text-muted);padding:1rem;">No videos analyzed yet. Upload one above.</p>'
                         )
@@ -459,9 +439,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     with gr.Column(scale=3):
                         gr.Markdown("### Video Details")
                         lib_video_id = gr.State("")
-                        lib_video_player = gr.Video(
-                            label="Selected Video", visible=False
-                        )
+                        lib_video_player = gr.Video(label="Selected Video", visible=False)
                         lib_info = gr.JSON(label="Video Info", visible=False)
 
             # ============ TAB 6: PIPELINE WORKFLOW (Gradio 6 Workflow) ============
@@ -497,9 +475,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 kg.persist_events_from_rag(rag, video_id)
                 kg.close()
             except Exception as kg_exc:
-                logger.warning(
-                    "KG event persistence failed: %s - continuing", kg_exc
-                )
+                logger.warning("KG event persistence failed: %s - continuing", kg_exc)
 
         # --- Process Video ---
         def do_process(video_path: str, state_vid: str):
@@ -562,9 +538,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                 _persist_events_to_kg(index.video_id)
 
-                status.value = (
-                    '<span class="badge ready">● Ready - ask questions</span>'
-                )
+                status.value = '<span class="badge ready">● Ready - ask questions</span>'
                 yield (
                     _progress_html(
                         9 if config.event_causal_rag_enabled else 8,
@@ -580,9 +554,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
             except Exception as e:
                 logger.error(f"Process error: {e}", exc_info=True)
-                status.value = (
-                    f'<span class="badge error">● Error: {str(e)[:100]}</span>'
-                )
+                status.value = f'<span class="badge error">● Error: {str(e)[:100]}</span>'
                 yield (
                     _progress_html(-1, f"❌ {str(e)[:200]}"),
                     status,
@@ -609,9 +581,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 )
 
             if not parse_yt_url(url):
-                status.value = (
-                    '<span class="badge error">● Unsupported URL format</span>'
-                )
+                status.value = '<span class="badge error">● Unsupported URL format</span>'
                 return (
                     gr.update(),
                     status,
@@ -679,9 +649,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                 _persist_events_to_kg(index.video_id)
 
-                status.value = (
-                    '<span class="badge ready">● Ready - ask questions</span>'
-                )
+                status.value = '<span class="badge ready">● Ready - ask questions</span>'
                 yield (
                     _progress_html(
                         9 if config.event_causal_rag_enabled else 8,
@@ -697,9 +665,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
             except Exception as e:
                 logger.error(f"Import error: {e}", exc_info=True)
-                status.value = (
-                    f'<span class="badge error">● Error: {str(e)[:100]}</span>'
-                )
+                status.value = f'<span class="badge error">● Error: {str(e)[:100]}</span>'
                 yield (
                     _progress_html(-1, f"❌ {str(e)[:200]}"),
                     status,
@@ -725,9 +691,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 )
 
             if not parse_yt_url(url):
-                status.value = (
-                    '<span class="badge error">● Unsupported URL format</span>'
-                )
+                status.value = '<span class="badge error">● Unsupported URL format</span>'
                 return (
                     gr.update(visible=False),
                     gr.update(
@@ -744,9 +708,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             try:
                 yield (
                     gr.update(visible=True),
-                    gr.update(
-                        value=_progress_html(0, "⬇️ Downloading video from URL...")
-                    ),
+                    gr.update(value=_progress_html(0, "⬇️ Downloading video from URL...")),
                     "",
                     "",
                     status,
@@ -772,9 +734,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                 yield (
                     gr.update(visible=True),
-                    gr.update(
-                        value=_progress_html(1, "⚙️ Processing downloaded video...")
-                    ),
+                    gr.update(value=_progress_html(1, "⚙️ Processing downloaded video...")),
                     "",
                     "",
                     status,
@@ -784,9 +744,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                 yield (
                     gr.update(visible=True),
-                    gr.update(
-                        value=_progress_html(6, "📝 Indexing content for Q&A...")
-                    ),
+                    gr.update(value=_progress_html(6, "📝 Indexing content for Q&A...")),
                     "",
                     "",
                     status,
@@ -796,19 +754,13 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                 _persist_events_to_kg(index.video_id)
 
-                status.value = (
-                    '<span class="badge ready">● Ready - ask questions</span>'
-                )
+                status.value = '<span class="badge ready">● Ready - ask questions</span>'
 
                 video_path_str = str(downloaded)
                 steps = 9 if config.event_causal_rag_enabled else 8
                 yield (
                     gr.update(visible=True, value=video_path_str),
-                    gr.update(
-                        value=_progress_html(
-                            steps, f"Complete - {_video_summary(index)}"
-                        )
-                    ),
+                    gr.update(value=_progress_html(steps, f"Complete - {_video_summary(index)}")),
                     index.video_id,
                     video_path_str,
                     status,
@@ -816,9 +768,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
             except Exception as e:
                 logger.error(f"Import tab error: {e}", exc_info=True)
-                status.value = (
-                    f'<span class="badge error">● Error: {str(e)[:100]}</span>'
-                )
+                status.value = f'<span class="badge error">● Error: {str(e)[:100]}</span>'
                 yield (
                     gr.update(visible=False),
                     gr.update(value=_progress_html(-1, f"❌ {str(e)[:200]}")),
@@ -853,11 +803,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     answer += "\n\n**📎 Sources:**\n"
                     for s in resp.sources[:3]:
                         ts = format_timestamp(s.timestamp)
-                        rel = (
-                            f" ({s.relevance_score:.0%})"
-                            if s.relevance_score > 0
-                            else ""
-                        )
+                        rel = f" ({s.relevance_score:.0%})" if s.relevance_score > 0 else ""
                         answer += f"- ⏱️ [{ts}](ts:{s.timestamp}){rel}\n"
                 history.append((msg, answer))
             except Exception as e:
@@ -1058,7 +1004,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     continue
 
                 item["status"] = "active"
-                progress_str = f'<p style="color:var(--text-muted);font-size:0.85rem;">Processing {idx+1}/{total}...</p>'
+                progress_str = f'<p style="color:var(--text-muted);font-size:0.85rem;">Processing {idx + 1}/{total}...</p>'
                 yield queue, queue_html(queue), progress_str, status
 
                 try:
@@ -1233,9 +1179,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 )
                 for vid, vid_chunks in sorted(by_video.items()):
                     first = vid_chunks[0]
-                    fname = (
-                        first.metadata.get("filename", vid) if first.metadata else vid
-                    )
+                    fname = first.metadata.get("filename", vid) if first.metadata else vid
                     html_parts.append(
                         f'<div class="library-card" style="margin-bottom:0.75rem;">'
                         f'<h4 style="margin:0 0 0.25rem 0;">📹 {fname}</h4>'
@@ -1405,18 +1349,14 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             visible=True,
         )
 
-        lib_select_input = gr.Textbox(
-            value="", visible=False, elem_id="lib-select-input"
-        )
+        lib_select_input = gr.Textbox(value="", visible=False, elem_id="lib-select-input")
         lib_select_input.change(
             do_select_video,
             inputs=[lib_select_input],
             outputs=[lib_video_player, lib_info, lib_video_id],
         )
 
-        lib_delete_input = gr.Textbox(
-            value="", visible=False, elem_id="lib-delete-input"
-        )
+        lib_delete_input = gr.Textbox(value="", visible=False, elem_id="lib-delete-input")
         lib_delete_input.change(
             fn=do_delete_video_js,
             inputs=[lib_delete_input, lib_video_id],
@@ -1704,9 +1644,7 @@ def launch(
     health_app = create_health_app(cfg)
     app = gr.mount_gradio_app(health_app, gradio_app, path="/")
 
-    logger.info(
-        f"Starting UI on http://{cfg.ui_host}:{cfg.ui_port} " f"(health API at /health)"
-    )
+    logger.info(f"Starting UI on http://{cfg.ui_host}:{cfg.ui_port} (health API at /health)")
 
     import uvicorn
 
