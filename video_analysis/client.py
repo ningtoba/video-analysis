@@ -21,9 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-import uuid
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -211,7 +209,6 @@ class VideoAnalysisClient:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-        self._session_id: str = ""
         try:
             import requests
         except ImportError:
@@ -289,11 +286,11 @@ class VideoAnalysisClient:
             uptime_seconds=float(data.get("uptime_seconds", 0.0)),
         )
 
-    def health_async(self) -> Any:
-        """Async health check — returns raw data for use with asyncio."""
+    async def health_async(self) -> HealthInfo:
+        """Async health check for use with asyncio."""
         import asyncio
 
-        return asyncio.to_thread(self.health)
+        return await asyncio.to_thread(self.health)
 
     # ------------------------------------------------------------------
     # Video Management
@@ -586,13 +583,8 @@ class VideoAnalysisClient:
             Dicts with ``token`` key for each token chunk.
             A ``[DONE]`` sentinel signals completion.
         """
-        try:
-            import requests as req_lib
-        except ImportError:
-            raise ImportError("The `requests` library is required.")
-
         url = self._url(f"/api/videos/{video_id}/query")
-        resp = req_lib.post(
+        resp = self._requests.post(
             url,
             json={"query": question, "stream": True},
             stream=True,
@@ -720,13 +712,8 @@ class VideoAnalysisClient:
         Returns:
             Raw image bytes (JPEG or PNG).
         """
-        try:
-            import requests as req_lib
-        except ImportError:
-            raise ImportError("The `requests` library is required.")
-
         url = self._url(f"/api/videos/{video_id}/frames/{timestamp}")
-        resp = req_lib.get(url, timeout=self.timeout)
+        resp = self._requests.get(url, timeout=self.timeout)
         if not resp.ok:
             raise APIError(resp.status_code, resp.text)
         return resp.content

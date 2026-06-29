@@ -21,7 +21,7 @@ Usage:
 import logging
 import statistics
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -420,7 +420,7 @@ class EvidenceTrustScorer:
             for line in entry:
                 if line is None or len(line) < 2:
                     continue
-                bbox, (text, raw_conf) = line[0], line[1]
+                _, (text, raw_conf) = line[0], line[1]
                 adjusted_conf = raw_conf * blur_penalty * frame_trust
                 confidences.append(raw_conf)
                 adjusted_texts.append(

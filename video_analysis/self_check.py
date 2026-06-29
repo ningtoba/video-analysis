@@ -27,13 +27,10 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-import re
-import subprocess
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Set, Tuple
+from typing import Any, List, Optional, Set
 
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG, RetrievedChunk
@@ -86,7 +83,6 @@ class SelfCheckRAG:
         self.config = config or Config()
         self.rag = rag  # optional — set later if not provided at init
         self._llm = llm  # optional LLMProvider instance
-        self._cached_verdicts: dict = {}  # query hash -> verdict cache
 
     def _get_llm(self):
         """Lazy-load the LLM provider."""

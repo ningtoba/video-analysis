@@ -12,9 +12,6 @@ torchvision>=0.27.0
 numpy>=2.5.0
 langchain-text-splitters>=1.1.0
 
-# BGE-VL / BGE embedding models
-einops>=0.8.0
-
 # Structured logging
 structlog>=26.0.0
 

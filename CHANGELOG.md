@@ -1,5 +1,10 @@
 # Changelog
 
+> **Note:** This changelog is ~190 KB. Detailed entries for versions before 0.44.0
+> are preserved in git history (`git log --oneline`). Consider using GitHub Releases
+> for curated release notes and trimming this file to the most recent versions.
+> To view full history: `git log --reverse --format="%H %s" -- CHANGELOG.md`
+
 ## 0.60.0 (2026-06-27) — Adaptive Pipeline Stage Scaling & Resource Management
 
 ### 🎯 Adaptive Pipeline Scaler (`video_analysis/adaptive_scaler.py`)
@@ -2007,18 +2012,7 @@ All core dependency bounds updated to match the actual installed versions, ensur
 
 ---
 
-## 1.0.0 (unreleased) — Full Production Readiness
 
-### Pending to reach v1.0.0
-- [ ] Gradio 6 Workflow integration
-- [ ] Qwen3-VL-30B-A3B FP8 backend
-- [ ] ColBERT-Att attention-weighted re-ranking
-- [ ] Real-time streaming video analysis
-- [ ] Federated video search (MCP-based)
-- [ ] Dependency modernization — update pyproject.toml bounds
-- [ ] PaddleOCR v5 upgrade
-
----
 
 ## 0.27.0 (2026-06-26) — LLM Self-Check + Re-Retrieval (Agentic Verification)
 

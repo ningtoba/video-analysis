@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import abc
 import json
+import logging
 import os
 import time
 import uuid
@@ -38,6 +39,8 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional
 
 from video_analysis.config import Config
+
+logger = logging.getLogger(__name__)
 
 # ── Data Models ──────────────────────────────────────────────────────────────
 
@@ -243,8 +246,8 @@ class EvaluationRunner:
         try:
             store = EvalReportStore(self.config.data_dir)
             store.save_report(report)
-        except Exception:
-            pass  # best-effort persistence
+        except Exception as exc:
+            logger.debug("Failed to persist evaluation report: %s", exc)
 
         # Fire webhook: eval.complete (v0.59.0)
         try:
@@ -266,8 +269,8 @@ class EvaluationRunner:
                         ),
                     },
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to fire eval.complete webhook: %s", exc)
 
         return report
 

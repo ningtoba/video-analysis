@@ -313,26 +313,6 @@ class TestSpecialistAgent:
             agent.execute(query="test", context={})
 
 
-@pytest.mark.skip(reason="Requires Video MLLM model loading")
-class TestVisualAnalyst:
-    def test_creates_tool_result(self, mock_config):
-        analyst = VisualAnalyst(config=mock_config)
-        result = analyst.execute(
-            query="Describe what you see",
-            context={"timestamps": [10.0]},
-        )
-        assert result.success or not result.success  # Model may or may not be available
-        assert result.agent_type == "visual_analyst"
-
-    def test_empty_timestamps(self, mock_config):
-        analyst = VisualAnalyst(config=mock_config)
-        result = analyst.execute(query="Describe", context={})
-        assert result.get("success", False) is False
-        assert "timestamps" in str(
-            result.get("error", "")
-        ).lower() or "timestamps" in result.get("data", "")
-
-
 class TestRAGSearcher:
     def test_no_rag_instance(self, mock_config):
         searcher = RAGSearcher(config=mock_config)

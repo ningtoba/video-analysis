@@ -40,6 +40,21 @@ logger = logging.getLogger(__name__)
 
 REPORT_SCHEMA_VERSION = "1.0"
 
+# Display / analysis limits
+_MAX_TOP_ENTITIES: int = 20       # top objects, key phrases
+_MAX_TOP_ACTIONS: int = 10
+_MAX_TOP_SCENES: int = 10
+_MAX_TOP_THEMES: int = 8
+_MAX_DESCRIPTION_PREVIEW: int = 200
+_MAX_SILENT_PERIODS: int = 50
+_MIN_WORD_LENGTH_KEY_PHRASE: int = 3
+_SILENT_GAP_THRESHOLD_S: float = 2.0
+_TRUNCATION_DECIMALS: int = 1
+
+# Checksum
+_CHECKSUM_CHUNK_SIZE: int = 65536  # 64KB
+_CHECKSUM_HEX_LENGTH: int = 16
+
 
 @dataclass
 class VideoMetadata:
@@ -337,7 +352,7 @@ class ReportGenerator:
                         key_moments.append(
                             KeyMoment(
                                 timestamp=f.timestamp,
-                                description=f.description[:200],
+                                description=f.description[:_MAX_DESCRIPTION_PREVIEW],
                                 source="frame_description",
                             )
                         )
@@ -381,11 +396,11 @@ class ReportGenerator:
             sorted_segs = sorted(index.transcript, key=lambda x: x.start)
             for i in range(1, len(sorted_segs)):
                 gap = sorted_segs[i].start - sorted_segs[i - 1].end
-                if gap > 2.0:
+                if gap > _SILENT_GAP_THRESHOLD_S:
                     silent_periods.append(
                         (
-                            round(sorted_segs[i - 1].end, 1),
-                            round(sorted_segs[i].start, 1),
+                            round(sorted_segs[i - 1].end, _TRUNCATION_DECIMALS),
+                            round(sorted_segs[i].start, _TRUNCATION_DECIMALS),
                         )
                     )
 
@@ -393,11 +408,11 @@ class ReportGenerator:
             word_freq: Dict[str, int] = {}
             for seg in index.transcript:
                 for w in set(w.lower().strip(".,!?;:") for w in seg.text.split()):
-                    if len(w) > 3:
+                    if len(w) > _MIN_WORD_LENGTH_KEY_PHRASE:
                         word_freq[w] = word_freq.get(w, 0) + 1
             key_phrases_sorted = sorted(
                 word_freq.items(), key=lambda x: x[1], reverse=True
-            )[:20]
+            )[: _MAX_TOP_ENTITIES]
             key_phrases = [k for k, _ in key_phrases_sorted]
 
             transcript_report = TranscriptReport(
@@ -407,7 +422,7 @@ class ReportGenerator:
                 speakers=speakers_dict,
                 key_phrases=key_phrases,
                 total_words=total_words,
-                silent_periods=silent_periods[:50],  # limit to 50 gaps
+                silent_periods=silent_periods[:_MAX_SILENT_PERIODS],
             )
 
         # --- Objects ---
@@ -425,7 +440,7 @@ class ReportGenerator:
 
         top_objects_list = sorted(
             object_freq.items(), key=lambda x: x[1], reverse=True
-        )[:20]
+        )[:_MAX_TOP_ENTITIES]
 
         object_catalog = ObjectCatalog(
             unique_objects=unique_objects,
@@ -453,7 +468,7 @@ class ReportGenerator:
 
         if actions_list:
             dominant = sorted(action_counter.items(), key=lambda x: x[1], reverse=True)[
-                :10
+                :_MAX_TOP_ACTIONS
             ]
             actions_summary = ActionSummary(
                 actions=actions_list,
@@ -806,7 +821,7 @@ class ReportGenerator:
 
         if report.objects.top_objects:
             lines.append(f"- **Top objects**:")
-            for name, count, scenes in report.objects.top_objects[:10]:
+            for name, count, scenes in report.objects.top_objects[:_MAX_TOP_ENTITIES]:
                 lines.append(f"  - {name}: {count} detections")
 
         lines.extend(
@@ -831,18 +846,18 @@ class ReportGenerator:
                     f"## 🎬 Scene Breakdown",
                 ]
             )
-            for s in report.scenes[:10]:  # Top 10 scenes
+            for s in report.scenes[:_MAX_TOP_SCENES]:
                 lines.append(
                     f"### Scene {s.scene_id} ({_fmt_duration(s.start_time)} - {_fmt_duration(s.end_time)})"
                 )
                 if s.description:
-                    lines.append(f"{s.description[:200]}")
+                    lines.append(f"{s.description[:_MAX_DESCRIPTION_PREVIEW]}")
                 if s.objects:
-                    lines.append(f"Objects: {', '.join(s.objects[:10])}")
+                    lines.append(f"Objects: {', '.join(s.objects[:_MAX_TOP_ENTITIES])}")
                 lines.append("")
 
-            if len(report.scenes) > 10:
-                lines.append(f"*... and {len(report.scenes) - 10} more scenes*")
+            if len(report.scenes) > _MAX_TOP_SCENES:
+                lines.append(f"*... and {len(report.scenes) - _MAX_TOP_SCENES} more scenes*")
 
         lines.append(f"---")
         lines.append(
@@ -876,7 +891,7 @@ class ReportGenerator:
             lines.append(f"- Transcript: {report.transcript.total_words} words")
         if report.transcript.key_phrases:
             lines.append(
-                f"- Key themes: {', '.join(report.transcript.key_phrases[:8])}"
+                f"- Key themes: {', '.join(report.transcript.key_phrases[:_MAX_TOP_THEMES])}"
             )
 
         return "\n".join(lines)
@@ -891,11 +906,11 @@ class ReportGenerator:
         try:
             h = hashlib.sha256()
             with open(video_path, "rb") as f:
-                chunk = f.read(65536)
+                chunk = f.read(_CHECKSUM_CHUNK_SIZE)
                 h.update(chunk)
             file_size = video_path.stat().st_size
             h.update(str(file_size).encode())
-            return h.hexdigest()[:16]
+            return h.hexdigest()[:_CHECKSUM_HEX_LENGTH]
         except (OSError, PermissionError) as exc:
             logger.warning("Could not compute checksum for %s: %s", video_path, exc)
             return ""
@@ -1043,8 +1058,6 @@ def _build_comparison(
     reports: List[VideoReport], video_ids: List[str]
 ) -> Dict[str, Any]:
     """Build a comparison dict across multiple video reports."""
-    from datetime import datetime, timezone
-
     comparison: Dict[str, Any] = {
         "video_ids": video_ids,
         "schema_version": REPORT_SCHEMA_VERSION,

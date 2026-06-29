@@ -174,7 +174,8 @@ def test_inject_camera_tab_signature():
         # Should not raise when called
         inject_camera_tab(mock_app, cfg)
 
-    assert True
+    # Verify the function ran: it attaches _camera_pipeline to the app
+    assert hasattr(mock_app, "_camera_pipeline")
 
 
 def test_inject_camera_tab_default_config():
@@ -189,7 +190,8 @@ def test_inject_camera_tab_default_config():
         # Should not raise
         inject_camera_tab(mock_app)
 
-    assert True
+    # Verify the function ran: it attaches _camera_pipeline to the app
+    assert hasattr(mock_app, "_camera_pipeline")
 
 
 # =========================================================================
@@ -259,20 +261,25 @@ def test_camera_module_lazy_imports():
 
     # Parse the source and check no top-level "import gradio"
     tree = ast.parse(source)
+    top_level_gradio_imports: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import) or isinstance(node, ast.ImportFrom):
             for alias in node.names if hasattr(node, "names") else []:
                 name = alias.name if hasattr(alias, "name") else ""
                 if "gradio" in name:
                     # Only allow imports inside functions (lazy)
+                    inside_function = False
                     for parent in ast.walk(tree):
                         if isinstance(parent, ast.FunctionDef):
                             if node in ast.walk(parent):
+                                inside_function = True
                                 break
-                    else:
-                        pytest.fail(f"Top-level gradio import found: {name}")
+                    if not inside_function:
+                        top_level_gradio_imports.append(name)
 
-    assert True
+    assert not top_level_gradio_imports, (
+        f"Top-level gradio import(s) found: {top_level_gradio_imports}"
+    )
 
 
 # =========================================================================

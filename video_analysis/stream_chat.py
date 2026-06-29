@@ -9,9 +9,8 @@ convenience generator ``stream_llm_response()``.  Both support
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Dict, List, Optional
@@ -82,7 +81,7 @@ class StreamSession:
     session_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     history: List[Dict[str, str]] = field(default_factory=list)
     is_active: bool = True
-    created_at: float = field(default_factory=lambda: __import__("time").time())
+    created_at: float = field(default_factory=time.time)
 
 
 class StreamChatManager:

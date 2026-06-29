@@ -71,6 +71,16 @@ from video_analysis.models import VideoIndex, SceneInfo
 
 logger = logging.getLogger(__name__)
 
+# ── LLM prompt truncation limits ───────────────────────────────────────
+_LLM_TRANSCRIPT_MAX_LENGTH = 4000
+_LLM_TRANSCRIPT_TRUNC_SIDE = 2000
+_LLM_SCENE_SUMMARY_MAX_LENGTH = 6000
+_LLM_SCENE_SUMMARY_TRUNC_SIDE = 3000
+_LLM_SEGMENTATION_MAX_TOKENS = 4096
+
+# ── Fallback segmentation ──────────────────────────────────────────────
+_DEFAULT_TEMPORAL_GRID_DURATION = 60.0  # seconds per event
+
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -207,13 +217,9 @@ class EventSegmenter:
         self,
         config: Optional[Config] = None,
         llm_provider=None,
-        max_event_duration: float = 300.0,
-        min_event_duration: float = 5.0,
     ):
         self.config = config or Config()
         self._llm = llm_provider
-        self.max_event_duration = max_event_duration
-        self.min_event_duration = min_event_duration
 
     def segment(
         self,
@@ -290,17 +296,19 @@ class EventSegmenter:
             scene_lines.append(f"Scene {i} [t={start:.1f}s]: {summary}")
         scene_summary = "\n".join(scene_lines)
         transcript_preview = transcript
-        if len(transcript_preview) > 4000:
+        if len(transcript_preview) > _LLM_TRANSCRIPT_MAX_LENGTH:
             transcript_preview = (
-                transcript_preview[:2000]
+                transcript_preview[:_LLM_TRANSCRIPT_TRUNC_SIDE]
                 + "\n...[truncated]..."
-                + transcript_preview[-2000:]
+                + transcript_preview[-_LLM_TRANSCRIPT_TRUNC_SIDE:]
             )
 
         # Truncate scene_summary if too long
-        if len(scene_summary) > 6000:
+        if len(scene_summary) > _LLM_SCENE_SUMMARY_MAX_LENGTH:
             scene_summary = (
-                scene_summary[:3000] + "\n...[truncated]..." + scene_summary[-3000:]
+                scene_summary[:_LLM_SCENE_SUMMARY_TRUNC_SIDE]
+                + "\n...[truncated]..."
+                + scene_summary[-_LLM_SCENE_SUMMARY_TRUNC_SIDE:]
             )
 
         prompt = (
@@ -332,7 +340,7 @@ class EventSegmenter:
             if hasattr(self._llm, "chat"):
                 result = self._llm.chat(prompt)
             elif hasattr(self._llm, "generate"):
-                result = self._llm.generate(prompt, max_tokens=4096)
+                result = self._llm.generate(prompt, max_tokens=_LLM_SEGMENTATION_MAX_TOKENS)
             else:
                 # Try calling it as a callable
                 result = self._llm(prompt)
@@ -483,7 +491,7 @@ class EventSegmenter:
         self,
         video_id: str,
         scenes: List[SceneInfo],
-        event_duration: float = 60.0,
+        event_duration: float = _DEFAULT_TEMPORAL_GRID_DURATION,
     ) -> List[Event]:
         """Fallback: merge scenes into fixed-duration events.
 
@@ -723,6 +731,32 @@ class SemanticStore:
         Returns:
             List of (Event, score) tuples sorted by descending score.
         """
+        # Primary path: query ChromaDB via the RAG embedding pipeline.
+        if self._rag is not None:
+            try:
+                query_emb = self._rag._get_query_embedding(query)
+                chroma = self._rag.collection
+                results = chroma.query(
+                    query_embeddings=[query_emb],
+                    n_results=top_k,
+                    where={"type": "event"},
+                    include=["metadatas", "distances"],
+                )
+                if results.get("ids") and results["ids"][0]:
+                    scored: List[Tuple[Event, float]] = []
+                    for i, _doc_id in enumerate(results["ids"][0]):
+                        meta = results["metadatas"][0][i]
+                        evt_id = meta.get("event_id", "")
+                        if evt_id and evt_id in self._events:
+                            dist = results["distances"][0][i]
+                            score = 1.0 - dist  # cosine distance → similarity
+                            scored.append((self._events[evt_id], float(score)))
+                    scored.sort(key=lambda x: x[1], reverse=True)
+                    return scored[:top_k]
+            except Exception as exc:
+                logger.debug("ChromaDB event search failed: %s — using fallback", exc)
+
+        # Fallback: TF-IDF cosine similarity on term frequencies
         if not self._fallback_store:
             return []
 
@@ -731,7 +765,6 @@ class SemanticStore:
         for w in query_words:
             query_counts[w] = query_counts.get(w, 0) + 1
 
-        # Simple cosine similarity on term frequencies
         scores: List[Tuple[str, float]] = []
         for evt_id, vec in self._fallback_store.items():
             dot = sum(

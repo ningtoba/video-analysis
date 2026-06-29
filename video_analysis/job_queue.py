@@ -34,7 +34,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI
@@ -114,6 +113,10 @@ class _BackgroundWorkerRegistry:
         if job_type in self._handlers:
             logger.warning("Overwriting existing handler for job_type=%r", job_type)
         self._handlers[job_type] = handler
+
+    def __contains__(self, job_type: str) -> bool:
+        """Support ``in`` operator — ``"process_video" in registry``."""
+        return job_type in self._handlers
 
     def get(self, job_type: str) -> Any:
         """Return the handler for *job_type*, or raise KeyError."""

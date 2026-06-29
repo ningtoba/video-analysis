@@ -21,6 +21,7 @@ reasoning.  The graph is built from ChromaDB metadata at query time (or when
 ``rebuild()`` is called), keeping the storage footprint small.
 """
 
+import json
 import logging
 from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple
@@ -28,9 +29,12 @@ from typing import Dict, List, Optional, Set, Tuple
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG, RetrievedChunk
 
-import json  # noqa: E402 — module-level import after package imports
-
 logger = logging.getLogger(__name__)
+
+# Semantic edge thresholds
+_SEMANTIC_JACCARD_THRESHOLD = 0.3
+_SEMANTIC_MIN_WORDS = 5
+_GRAPH_EXPANSION_DEFAULT_SCORE = 0.5
 
 
 class SceneGraph:
@@ -238,9 +242,9 @@ class SceneGraph:
                 # Simple word set overlap as a lightweight semantic proxy
                 words1 = set(txt1.split())
                 words2 = set(txt2.split())
-                if len(words1) > 5 and len(words2) > 5:
+                if len(words1) > _SEMANTIC_MIN_WORDS and len(words2) > _SEMANTIC_MIN_WORDS:
                     jaccard = len(words1 & words2) / len(words1 | words2)
-                    if jaccard >= 0.3:  # 30% word overlap
+                    if jaccard >= _SEMANTIC_JACCARD_THRESHOLD:
                         self._add_edge(k1, k2)
 
         logger.info(
@@ -339,7 +343,7 @@ class SceneGraph:
                     )
                     if result["ids"]:
                         meta = result["metadatas"][0]
-                        score = 0.5  # graph-expanded chunks get default score
+                        score = _GRAPH_EXPANSION_DEFAULT_SCORE
                         new_chunks.append(
                             RetrievedChunk(
                                 chunk_id=chunk_id,

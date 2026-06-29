@@ -19,7 +19,7 @@ WORKDIR /app
 #   - ffmpeg: audio extraction, sprite sheets, clip export
 #   - gcc/g++: C extensions (onnxruntime, tokenizers, open-clip-torch)
 #   - libgomp1: OpenMP parallel loops (numpy, torch)
-#   - rustc: tokenizers build dependency (sentence-transformers)
+#   - rustc: NOT needed — tokenizers ships pre-built wheels for linux/amd64 + Python 3.11
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     gcc \
@@ -47,9 +47,9 @@ FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
 LABEL org.opencontainers.image.title="Video Analysis Platform"
 LABEL org.opencontainers.image.description="Self-hosted video analysis with AI chatbot — scene understanding, RAG, clip export, YouTube import, batch processing"
-LABEL org.opencontainers.image.version="0.49.0"
+LABEL org.opencontainers.image.version="0.60.0"
 LABEL org.opencontainers.image.vendor="Nous Research"
-LABEL org.opencontainers.image.documentation="https://github.com/.../video-analysis"
+LABEL org.opencontainers.image.documentation="https://github.com/ningtoba/video-analysis"
 
 # ── Runtime environment ──
 ENV DEBIAN_FRONTEND=noninteractive

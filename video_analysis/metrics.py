@@ -127,6 +127,10 @@ def _ensure_metrics() -> None:
         "va_videos_indexed_total",
         "Total number of videos successfully indexed in ChromaDB",
     )
+    retrieval_chunks_total = Counter(
+        "va_retrieval_chunks_total",
+        "Total number of chunks returned from retrieval operations",
+    )
     questions_answered_total = Counter(
         "va_questions_answered_total",
         "Total number of Q&A questions answered",

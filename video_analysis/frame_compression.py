@@ -40,6 +40,9 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+# dinov2-small output dimension (for the zero-feature fallback array)
+_DINOV2_SMALL_DIM = 384
+
 
 class DINOv2FrameCompressor:
     """Adaptive frame compression using DINOv2 perceptual similarity.
@@ -215,7 +218,7 @@ class DINOv2FrameCompressor:
             all_features.append(cls_tokens.cpu().numpy())
 
         if not all_features:
-            return np.zeros((0, 384))  # dinov2-small dim
+            return np.zeros((0, _DINOV2_SMALL_DIM))
 
         return np.concatenate(all_features, axis=0)
 

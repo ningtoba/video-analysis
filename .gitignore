@@ -19,6 +19,9 @@ venv/
 *.swo
 *~
 
+# Linting cache
+.ruff_cache/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -41,9 +44,17 @@ data/chroma/
 # Logs
 *.log
 
-# Research notes (working docs, not part of platform)
-*research*.md
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Data directory
-/data/
+# Data directory (generated runtime files)
+data/*.db
+data/clips/
+data/tmp/
+data/eval_reports/
+data/eval_fixtures/
+
+# Worktrees (stale git worktrees)
 .worktrees/

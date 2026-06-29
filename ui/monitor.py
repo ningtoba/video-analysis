@@ -14,17 +14,13 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
-import time
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import gradio as gr
 
 from video_analysis.config import Config
-from video_analysis.job_queue import get_default_manager, JobStatus
+from video_analysis.job_queue import get_default_manager
 from video_analysis.evaluation import EvaluationRunner
 from video_analysis import metrics as va_metrics
 
@@ -219,8 +215,7 @@ def _build_job_queue_html(cfg: Config) -> str:
 def _build_metrics_snapshot_html(cfg: Config) -> str:
     """Build full metrics snapshot HTML for the dashboard."""
     metrics = _collect_system_metrics()
-    html = MONITOR_DARK_CSS
-    html += "<h3 style='margin-top:0'>System Metrics</h3>"
+    html = "<h3 style='margin-top:0'>System Metrics</h3>"
     html += _build_system_metrics_html(metrics)
     html += "<h3>Job Queue</h3>"
     html += _build_job_queue_html(cfg)
@@ -309,3 +304,6 @@ def inject_monitor_tab(
             inputs=[gr.State(cfg), eval_task_input],
             outputs=[eval_output],
         )
+
+        # Inject CSS (separate from content to avoid rendering as visible text)
+        gr.HTML(f"<style>{MONITOR_DARK_CSS}</style>", visible=True)

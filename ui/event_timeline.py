@@ -14,9 +14,8 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import gradio as gr
 
@@ -212,7 +211,7 @@ def inject_event_timeline_tab(app: gr.Blocks, config: Config) -> None:
         with gr.Row():
             with gr.Column(scale=1):
                 gr.Markdown("### 🔗 Causal / Temporal Chains")
-                causal_html = gr.HTML(_initial_causal_html(config, _kg))
+                causal_html = gr.HTML(_initial_causal_html(_kg))
             with gr.Column(scale=1):
                 gr.Markdown("### 💭 Streaming Thinking")
                 thinking_html = gr.HTML(_streaming_thoughts_html())
@@ -337,29 +336,23 @@ def _initial_events_html(
         videos = rag.list_videos()
         if videos:
             return _build_events_view(videos[0], config, rag, kg)[0]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to load initial events: %s", exc)
     return (
         '<div class="evt-card"><div class="label">Event Timeline</div>'
         '<p style="color:var(--text-muted)">No videos indexed yet.</p></div>'
     )
 
 
-def _initial_causal_html(config: Config, kg) -> str:
+def _initial_causal_html(kg) -> str:
     """Get initial causal relations HTML."""
     if kg is None:
         return _causal_relations_html([], {})
     try:
         rels = kg.get_causal_relations(limit=50)
-        events = {}
-        for r in rels:
-            for eid in [r.get("source_event_id", ""), r.get("target_event_id", "")]:
-                if eid and eid not in events:
-                    ev_rows = kg.get_events_for_video("")  # not needed — use raw events
-                    # Get events from all videos
-                    break
         return _causal_relations_html(rels, {})
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to load initial causal relations: %s", exc)
         return _causal_relations_html([], {})
 
 

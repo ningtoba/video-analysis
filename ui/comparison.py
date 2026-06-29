@@ -20,13 +20,12 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List
 
 import gradio as gr
 
 from video_analysis.config import Config
-from video_analysis.evaluation import EvalReportStore, EvaluationRunner
+from video_analysis.evaluation import EvalReportStore
 
 logger = logging.getLogger(__name__)
 
@@ -266,16 +265,14 @@ def _run_compare(config: Config, report_ids_text: str) -> str:
 
 
 def _delete_old_reports(config: Config) -> str:
-    """Delete all evaluation reports from disk."""
+    """Delete all evaluation reports from disk and return refreshed list."""
     store = _load_report_store(config)
-    count = 0
     for f in store.reports_dir.glob("report_*.json"):
         try:
             f.unlink()
-            count += 1
         except OSError:
             pass
-    return f"Deleted {count} evaluation report(s)."
+    return _refresh_report_list(config)
 
 
 def inject_comparison_tab(

@@ -6,8 +6,6 @@ testable in environments without the full UI stack.
 """
 
 import re
-from pathlib import Path
-from typing import List, Optional
 
 
 def parse_yt_url(url: str) -> bool:
@@ -53,9 +51,3 @@ def queue_html(items: list) -> str:
         html += f'<div class="queue-item"><span class="q-status {status}">{emoji}</span><span>{name}</span></div>'
     html += "</div>"
     return html
-
-
-def is_video_file(path: str) -> bool:
-    """Check if a file path has a video extension."""
-    video_exts = {".mp4", ".webm", ".mov", ".avi", ".mkv", ".flv", ".wmv"}
-    return Path(path).suffix.lower() in video_exts

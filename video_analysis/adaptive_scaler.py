@@ -14,16 +14,30 @@ Scaling policies:
 
 from __future__ import annotations
 
-import gc
 import logging
-import math
-import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Video-aware policy thresholds
+_VRAM_CRITICAL_RATIO: float = 0.95
+_VRAM_WARNING_RATIO: float = 0.85
+_VRAM_STAGE_PRUNE_RATIO: float = 0.9
+_LONG_VIDEO_DURATION_S: float = 1800.0
+_SHORT_VIDEO_DURATION_S: float = 60.0
+_SHORT_VIDEO_HIGH_RES_MP: float = 2.0
+
+# Defaults
+_DEFAULT_SCENE_THRESHOLD: float = 0.3
+_LONG_VIDEO_DINO_THRESHOLD: float = 0.95
+_LONG_VIDEO_JPEG_QUALITY: int = 75
+_SHORT_VIDEO_MAX_FRAME_SIZE: int = 1280
+
+# Probe
+_FFPROBE_TIMEOUT_S: int = 30
 
 # ── Scaling profiles ──────────────────────────────────────────────────────────
 
@@ -195,7 +209,7 @@ def get_video_properties(video_path: Path) -> Dict[str, float]:
             ],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=_FFPROBE_TIMEOUT_S,
         )
         if result.returncode != 0:
             logger.warning("ffprobe failed: %s", result.stderr.strip())
@@ -385,13 +399,13 @@ class AdaptivePipelineScaler:
         # Estimate VRAM at this policy
         estimated_vram = estimate_vram_usage(enabled_stages, policy)
         if free_vram > 0:
-            vram_ratio = estimated_vram / free_vram if free_vram > 0 else 99
+            vram_ratio = estimated_vram / free_vram if free_vram > 0 else float("inf")
             reasoning.append(
                 f"Estimated VRAM: {estimated_vram:.1f} GB / {free_vram:.1f} GB free "
                 f"({vram_ratio:.0%})"
             )
             # Auto-downgrade if VRAM pressure is high
-            if vram_ratio > 0.95:
+            if vram_ratio > _VRAM_CRITICAL_RATIO:
                 old_policy = policy
                 policy = "conservative"
                 reasoning.append(
@@ -399,7 +413,7 @@ class AdaptivePipelineScaler:
                     f"from '{old_policy}' to '{policy}'"
                 )
                 estimated_vram = estimate_vram_usage(enabled_stages, policy)
-            elif vram_ratio > 0.85 and policy == "performance":
+            elif vram_ratio > _VRAM_WARNING_RATIO and policy == "performance":
                 old_policy = policy
                 policy = "balanced"
                 reasoning.append(
@@ -417,7 +431,7 @@ class AdaptivePipelineScaler:
         # Build the result
         result = ScalingResult(
             frame_rate=effective_fps,
-            scene_threshold=0.3,  # unchanged by default
+            scene_threshold=_DEFAULT_SCENE_THRESHOLD,
             frame_analysis_size=FRAME_SIZE_TIERS.get(policy, 960),
             frame_thumbnail_size=THUMBNAIL_SIZE_TIERS.get(policy, 320),
             frame_storage_mode="tiered",
@@ -437,7 +451,7 @@ class AdaptivePipelineScaler:
         )
 
         # Decision: disable expensive stages when VRAM is critically tight
-        if free_vram > 0 and estimated_vram > free_vram * 0.9:
+        if free_vram > 0 and estimated_vram > free_vram * _VRAM_STAGE_PRUNE_RATIO:
             # Stage-level pruning — disable the most expensive optional stages
             if enabled_stages.get("xclip", False):
                 result.action_recognition_enabled = False
@@ -452,30 +466,32 @@ class AdaptivePipelineScaler:
                 reasoning.append("Disabling face recognition due to VRAM pressure")
 
         # For very long videos, never enable optional heavy stages
-        if duration > 1800:  # > 30 minutes
+        if duration > _LONG_VIDEO_DURATION_S:
             if enabled_stages.get("xclip", False):
                 result.action_recognition_enabled = False
                 reasoning.append(
                     "Disabling action recognition for long video "
-                    f"({duration:.0f}s > 1800s)"
+                    f"({duration:.0f}s > {_LONG_VIDEO_DURATION_S:.0f}s)"
                 )
             if enabled_stages.get("video_mllm", False):
                 result.video_mllm_as_describer = False
                 reasoning.append(
                     "Disabling MLLM describer for long video "
-                    f"({duration:.0f}s > 1800s)"
+                    f"({duration:.0f}s > {_LONG_VIDEO_DURATION_S:.0f}s)"
                 )
-            if free_vram > 0 or True:  # Always compress aggressively for long videos
-                result.dino_frame_compression_threshold = 0.95
-                result.frame_compression_quality = 75
-                reasoning.append(
-                    "Aggressive compression for long video: "
-                    "DINO threshold=0.95, JPEG quality=75"
-                )
+            result.dino_frame_compression_threshold = _LONG_VIDEO_DINO_THRESHOLD
+            result.frame_compression_quality = _LONG_VIDEO_JPEG_QUALITY
+            reasoning.append(
+                "Aggressive compression for long video: "
+                "DINO threshold=0.95, JPEG quality=75"
+            )
 
         # For short high-resolution videos, boost quality
-        if duration <= 60 and resolution_mp >= 2.0:
-            result.frame_analysis_size = max(result.frame_analysis_size or 960, 1280)
+        if duration <= _SHORT_VIDEO_DURATION_S and resolution_mp >= _SHORT_VIDEO_HIGH_RES_MP:
+            result.frame_analysis_size = max(
+                result.frame_analysis_size or FRAME_SIZE_TIERS["balanced"],
+                _SHORT_VIDEO_MAX_FRAME_SIZE,
+            )
             reasoning.append(
                 "Short high-resolution video: boosting frame analysis size to 1280"
             )

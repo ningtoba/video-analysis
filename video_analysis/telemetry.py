@@ -41,7 +41,6 @@ from contextlib import asynccontextmanager, contextmanager
 from functools import wraps
 from typing import (
     Any,
-    AsyncGenerator,
     AsyncIterator,
     Callable,
     Dict,
@@ -49,11 +48,12 @@ from typing import (
     Mapping,
     Optional,
     TypeVar,
-    Union,
     cast,
 )
 
 logger = logging.getLogger(__name__)
+
+_TRACE_ID_FORMAT: str = "032x"
 
 # ── Module-level state ──────────────────────────────────────────────────
 
@@ -486,16 +486,15 @@ async def pipeline_span(
             ctx.set_status_ok()
     """
     ctx = TelemetryContext(stage, **(attributes or {}))
+    await ctx.__aenter__()
     try:
-        await ctx.__aenter__()
         yield ctx
-    except Exception as exc:
+        ctx.set_status_ok()
+    except BaseException as exc:
         ctx.set_status_error(str(exc))
         raise
-    else:
-        ctx.set_status_ok()
     finally:
-        await ctx.__aexit__(None, None, None)
+        ctx._span.end()
 
 
 # ── Parent span from HTTP headers (W3C TraceContext) ────────────────────
@@ -621,7 +620,7 @@ def get_trace_id() -> str:
         span_context = current_span.get_span_context()
         if span_context and span_context.trace_id != 0:
             # Format as 32-char zero-padded hex
-            return format(span_context.trace_id, "032x")
+            return format(span_context.trace_id, _TRACE_ID_FORMAT)
     except (ImportError, RuntimeError, AttributeError):
         pass
 

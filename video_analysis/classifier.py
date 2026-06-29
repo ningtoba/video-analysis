@@ -181,21 +181,6 @@ def classify_by_extension(filepath: Path) -> MediaType:
     return MediaType.UNKNOWN
 
 
-def _extension_hints(filepath: Path) -> Dict:
-    """Return a dict of extension-based heuristics for downstream use."""
-    ext = filepath.suffix.lower()
-    return {
-        "is_common_video": ext in VIDEO_EXTENSIONS,
-        "is_common_audio": ext in AUDIO_EXTENSIONS,
-        "is_container_mp4": ext == ".mp4",
-        "is_container_mkv": ext == ".mkv",
-        "is_container_avi": ext == ".avi",
-        "is_container_mov": ext == ".mov",
-        "is_container_webm": ext == ".webm",
-        "is_lossless_audio": ext in {".wav", ".flac", ".alac", ".aiff"},
-    }
-
-
 # ============================================================================
 # 4.  Content sniffing via ffprobe (second layer, <100 ms)
 # ============================================================================
@@ -1009,7 +994,7 @@ def get_active_stages(
 
     Returns:
         A set of stage names that should be **skipped** (matching the existing
-        ``_get_active_stages()`` interface in ``VideoPipeline``).
+        ``_get_skipped_stages()`` interface in ``VideoPipeline``).
     """
     if stage_map is None:
         stage_map = DEFAULT_STAGE_MAP
@@ -1143,7 +1128,7 @@ def _classify_first_frame(filepath: Path, classifier: Dict) -> Dict:
 
 
 # ============================================================================
-# 9.  Integration helper: wrap existing _get_active_stages interface
+# 9.  Integration helper: wrap existing _get_skipped_stages interface
 # ============================================================================
 
 
@@ -1155,7 +1140,7 @@ def pipeline_skipped_stages(
 ) -> Set[str]:
     """Compute pipeline skipped stages using auto-detection or explicit mode.
 
-    This is the main integration point for ``VideoPipeline._get_active_stages()``.
+    This is the main integration point for ``VideoPipeline._get_skipped_stages()``.
 
     Args:
         filepath: Path to the input file.
@@ -1167,7 +1152,7 @@ def pipeline_skipped_stages(
 
     Returns:
         Set of stage names to **skip** (same interface as
-        ``VideoPipeline._get_active_stages()``).
+        ``VideoPipeline._get_skipped_stages()``).
     """
     if processing_mode == "video_full":
         return set()  # Run everything

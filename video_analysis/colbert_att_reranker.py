@@ -33,7 +33,6 @@ Usage:
 """
 
 import logging
-import math
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -56,14 +55,10 @@ class ColBERTAttReranker:
         model_name: str = "colbert-ir/colbertv2.0",
         device: str = "cuda",
         use_fp16: bool = True,
-        query_attention_scale: float = 1.0,
-        doc_attention_scale: float = 0.5,
     ):
         self.model_name = model_name
         self.device = device
         self.use_fp16 = use_fp16
-        self.query_attention_scale = query_attention_scale
-        self.doc_attention_scale = doc_attention_scale
         self._model = None
         self._tokenizer = None
         self._available = None

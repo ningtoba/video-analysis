@@ -29,6 +29,9 @@ dependencies = [
     "structlog>=26.0.0",
     "mcp>=1.28.0",
     "prometheus-client>=0.25.0",
+    "numpy>=2.5.0",
+    "yt-dlp>=2026.6.0",
+    "scenedetect>=0.7.0",
 ]
 
 [project.scripts]

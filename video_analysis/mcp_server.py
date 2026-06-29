@@ -38,12 +38,20 @@ from mcp.server.fastmcp import FastMCP
 
 from video_analysis.config import Config
 from video_analysis.pipeline import VideoPipeline
-from video_analysis.streaming import StreamingPipeline, StreamingChunkResult
+from video_analysis.streaming import StreamingPipeline
 from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
 from video_analysis.federation import FederatedSearch
 
 logger = logging.getLogger(__name__)
+
+# Display truncation limits
+_MAX_SEARCH_TOP_K: int = 20
+_SEARCH_TEXT_PREVIEW: int = 180
+_SOURCE_TEXT_PREVIEW: int = 120
+_SCENE_METADATA_LIMIT: int = 500
+_SCENE_TEXT_PREVIEW: int = 150
+_FEDERATED_TEXT_PREVIEW: int = 300
 
 # ── Globals (lazy-initialized per tool call) ──────────────────────────
 
@@ -150,14 +158,14 @@ async def search_videos(query: str, top_k: int = 5) -> str:
     """
     _, rag, _ = _ensure_services()
 
-    results = rag.search_all(query, top_k=min(top_k, 20))
+    results = rag.search_all(query, top_k=min(top_k, _MAX_SEARCH_TOP_K))
 
     if not results:
         return "No results found."
 
     lines = [f"Found {len(results)} results for: {query}\n"]
     for r in results:
-        lines.append(f"  [{r.video_id} @ {r.timestamp:.1f}s] {r.text[:180]}")
+        lines.append(f"  [{r.video_id} @ {r.timestamp:.1f}s] {r.text[:_SEARCH_TEXT_PREVIEW]}")
     return "\n".join(lines)
 
 
@@ -182,7 +190,8 @@ async def ask_question(question: str, video_id: Optional[str] = None) -> str:
         parts.append(f"\nSources ({len(response.sources)}):")
         for s in response.sources[:5]:
             parts.append(
-                f"  [{format_timestamp(s.timestamp)}] " f"[{s.video_id}] {s.text[:120]}"
+                f"  [{format_timestamp(s.timestamp)}] "
+                f"[{s.video_id}] {s.text[:_SOURCE_TEXT_PREVIEW]}"
             )
 
     return "\n".join(parts)
@@ -202,7 +211,7 @@ async def extract_scenes(video_id: str) -> str:
     try:
         results = rag.collection.get(
             where={"video_id": video_id},
-            limit=500,
+            limit=_SCENE_METADATA_LIMIT,
         )
     except Exception:
         return f"No scenes found for video_id: {video_id}"
@@ -213,7 +222,7 @@ async def extract_scenes(video_id: str) -> str:
     lines = [f"Scenes for {video_id}:\n"]
     for i, md in enumerate(results["metadatas"]):
         ts = md.get("timestamp", 0)
-        text = (md.get("text", "") or "")[:150]
+        text = (md.get("text", "") or "")[:_SCENE_TEXT_PREVIEW]
         chunk_type = md.get("chunk_type", "scene")
         lines.append(f"  [{i}] @ {ts:.1f}s [{chunk_type}] {text}")
 
@@ -497,7 +506,7 @@ async def federated_search(
                 {
                     "chunk_id": c.chunk_id,
                     "video_id": c.video_id,
-                    "text": c.text[:300],
+                    "text": c.text[:_FEDERATED_TEXT_PREVIEW],
                     "timestamp": round(c.timestamp, 1),
                     "scene_id": c.scene_id,
                     "score": round(c.score, 4),

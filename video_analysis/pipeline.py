@@ -11,10 +11,7 @@ import math
 import subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import cv2
-import numpy as np
 from PIL import Image
 
 from video_analysis.config import Config
@@ -58,6 +55,20 @@ DEFAULT_CLIP_LABELS = [
     "night scene",
     "underwater",
 ]
+
+# --- Timeout constants (seconds) for subprocess calls ---
+FFPROBE_TIMEOUT = 30
+FFMPEG_AUDIO_EXTRACT_TIMEOUT = 300
+FFMPEG_SCENE_DETECT_TIMEOUT = 300
+FFMPEG_FRAME_EXTRACT_TIMEOUT = 60
+FFMPEG_CLIP_EXPORT_TIMEOUT = 300
+FFMPEG_SPRITE_FRAME_TIMEOUT = 60
+
+# --- Sprite sheet layout constants ---
+SPRITE_COLUMNS = 10
+SPRITE_THUMB_WIDTH = 160
+SPRITE_THUMB_HEIGHT = 90
+SPRITE_JPEG_QUALITY = 85
 
 
 class VideoPipeline:
@@ -142,6 +153,14 @@ class VideoPipeline:
             except Exception:
                 pass
             self._video_mllm = None
+        if hasattr(self, "_face_recognizer") and self._face_recognizer is not None:
+            try:
+                self._face_recognizer.unload()
+            except Exception:
+                pass
+            self._face_recognizer = None
+        if hasattr(self, "_diarization_pipeline") and self._diarization_pipeline is not None:
+            self._diarization_pipeline = None
         import torch
 
         torch.cuda.empty_cache()
@@ -150,7 +169,7 @@ class VideoPipeline:
         gc.collect()
         logger.info("Pipeline GPU models cleaned up")
 
-    def _get_active_stages(self) -> set:
+    def _get_skipped_stages(self) -> set:
         """Return the set of stage names that should be SKIPPED based on processing_mode.
 
         Modes:
@@ -231,11 +250,11 @@ class VideoPipeline:
         video_id = video_path.stem
         logger.info(f"Processing video: {video_path.name}")
 
-        # Set the current video path for auto-classification in _get_active_stages()
+        # Set the current video path for auto-classification in _get_skipped_stages()
         self._current_video_path = video_path
 
         # Determine which stages to skip based on processing_mode
-        skipped_stages = self._get_active_stages()
+        skipped_stages = self._get_skipped_stages()
         logger.info(
             f"Processing mode: {self.config.processing_mode} "
             f"(skipped stages: {skipped_stages if skipped_stages else 'none'})"
@@ -279,7 +298,7 @@ class VideoPipeline:
                         old_val = getattr(self.config, key)
                         setattr(self.config, key, value)
                         logger.info(
-                            "Adaptive scaling: %s %.4s -> %.4s",
+                            "Adaptive scaling: %s %s -> %s",
                             key,
                             str(old_val),
                             str(value),
@@ -348,7 +367,7 @@ class VideoPipeline:
         # Step 6: Speaker diarization (PyAnnote — CPU)
         if self.config.diarize_enabled:
             transcript_segments = self._diarize(
-                audio_path, transcript_segments, video_id
+                audio_path, transcript_segments
             )
             diarized_count = sum(
                 1 for s in transcript_segments if s.speaker is not None
@@ -503,7 +522,7 @@ class VideoPipeline:
                 ],
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=FFPROBE_TIMEOUT,
             )
             data = json.loads(result.stdout)
             return float(data["format"]["duration"])
@@ -532,7 +551,7 @@ class VideoPipeline:
                 str(audio_path),
             ],
             capture_output=True,
-            timeout=300,
+            timeout=FFMPEG_AUDIO_EXTRACT_TIMEOUT,
             check=True,
         )
         return audio_path
@@ -657,7 +676,7 @@ class VideoPipeline:
                 ],
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=FFMPEG_SCENE_DETECT_TIMEOUT,
             )
             timestamps = [0.0]
             for line in result.stderr.split("\n"):
@@ -719,15 +738,13 @@ class VideoPipeline:
                         str(frame_path),
                     ],
                     capture_output=True,
-                    timeout=60,
+                    timeout=FFMPEG_FRAME_EXTRACT_TIMEOUT,
                     check=True,
                 )
 
             # Apply tiered storage: re-save as analysis/thumbnail variants
             if self.config.frame_storage_mode == "tiered":
                 try:
-                    from PIL import Image
-
                     img = Image.open(frame_path).convert("RGB")
                     analysis_path, full_path, thumb_path = save_frame_tiered(
                         img, scene_dir, frame_name, self.config
@@ -837,8 +854,6 @@ class VideoPipeline:
                 "ViT-B-32", pretrained="laion2b_s34b_b79k", device=device
             )
             model.eval()
-
-            from PIL import Image
 
             embeddings = []
             valid_indices = []
@@ -1279,8 +1294,6 @@ class VideoPipeline:
 
                 # Load and preprocess images
                 try:
-                    from PIL import Image
-
                     images = []
                     valid_indices = []
                     for idx, frame in enumerate(batch):
@@ -1504,10 +1517,10 @@ class VideoPipeline:
         if duration <= 0 or num_thumbnails < 1:
             return None, None
 
-        cols = 10
+        cols = SPRITE_COLUMNS
         rows = math.ceil(num_thumbnails / cols)
-        thumb_w = 160
-        thumb_h = 90
+        thumb_w = SPRITE_THUMB_WIDTH
+        thumb_h = SPRITE_THUMB_HEIGHT
         total = rows * cols  # actual number of thumbnails in the grid
 
         sprite_path = self.config.thumbnails_dir / f"{video_id}_sprite.jpg"
@@ -1553,7 +1566,7 @@ class VideoPipeline:
                         str(frame_file),
                     ],
                     capture_output=True,
-                    timeout=60,
+                    timeout=FFMPEG_SPRITE_FRAME_TIMEOUT,
                 )
                 # FFmpeg may return non-zero (e.g., 234) for end-of-stream
                 # or when seeking past the last keyframe; that's okay —
@@ -1591,7 +1604,7 @@ class VideoPipeline:
                 except Exception:
                     pass
 
-            sprite_img.save(sprite_path, "JPEG", quality=85)
+            sprite_img.save(sprite_path, "JPEG", quality=SPRITE_JPEG_QUALITY)
             logger.info(
                 f"Sprite sheet saved: {sprite_path} "
                 f"({sprite_img.size[0]}x{sprite_img.size[1]}, "
@@ -1675,7 +1688,6 @@ class VideoPipeline:
         self,
         audio_path: Path,
         transcript_segments: List[TranscriptSegment],
-        video_id: str,
     ) -> List[TranscriptSegment]:
         """
         Run speaker diarization using PyAnnote Audio.
@@ -1689,7 +1701,6 @@ class VideoPipeline:
         Args:
             audio_path: Path to the extracted audio WAV file.
             transcript_segments: List of TranscriptSegment from transcription.
-            video_id: Unused, kept for future caching.
 
         Returns:
             List of TranscriptSegment with speaker labels populated.
@@ -1772,32 +1783,6 @@ class VideoPipeline:
             logger.warning(f"Diarization failed: {e}")
 
         return transcript_segments
-
-    def cleanup(self):
-        """Release GPU memory from all loaded models."""
-        if self._whisper_model is not None:
-            del self._whisper_model
-            self._whisper_model = None
-        if self._yolo_model is not None:
-            del self._yolo_model
-            self._yolo_model = None
-        if self._clip_model is not None:
-            del self._clip_model
-            self._clip_model = None
-            self._clip_preprocess = None
-            self._clip_tokenizer = None
-        if self._action_recognizer is not None:
-            try:
-                self._action_recognizer.unload()
-            except Exception:
-                pass
-            self._action_recognizer = None
-        import torch
-
-        torch.cuda.empty_cache()
-        import gc
-
-        gc.collect()
 
     @staticmethod
     def download_from_url(
@@ -1921,7 +1906,7 @@ class VideoPipeline:
                 str(output_path),
             ],
             capture_output=True,
-            timeout=300,
+            timeout=FFMPEG_CLIP_EXPORT_TIMEOUT,
             check=True,
         )
 

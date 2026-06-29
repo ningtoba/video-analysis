@@ -184,68 +184,6 @@ def _video_summary(index: VideoIndex) -> str:
     return f"{scenes} scenes, {objs} objects, {descs} described frames, {dur:.0f}s"
 
 
-def _library_card_html(
-    vid: str, rag: VideoRAG, pipeline: VideoPipeline, config: Config
-) -> str:
-    """Render a single library card with rich metadata."""
-    video_path = config.video_dir / f"{vid}.mp4"
-    dur = 0
-    scenes = 0
-    objs = 0
-    info_str = ""
-    file_exists = video_path.exists()
-
-    # Try to get duration from file
-    if file_exists:
-        dur = pipeline._get_duration(video_path)
-
-    # Try to get stats from RAG index metadata
-    try:
-        all_meta = rag.collection.get(
-            where={"video_id": vid},
-            include=["metadatas"],
-        )
-        scene_ids = set()
-        obj_count = 0
-        for meta in all_meta.get("metadatas", []):
-            sid = meta.get("scene_id", -1)
-            if sid >= 0:
-                scene_ids.add(sid)
-        scenes = len(scene_ids)
-        # Estimate objects from metadata keywords
-        obj_count = len(all_meta.get("metadatas", []))
-        objs = obj_count
-    except Exception:
-        pass
-
-    # Build info string
-    parts = []
-    if dur > 0:
-        parts.append(f"⏱ {dur:.0f}s")
-    if scenes > 0:
-        parts.append(f"🎬 {scenes} scenes")
-    if objs > 0:
-        parts.append(f"📦 ~{objs} chunks")
-
-    if parts:
-        info_str = (
-            '<div class="badge-stats">'
-            + "".join(f'<span class="stat">{p}</span>' for p in parts)
-            + "</div>"
-        )
-
-    delete_id = vid
-    html = (
-        f'<div class="library-card" data-video-id="{vid}">'
-        f'<div class="title">{vid}</div>'
-        f'<div class="meta">ID: {vid}</div>'
-        f"{info_str}"
-        f'<button class="delete-btn" onclick="event.stopPropagation(); window.__deleteVideo(\'{delete_id}\')">🗑 Delete</button>'
-        f"</div>"
-    )
-    return html
-
-
 def _library_html(
     video_ids: List[str],
     rag: VideoRAG,
@@ -354,11 +292,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                         video_player = gr.Video(
                             label="Video Player", visible=False, height=400
-                        )
-
-                        # Timeline hover preview — JavaScript injected as HTML
-                        timeline_preview_js = gr.HTML(
-                            """<div id="timeline-hover-root"></div>""", visible=True
                         )
 
                         # Sprite sheet + clip export
@@ -552,20 +485,32 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
         # ==================== EVENT HANDLERS ====================
 
+        # --- Shared helpers ---
+        def _persist_events_to_kg(video_id: str):
+            """Persist indexed events to KnowledgeGraph if event-causal RAG is enabled."""
+            if not config.event_causal_rag_enabled:
+                return
+            try:
+                from video_analysis.knowledge_graph import KnowledgeGraph
+
+                kg = KnowledgeGraph(config)
+                kg.persist_events_from_rag(rag, video_id)
+                kg.close()
+            except Exception as kg_exc:
+                logger.warning(
+                    "KG event persistence failed: %s - continuing", kg_exc
+                )
+
         # --- Process Video ---
         def do_process(video_path: str, state_vid: str):
             if not video_path or busy.value:
                 return (
-                    state_vid,
-                    state_vid,
-                    None,
+                    gr.update(),
+                    gr.update(),
                     gr.update(visible=False),
-                    None,
-                    None,
-                    gr.update(visible=False),
-                    status,
-                    progress_html,
-                    gr.update(visible=False),
+                    gr.update(value=None),
+                    gr.update(),
+                    gr.update(),
                     gr.update(visible=False),
                 )
 
@@ -578,12 +523,8 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     status,
                     True,
                     None,
-                    None,
-                    None,
-                    gr.update(visible=False),
-                    vid,
-                    vpath,
-                    gr.update(visible=False),
+                    state_vid,
+                    state_vid,
                     gr.update(visible=False),
                 )
 
@@ -598,12 +539,8 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     status,
                     True,
                     None,
-                    None,
-                    None,
-                    gr.update(visible=False),
-                    vid,
-                    vpath,
-                    gr.update(visible=False),
+                    state_vid,
+                    state_vid,
                     gr.update(visible=False),
                 )
 
@@ -615,30 +552,15 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     status,
                     True,
                     None,
-                    None,
-                    None,
-                    gr.update(visible=False),
-                    vid,
-                    vpath,
-                    gr.update(visible=False),
+                    state_vid,
+                    state_vid,
                     gr.update(visible=False),
                 )
 
                 rag.index_video(index)
                 chat_session.reset_history()
 
-                # Persist events to KnowledgeGraph (v0.58.0)
-                try:
-                    if config.event_causal_rag_enabled:
-                        from video_analysis.knowledge_graph import KnowledgeGraph
-
-                        kg = KnowledgeGraph(config)
-                        kg.persist_events_from_rag(rag, index.video_id)
-                        kg.close()
-                except Exception as kg_exc:
-                    logger.warning(
-                        "KG event persistence failed: %s - continuing", kg_exc
-                    )
+                _persist_events_to_kg(index.video_id)
 
                 status.value = (
                     '<span class="badge ready">● Ready - ask questions</span>'
@@ -653,10 +575,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     video_path_str,
                     pid,
                     video_path_str,
-                    gr.update(visible=True),
-                    pid,
-                    video_path_str,
-                    gr.update(visible=True),
                     gr.update(visible=True),
                 )
 
@@ -673,10 +591,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     state_vid,
                     state_vid,
                     gr.update(visible=False),
-                    state_vid,
-                    state_vid,
-                    gr.update(visible=False),
-                    gr.update(visible=False),
                 )
             finally:
                 busy.value = False
@@ -685,16 +599,12 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
         def do_import_url(url: str, state_vid: str):
             if not url or busy.value:
                 return (
-                    state_vid,
-                    state_vid,
-                    None,
+                    gr.update(),
+                    gr.update(),
                     gr.update(visible=False),
-                    None,
-                    None,
-                    gr.update(visible=False),
-                    status,
-                    progress_html,
-                    gr.update(visible=False),
+                    gr.update(value=None),
+                    gr.update(),
+                    gr.update(),
                     gr.update(visible=False),
                 )
 
@@ -703,16 +613,12 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     '<span class="badge error">● Unsupported URL format</span>'
                 )
                 return (
-                    state_vid,
-                    state_vid,
-                    None,
-                    gr.update(visible=False),
-                    None,
-                    None,
-                    gr.update(visible=False),
+                    gr.update(),
                     status,
                     gr.update(visible=False),
-                    gr.update(visible=False),
+                    gr.update(value=None),
+                    gr.update(),
+                    gr.update(),
                     gr.update(visible=False),
                 )
 
@@ -725,12 +631,8 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     status,
                     True,
                     None,
-                    None,
-                    None,
-                    gr.update(visible=False),
-                    vid,
-                    vpath,
-                    gr.update(visible=False),
+                    state_vid,
+                    state_vid,
                     gr.update(visible=False),
                 )
 
@@ -745,10 +647,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                         state_vid,
                         state_vid,
                         gr.update(visible=False),
-                        state_vid,
-                        state_vid,
-                        gr.update(visible=False),
-                        gr.update(visible=False),
                     )
                     return
 
@@ -759,12 +657,8 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     status,
                     True,
                     None,
-                    None,
-                    None,
-                    gr.update(visible=False),
-                    vid,
-                    vpath,
-                    gr.update(visible=False),
+                    state_vid,
+                    state_vid,
                     gr.update(visible=False),
                 )
 
@@ -775,30 +669,15 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     status,
                     True,
                     None,
-                    None,
-                    None,
-                    gr.update(visible=False),
-                    vid,
-                    vpath,
-                    gr.update(visible=False),
+                    state_vid,
+                    state_vid,
                     gr.update(visible=False),
                 )
 
                 rag.index_video(index)
                 chat_session.reset_history()
 
-                # Persist events to KnowledgeGraph (v0.58.0)
-                try:
-                    if config.event_causal_rag_enabled:
-                        from video_analysis.knowledge_graph import KnowledgeGraph
-
-                        kg = KnowledgeGraph(config)
-                        kg.persist_events_from_rag(rag, index.video_id)
-                        kg.close()
-                except Exception as kg_exc:
-                    logger.warning(
-                        "KG event persistence failed: %s - continuing", kg_exc
-                    )
+                _persist_events_to_kg(index.video_id)
 
                 status.value = (
                     '<span class="badge ready">● Ready - ask questions</span>'
@@ -814,10 +693,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     index.video_id,
                     str(downloaded),
                     gr.update(visible=True),
-                    index.video_id,
-                    str(downloaded),
-                    gr.update(visible=True),
-                    gr.update(visible=True),
                 )
 
             except Exception as e:
@@ -832,10 +707,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     None,
                     state_vid,
                     state_vid,
-                    gr.update(visible=False),
-                    state_vid,
-                    state_vid,
-                    gr.update(visible=False),
                     gr.update(visible=False),
                 )
             finally:
@@ -923,18 +794,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
                 rag.index_video(index)
 
-                # Persist events to KnowledgeGraph (v0.58.0)
-                try:
-                    if config.event_causal_rag_enabled:
-                        from video_analysis.knowledge_graph import KnowledgeGraph
-
-                        kg = KnowledgeGraph(config)
-                        kg.persist_events_from_rag(rag, index.video_id)
-                        kg.close()
-                except Exception as kg_exc:
-                    logger.warning(
-                        "KG event persistence failed: %s - continuing", kg_exc
-                    )
+                _persist_events_to_kg(index.video_id)
 
                 status.value = (
                     '<span class="badge ready">● Ready - ask questions</span>'
@@ -1250,7 +1110,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
             )
 
         # Wire events
-        evt = process_btn.click(
+        process_btn.click(
             fn=do_process,
             inputs=[video_input, vid],
             outputs=[
@@ -1260,10 +1120,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 video_player,
                 vid,
                 vpath,
-                export_group,
-                vid,
-                vpath,
-                progress_panel,
                 export_group,
             ],
         )
@@ -1278,10 +1134,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 video_player,
                 vid,
                 vpath,
-                export_group,
-                vid,
-                vpath,
-                progress_panel,
                 export_group,
             ],
         )

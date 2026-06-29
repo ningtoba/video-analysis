@@ -41,7 +41,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
@@ -52,6 +51,13 @@ from video_analysis.streaming import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Truncation constants
+_TRANSCRIPT_EXCERPT_MAX = 500
+_TRANSCRIPT_EXCERPT_EDGE = 250
+_THOUGHT_SUMMARY_MAX_LEN = 80
+_ACCUMULATED_SUMMARY_MAX = 2000
+_LLM_CONTEXT_MAX_LEN = 1500
 
 
 # ---------------------------------------------------------------------------
@@ -309,9 +315,11 @@ class StreamingThinkingPipeline:
 
         # Build transcript summary
         transcript_excerpt = chunk.full_transcript
-        if len(transcript_excerpt) > 500:
+        if len(transcript_excerpt) > _TRANSCRIPT_EXCERPT_MAX:
             transcript_excerpt = (
-                transcript_excerpt[:250] + "...[...]..." + transcript_excerpt[-250:]
+                transcript_excerpt[:_TRANSCRIPT_EXCERPT_EDGE]
+                + "...[...]..."
+                + transcript_excerpt[-_TRANSCRIPT_EXCERPT_EDGE:]
             )
 
         # Scene summary
@@ -397,12 +405,12 @@ class StreamingThinkingPipeline:
             if text:
                 # Take first sentence or first 80 chars
                 first_sentence = text.split(".")[0]
-                if len(first_sentence) > 80:
-                    first_sentence = first_sentence[:80] + "..."
+                if len(first_sentence) > _THOUGHT_SUMMARY_MAX_LEN:
+                    first_sentence = first_sentence[:_THOUGHT_SUMMARY_MAX_LEN] + "..."
                 parts.append(f'"{first_sentence}"')
         if ts.causal_observations:
             # Use last causal observation
-            parts.append(ts.causal_observations[-1][:80])
+            parts.append(ts.causal_observations[-1][:_THOUGHT_SUMMARY_MAX_LEN])
         if not parts:
             parts.append(f"Chunk {chunk.chunk_index}: {len(chunk.scenes)} scenes")
         return "; ".join(parts)
@@ -489,11 +497,11 @@ class StreamingThinkingPipeline:
         new_text = chunk.full_transcript
         if current_summary:
             combined = current_summary + "\n" + new_text
-            if len(combined) > 2000:
-                # Keep last 2000 chars
-                combined = "..." + combined[-2000:]
+            if len(combined) > _ACCUMULATED_SUMMARY_MAX:
+                # Keep last _ACCUMULATED_SUMMARY_MAX chars
+                combined = "..." + combined[-_ACCUMULATED_SUMMARY_MAX:]
             return combined
-        return new_text[:2000]
+        return new_text[:_ACCUMULATED_SUMMARY_MAX]
 
     def _answer_with_llm(self, query: str) -> str:
         """Use LLM to answer a query from accumulated streaming context."""
@@ -506,7 +514,9 @@ class StreamingThinkingPipeline:
             f"Video duration seen: {ts.total_duration:.0f}s across {ts.chunks_seen} chunks.",
         ]
         if ts.summary:
-            context_parts.append(f"Transcript history: {ts.summary[-1500:]}")
+            context_parts.append(
+                f"Transcript history: {ts.summary[-_LLM_CONTEXT_MAX_LEN:]}"
+            )
         if ts.entities:
             context_parts.append(
                 f"Entities observed: {', '.join(f'{k} ({v}x)' for k, v in sorted(ts.entities.items(), key=lambda x: x[1], reverse=True)[:10])}"

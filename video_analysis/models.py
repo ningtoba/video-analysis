@@ -5,7 +5,6 @@ Data models for video analysis platform.
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 from datetime import timedelta
-import json
 
 
 @dataclass
@@ -90,6 +89,8 @@ class VideoIndex:
                             "ocr_text": f.ocr_text,
                             "action": f.action,
                             "action_confidence": f.action_confidence,
+                            "faces": f.faces,
+                            "metadata": f.metadata,
                         }
                         for f in s.key_frames
                     ],

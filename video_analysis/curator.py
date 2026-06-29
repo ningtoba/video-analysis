@@ -35,13 +35,12 @@ Usage:
 
 import json
 import logging
-import os
 import re
 import time
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from video_analysis.config import Config
 from video_analysis.models import format_timestamp
@@ -734,17 +733,6 @@ class VideoCurator:
                 ),
             )
             if frame_result and frame_result.success:
-                keywords = [
-                    "person",
-                    "people",
-                    "speaker",
-                    "object",
-                    "text",
-                    "location",
-                    "setting",
-                    "scene",
-                    "activity",
-                ]
                 for i, ts in enumerate(sample_points):
                     # Take segments from the frame result
                     obs_content = frame_result.data

@@ -25,7 +25,6 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-import struct
 from pathlib import Path
 from typing import Any, List, Optional
 

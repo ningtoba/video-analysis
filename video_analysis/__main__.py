@@ -100,8 +100,8 @@ def cli_mode(args):
 
             for s in response.sources[:3]:
                 print(f"  [{format_timestamp(s.timestamp)}] {s.text[:100]}...")
-    elif args.batch_file:
-        batch_process(args.batch_file, config, pipeline, rag)
+    elif args.batch:
+        batch_process(args.batch, config, pipeline, rag)
 
 
 def batch_process(

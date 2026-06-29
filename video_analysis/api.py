@@ -40,7 +40,7 @@ from video_analysis.config import Config
 from video_analysis.pipeline import VideoPipeline
 from video_analysis.rag import VideoRAG, RetrievedChunk, VideoLibraryInfo
 from video_analysis.chat import VideoChat
-from video_analysis.models import VideoIndex, ChatMessage, ChatSource, format_timestamp
+from video_analysis.models import VideoIndex, ChatMessage
 from video_analysis.chapters import ChapterGenerator, ChapteringResult
 from video_analysis.job_queue import (
     Job,
@@ -50,11 +50,25 @@ from video_analysis.job_queue import (
 )
 from video_analysis.evaluation import EvalReportStore
 
-# v0.53.0: KG and Health Monitor lazy singleton instances
+# Lazy singleton instances
 _kg_instance: Any = None
 _health_instance: Any = None
+_RAG: Optional[VideoRAG] = None
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_SSE_TOKEN_CHUNK_SIZE: int = 50
+_SSE_DEFAULT_TEMPERATURE: float = 0.3
+_FRAME_METADATA_SEARCH_LIMIT: int = 500
+_SEARCH_TEXT_PREVIEW_LENGTH: int = 500
+_TRANSCRIPT_SUMMARY_PREVIEW_LENGTH: int = 2000
+_TRANSCRIPT_DEDUP_PREFIX_LENGTH: int = 100
+_DEFAULT_MAX_CHAPTERS: int = 12
+_DEFAULT_MIN_CHAPTERS: int = 2
 
 
 def _get_kg(config: "Config") -> Any:
@@ -242,12 +256,6 @@ class DeleteResponse(BaseModel):
     video_id: str = Field(..., description="Video identifier")
     deleted: bool = Field(True, description="Whether deletion succeeded")
     message: str = Field("", description="Status message")
-
-
-class SSEErrorResponse(BaseModel):
-    """Error detail for SSE endpoints."""
-
-    error: str = Field(..., description="Error message")
 
 
 class VideoListResponse(BaseModel):
@@ -467,7 +475,7 @@ def _get_video_transcript_data(rag: VideoRAG, video_id: str) -> Dict[str, Any]:
         speaker = meta.get("speaker")
 
         # Deduplicate near-identical text (e.g. scene-level + window duplicates)
-        norm = text.strip()[:100]
+        norm = text.strip()[:_TRANSCRIPT_DEDUP_PREFIX_LENGTH]
         if norm not in seen_texts:
             seen_texts.add(norm)
             segments.append(
@@ -484,11 +492,6 @@ def _get_video_transcript_data(rag: VideoRAG, video_id: str) -> Dict[str, Any]:
         "segments": segments,
         "full_transcript": "\n".join(full_text_parts),
     }
-
-
-def _get_chapter_generator(config: Config) -> ChapterGenerator:
-    """Create a ChapterGenerator instance (lazy)."""
-    return ChapterGenerator(config=config)
 
 
 def _get_scene_info_from_index(rag: VideoRAG, video_id: str) -> List[Dict[str, Any]]:
@@ -590,7 +593,7 @@ async def _query_event_generator(
                 try:
                     for token in llm.stream(
                         prompt=prompt,
-                        temperature=0.3,
+                        temperature=_SSE_DEFAULT_TEMPERATURE,
                         max_tokens=config.llm_max_tokens,
                     ):
                         if token:
@@ -608,7 +611,7 @@ async def _query_event_generator(
                 )
                 if answer:
                     # Send answer in chunks of ~50 chars to simulate streaming
-                    chunk_size = 50
+                    chunk_size = _SSE_TOKEN_CHUNK_SIZE
                     for i in range(0, len(answer), chunk_size):
                         q.put_nowait(answer[i : i + chunk_size])
 
@@ -683,7 +686,7 @@ async def _chat_event_generator(
                     max_tokens=config.llm_max_tokens,
                 )
                 if answer:
-                    chunk_size = 50
+                    chunk_size = _SSE_TOKEN_CHUNK_SIZE
                     for i in range(0, len(answer), chunk_size):
                         q.put_nowait(answer[i : i + chunk_size])
 
@@ -765,15 +768,11 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         manager: JobManager,
         job_id: str,
         video_path: str,
-        video_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Run the full video pipeline (sync, runs in thread pool).
 
         Registered as the ``process_video`` handler in the JobManager.
         """
-        # Report phase 1: pipeline
-        import asyncio
-
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -837,9 +836,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
     _job_manager = get_default_manager()
 
     # Only register if not already registered (re-entrant route factory calls)
-    try:
-        _job_manager._worker_registry.get("process_video")
-    except KeyError:
+    if "process_video" not in _job_manager._worker_registry:
         _job_manager.register_handler("process_video", _process_video_handler)
 
     # ------------------------------------------------------------------
@@ -1060,7 +1057,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
                 SearchResult(
                     chunk_id=c.chunk_id,
                     video_id=c.video_id,
-                    text=c.text[:500],
+                    text=c.text[:_SEARCH_TEXT_PREVIEW_LENGTH],
                     timestamp=c.timestamp,
                     scene_id=c.scene_id,
                     score=c.score,
@@ -1112,7 +1109,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
             results = rag_instance.collection.get(
                 where={"video_id": video_id},
                 include=["metadatas"],
-                limit=500,
+                limit=_FRAME_METADATA_SEARCH_LIMIT,
             )
         except Exception as exc:
             logger.error("Error fetching frame metadata for %s: %s", video_id, exc)
@@ -1233,8 +1230,8 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
                 data["segments"],
                 video_id,
                 None,  # scene_boundaries
-                12,  # max_chapters
-                2,  # min_chapters
+                _DEFAULT_MAX_CHAPTERS,  # max_chapters
+                _DEFAULT_MIN_CHAPTERS,  # min_chapters
                 True,  # use_llm_titles
             )
         except Exception as exc:
@@ -1345,7 +1342,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
             has_sprite=info.has_sprite,
             scenes=[SceneInfoSchema(**s) for s in scenes],
             transcript_summary=(
-                transcript_data["full_transcript"][:2000]
+                transcript_data["full_transcript"][:_TRANSCRIPT_SUMMARY_PREVIEW_LENGTH]
                 if transcript_data["full_transcript"]
                 else ""
             ),

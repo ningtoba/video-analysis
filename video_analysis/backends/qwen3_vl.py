@@ -28,7 +28,6 @@ import json
 import logging
 import os
 import subprocess
-import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Literal, Union
 
@@ -569,6 +568,7 @@ class Qwen3VLBackend:
         frames: Optional[List[str]] = None,
         video_path: Optional[str] = None,
         max_new_tokens: int = 512,
+        max_frames: Optional[int] = None,
     ) -> Optional[str]:
         """Dispatch generation to the resolved backend."""
         if self._resolved_backend is None:
@@ -580,7 +580,7 @@ class Qwen3VLBackend:
         # Decode video frames if video path is given
         frame_paths = frames
         if video_path and not frames:
-            frame_paths = self._decode_video_frames(video_path)
+            frame_paths = self._decode_video_frames(video_path, num_frames=max_frames)
 
         try:
             if backend == "vllm_server":
@@ -674,7 +674,6 @@ class Qwen3VLBackend:
         The caller is responsible for managing the process lifecycle.
         """
         try:
-            import subprocess
             import sys
 
             cmd = [

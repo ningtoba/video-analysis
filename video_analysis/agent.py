@@ -34,12 +34,19 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Tuple
+from typing import Any, Dict, List, Optional
 
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG, RetrievedChunk
 
 logger = logging.getLogger(__name__)
+
+# Default fallback timestamps for sampling when none specified in question
+_DEFAULT_OBJECT_TIMESTAMPS = [30.0, 120.0, 300.0]
+_DEFAULT_VISUAL_TIMESTAMPS = [30.0, 120.0]
+_DEFAULT_PERSON_TIMESTAMPS = [60.0, 180.0]
+_DEFAULT_SUMMARIZE_FRAMES = 16
+_DEFAULT_RAG_TOP_K = 5
 
 
 # ---------------------------------------------------------------------------
@@ -875,7 +882,7 @@ class VideoUnderstandingAgent:
         ):
             steps.append("Question type: summarization → invoking summarize_video")
             steps.append("Also searching RAG for comprehensive context.")
-            result = self._tools.summarize_video(num_frames=16)
+            result = self._tools.summarize_video(num_frames=_DEFAULT_SUMMARIZE_FRAMES)
             evidence.append(result)
             if result.success:
                 answer_parts.append(result.data)
@@ -920,7 +927,7 @@ class VideoUnderstandingAgent:
                         steps.append(f"Detected objects at {ts:.1f}s")
             else:
                 # Sample evenly — early, mid, late
-                for ts in [30.0, 120.0, 300.0]:
+                for ts in _DEFAULT_OBJECT_TIMESTAMPS:
                     do = self._tools.detect_objects(ts)
                     evidence.append(do)
                     if do.success:
@@ -931,7 +938,7 @@ class VideoUnderstandingAgent:
             for w in ["text", "ocr", "read", "caption", "subtitle", "what does it say"]
         ):
             steps.append("Question type: OCR/text extraction")
-            timestamps = self._extract_timestamps(question) or [30.0, 120.0, 300.0]
+            timestamps = self._extract_timestamps(question) or _DEFAULT_OBJECT_TIMESTAMPS
             for ts in timestamps[:3]:
                 ocr_result = self._tools.extract_text(ts)
                 evidence.append(ocr_result)
@@ -964,7 +971,7 @@ class VideoUnderstandingAgent:
                 answer_parts.append(tx.data)
 
             # Also analyze frames for people
-            timestamps = self._extract_timestamps(question) or [60.0, 180.0]
+            timestamps = self._extract_timestamps(question) or _DEFAULT_PERSON_TIMESTAMPS
             for ts in timestamps[:2]:
                 fa = self._tools.analyze_frames(
                     [ts],
@@ -990,7 +997,7 @@ class VideoUnderstandingAgent:
                 for w in ["look", "scene", "see", "show", "appear", "background"]
             ):
                 steps.append("Question appears visual — also sampling frames")
-                timestamps = self._extract_timestamps(question) or [30.0, 120.0]
+                timestamps = self._extract_timestamps(question) or _DEFAULT_VISUAL_TIMESTAMPS
                 fa = self._tools.analyze_frames(
                     timestamps[:3],
                     prompt=f"Question: {question}\n\nDescribe what you see in these frames "
@@ -1006,7 +1013,6 @@ class VideoUnderstandingAgent:
         all_evidence_text = "\n\n---\n\n".join(
             f"[Tool: {e.tool_name}]\n{e.data}" for e in evidence if e.success
         )
-        tools_used = sum(1 for e in evidence if e.success)
 
         # Always include RAG search for any remaining context
         if not any(e.tool_name == "search_rag" for e in evidence):
@@ -1014,6 +1020,8 @@ class VideoUnderstandingAgent:
             evidence.append(sr)
             if sr.success:
                 all_evidence_text += f"\n\n---\n\n[Tool: search_rag]\n{sr.data}"
+
+        tools_used = sum(1 for e in evidence if e.success)
 
         # Build final answer from evidence
         if answer_parts:
@@ -1061,12 +1069,13 @@ class VideoUnderstandingAgent:
         """
         timestamps: List[float] = []
 
-        # Match MM:SS or H:MM:SS
-        time_pattern = re.compile(r"(?:(\d+):)?(\d+):(\d+)")
+        # Match HH:MM:SS or MM:SS — the three-group form is unambiguous
+        time_pattern = re.compile(r"(\d+):(\d+)(?::(\d+))?")
         for match in time_pattern.finditer(text):
-            h = int(match.group(1)) if match.group(1) else 0
-            m = int(match.group(2))
-            s = int(match.group(3))
+            if match.group(3) is not None:
+                h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            else:
+                h, m, s = 0, int(match.group(1)), int(match.group(2))
             total = h * 3600 + m * 60 + s
             if total > 0:
                 timestamps.append(float(total))

@@ -46,9 +46,9 @@ import math
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from video_analysis.config import Config
 
@@ -61,7 +61,31 @@ DEFAULT_Z_SCORE_THRESHOLD = 3.0  # z-score > this = anomaly
 DEFAULT_MIN_DATA_POINTS = 10  # minimum datapoints before drift detection activates
 DEFAULT_ALERT_COOLDOWN_SECONDS = 3600  # suppress duplicate alerts for 1 hour
 DEFAULT_ALERT_EXPIRY_SECONDS = 86400  # auto-expire alerts after 24h
-HEALTH_TOP_ENTITIES = 5  # top entities per video for health reports
+
+# z-score severity thresholds
+_Z_CRITICAL_THRESHOLD: float = 5.0
+_Z_ERROR_THRESHOLD: float = 4.0
+
+# Alert severity penalty weights (subtracted from alert_health score)
+_ALERT_PENALTY_CRITICAL: float = 0.25
+_ALERT_PENALTY_ERROR: float = 0.15
+_ALERT_PENALTY_WARNING: float = 0.08
+_ALERT_PENALTY_INFO: float = 0.03
+
+# Health score component weights (must sum to 1.0)
+_HEALTH_WEIGHT_SUCCESS_RATE: float = 0.4
+_HEALTH_WEIGHT_ALERT: float = 0.3
+_HEALTH_WEIGHT_DURATION_STABILITY: float = 0.15
+_HEALTH_WEIGHT_CONFIDENCE: float = 0.15
+
+# Health status thresholds
+_HEALTH_STATUS_HEALTHY: float = 0.8
+_HEALTH_STATUS_UNHEALTHY: float = 0.5
+
+# Miscellaneous
+_SECONDS_PER_DAY: float = 86400.0
+_DEFAULT_HEALTH_REPORT_RECENT: int = 20
+_DEFAULT_RECENT_ALERTS_DISPLAY: int = 10
 
 SEVERITY_ORDER = {"info": 0, "warning": 1, "error": 2, "critical": 3}
 
@@ -460,9 +484,9 @@ class PipelineHealthMonitor:
 
         # Determine severity based on z-score
         z = snapshot.z_score
-        if z > 5.0:
+        if z > _Z_CRITICAL_THRESHOLD:
             severity = "critical"
-        elif z > 4.0:
+        elif z > _Z_ERROR_THRESHOLD:
             severity = "error"
         elif z > self._z_score_threshold:
             severity = "warning"
@@ -537,7 +561,11 @@ class PipelineHealthMonitor:
                         },
                     )
             except Exception:
-                pass
+                logger.warning(
+                    "Failed to fire webhook for alert %s (severity=%s)",
+                    alert_id,
+                    severity,
+                )
 
         return HealthAlert(
             alert_id=alert_id,
@@ -664,21 +692,21 @@ class PipelineHealthMonitor:
             alert_penalty = 0.0
             for a in alerts:
                 sev_order = SEVERITY_ORDER.get(a["severity"], 0)
-                if sev_order >= 4:  # critical
-                    alert_penalty += 0.25
-                elif sev_order >= 3:  # error
-                    alert_penalty += 0.15
-                elif sev_order >= 2:  # warning
-                    alert_penalty += 0.08
+                if sev_order >= SEVERITY_ORDER["critical"]:
+                    alert_penalty += _ALERT_PENALTY_CRITICAL
+                elif sev_order >= SEVERITY_ORDER["error"]:
+                    alert_penalty += _ALERT_PENALTY_ERROR
+                elif sev_order >= SEVERITY_ORDER["warning"]:
+                    alert_penalty += _ALERT_PENALTY_WARNING
                 else:
-                    alert_penalty += 0.03
+                    alert_penalty += _ALERT_PENALTY_INFO
             alert_health = max(0.0, 1.0 - min(alert_penalty, 1.0))
 
             score = (
-                0.4 * success_rate
-                + 0.3 * alert_health
-                + 0.15 * duration_stability
-                + 0.15 * avg_confidence
+                _HEALTH_WEIGHT_SUCCESS_RATE * success_rate
+                + _HEALTH_WEIGHT_ALERT * alert_health
+                + _HEALTH_WEIGHT_DURATION_STABILITY * duration_stability
+                + _HEALTH_WEIGHT_CONFIDENCE * avg_confidence
             )
             return round(max(0.0, min(1.0, score)), 4)
 
@@ -760,7 +788,7 @@ class PipelineHealthMonitor:
 
     def get_health_summary(self) -> Dict[str, Any]:
         """Return a concise health summary dict for API/UI consumption."""
-        report = self.get_health_report(recent_count=20)
+        report = self.get_health_report(recent_count=_DEFAULT_HEALTH_REPORT_RECENT)
         return {
             "health_score": report.health_score,
             "total_runs": report.total_runs,
@@ -772,14 +800,16 @@ class PipelineHealthMonitor:
             "degraded_metrics": report.degraded_metrics,
             "status": (
                 "healthy"
-                if report.health_score >= 0.8
-                else "degraded" if report.health_score >= 0.5 else "unhealthy"
+                if report.health_score >= _HEALTH_STATUS_HEALTHY
+                else "degraded"
+                if report.health_score >= _HEALTH_STATUS_UNHEALTHY
+                else "unhealthy"
             ),
         }
 
     def get_health_context(self) -> str:
         """Generate a compact LLM-friendly health summary for context injection."""
-        report = self.get_health_report(recent_count=20)
+        report = self.get_health_report(recent_count=_DEFAULT_HEALTH_REPORT_RECENT)
         status = (
             "healthy"
             if report.health_score >= 0.8
@@ -799,7 +829,7 @@ class PipelineHealthMonitor:
         if report.alerts:
             lines.append("")
             lines.append("### Active alerts")
-            for a in report.alerts[:10]:
+            for a in report.alerts[:_DEFAULT_RECENT_ALERTS_DISPLAY]:
                 lines.append(f"- [{a.severity}] {a.title}: {a.message}")
         return "\n".join(lines)
 
@@ -816,7 +846,7 @@ class PipelineHealthMonitor:
         """Clear old pipeline runs.  If older_than_days is 0, clears all."""
         with self._lock:
             if older_than_days > 0:
-                cutoff = time.time() - older_than_days * 86400
+                cutoff = time.time() - older_than_days * _SECONDS_PER_DAY
                 cur = self._conn.execute(
                     "DELETE FROM pipeline_runs WHERE timestamp < ?",
                     (cutoff,),

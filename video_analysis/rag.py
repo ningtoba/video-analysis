@@ -76,6 +76,29 @@ EMBEDDING_PREFIXES = {
     },
 }
 
+# ── Indexing constants ─────────────────────────────────────────────────
+_FIXED_WINDOW_DURATION = 60.0          # seconds, no overlap
+_FIXED_WINDOW_CHUNK_SIZE = 500         # chars per text-splitter chunk
+_FIXED_WINDOW_CHUNK_OVERLAP = 0
+
+_SLIDING_WINDOW_DURATION = 30.0        # seconds
+_SLIDING_WINDOW_OVERLAP = 15.0         # seconds
+_SLIDING_WINDOW_CHUNK_SIZE = 300       # chars per text-splitter chunk
+_SLIDING_WINDOW_CHUNK_OVERLAP = 50
+
+_TRANSCRIPT_CHUNK_SIZE = 500
+_TRANSCRIPT_CHUNK_OVERLAP = 50
+
+_CHROMA_BATCH_SIZE = 100
+_RETRIEVAL_FETCH_MULTIPLIER = 2        # fetch top_k * N before re-ranking
+_MIN_CHUNK_TEXT_LENGTH = 10            # chars — skip chunks shorter than this
+
+# ── Re-ranking constants ───────────────────────────────────────────────
+_RERANK_TRUNCATION_LENGTH = 512        # chars — max text sent to cross-encoder
+_DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+_SOURCE_PREVIEW_LENGTH = 200           # chars — source citation preview
+_TEMPORAL_NEIGHBOR_DISCOUNT = 0.8      # score multiplier for neighbor chunks
+
 
 def _apply_embedding_prefix(text: str, model_name: str, prefix_type: str) -> str:
     """Apply the correct prefix for query or document embedding.
@@ -290,11 +313,26 @@ class VideoRAG:
             from transformers import AutoModel, AutoTokenizer
         except ImportError:
             logger.debug("transformers/Pillow not available for multimodal embedding")
-            return (
-                self._get_embedding(text)
-                if not self.config.multimodal_embedding_enabled
-                else self._get_embedding(text)
+            # Cannot call _get_embedding here — it would loop back to this
+            # method when multimodal_embedding_enabled is True.  Fall
+            # through to BGE-VL directly, then SentenceTransformer.
+            bge_emb = self._get_bge_vl_embedding(text)
+            if bge_emb is not None:
+                return bge_emb
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError:
+                return []
+            if self._embedding_model is None:
+                model_name = self.config.text_embedding_model
+                self._embedding_model = SentenceTransformer(
+                    model_name, device="cuda", trust_remote_code=True,
+                )
+            prefixed = _apply_embedding_prefix(
+                text, self.config.text_embedding_model, "document"
             )
+            emb = self._embedding_model.encode(prefixed, normalize_embeddings=True)
+            return emb.tolist()
 
         model_id = self.config.multimodal_embedding_model
         try:
@@ -384,6 +422,8 @@ class VideoRAG:
         | sliding_30s | ~30s | Transcript only, 15s overlap | Fine-grained temporal localization |
         | frame | Per-frame | Description + objects + OCR + action | Direct frame-level retrieval |
         """
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+
         chunks = []
         metadatas = []
         ids = []
@@ -483,7 +523,7 @@ class VideoRAG:
                     frame_parts.append(f"[Action]: {frame.action}{conf_str}")
 
                 frame_text = "\n".join(frame_parts)
-                if len(frame_text) < 10:  # skip empty chunks
+                if len(frame_text) < _MIN_CHUNK_TEXT_LENGTH:  # skip empty chunks
                     continue
 
                 frame_chunk_id = f"{video_index.video_id}_frame_{frame.timestamp:.2f}"
@@ -503,26 +543,23 @@ class VideoRAG:
 
         # --- Fixed-window chunks (60 seconds, no overlap) ---
         if video_index.duration > 0 and transcript_by_time:
-            window_duration = 60.0
             full_text = video_index.full_transcript or " ".join(
                 t[2] for t in transcript_by_time
             )
             if full_text.strip():
-                from langchain_text_splitters import RecursiveCharacterTextSplitter
-
                 splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=500,
-                    chunk_overlap=0,
+                    chunk_size=_FIXED_WINDOW_CHUNK_SIZE,
+                    chunk_overlap=_FIXED_WINDOW_CHUNK_OVERLAP,
                     separators=["\n\n", ". ", " ", ""],
                 )
                 text_chunks = splitter.split_text(full_text)
 
                 for window_idx in range(
-                    0, max(1, int(video_index.duration / window_duration))
+                    0, max(1, int(video_index.duration / _FIXED_WINDOW_DURATION))
                 ):
-                    start_t = window_idx * window_duration
+                    start_t = window_idx * _FIXED_WINDOW_DURATION
                     end_t = min(
-                        (window_idx + 1) * window_duration, video_index.duration
+                        (window_idx + 1) * _FIXED_WINDOW_DURATION, video_index.duration
                     )
 
                     # Estimate which text chunks belong to this time window
@@ -551,17 +588,13 @@ class VideoRAG:
 
         # --- Sliding-window chunks (30 seconds, 15 second overlap) ---
         if video_index.duration > 0 and transcript_by_time:
-            window_size = 30.0
-            overlap = 15.0
             full_text = video_index.full_transcript or " ".join(
                 t[2] for t in transcript_by_time
             )
             if full_text.strip():
-                from langchain_text_splitters import RecursiveCharacterTextSplitter
-
                 splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=300,
-                    chunk_overlap=50,
+                    chunk_size=_SLIDING_WINDOW_CHUNK_SIZE,
+                    chunk_overlap=_SLIDING_WINDOW_CHUNK_OVERLAP,
                     separators=["\n\n", ". ", " ", ""],
                 )
                 text_chunks = splitter.split_text(full_text)
@@ -570,7 +603,7 @@ class VideoRAG:
                 t = 0.0
                 while t < video_index.duration:
                     start_t = t
-                    end_t = min(t + window_size, video_index.duration)
+                    end_t = min(t + _SLIDING_WINDOW_DURATION, video_index.duration)
 
                     window_text = ""
                     for i, tc in enumerate(text_chunks):
@@ -594,15 +627,13 @@ class VideoRAG:
                         ids.append(chunk_id)
                         slide_idx += 1
 
-                    t += overlap
+                    t += _SLIDING_WINDOW_OVERLAP
 
         # --- Transcript chunks (legacy, for backward compat) ---
         if video_index.full_transcript:
-            from langchain_text_splitters import RecursiveCharacterTextSplitter
-
             splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500,
-                chunk_overlap=50,
+                chunk_size=_TRANSCRIPT_CHUNK_SIZE,
+                chunk_overlap=_TRANSCRIPT_CHUNK_OVERLAP,
                 separators=["\n\n", ". ", " ", ""],
             )
             transcript_chunks = splitter.split_text(video_index.full_transcript)
@@ -635,9 +666,8 @@ class VideoRAG:
         embeddings = [self._get_embedding(c) for c in chunks]
 
         # Batch add to Chroma
-        batch_size = 100
-        for i in range(0, len(chunks), batch_size):
-            batch_end = min(i + batch_size, len(chunks))
+        for i in range(0, len(chunks), _CHROMA_BATCH_SIZE):
+            batch_end = min(i + _CHROMA_BATCH_SIZE, len(chunks))
             self.collection.add(
                 ids=ids[i:batch_end],
                 embeddings=embeddings[i:batch_end],
@@ -710,7 +740,7 @@ class VideoRAG:
         # Query Chroma
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=top_k * 2,  # fetch more for re-ranking
+            n_results=top_k * _RETRIEVAL_FETCH_MULTIPLIER,  # fetch more for re-ranking
             where=where,
             include=["documents", "metadatas", "distances"],
         )
@@ -793,11 +823,11 @@ class VideoRAG:
             raise ImportError("sentence-transformers not installed")
 
         reranker = CrossEncoder(
-            "cross-encoder/ms-marco-MiniLM-L-6-v2",
+            _DEFAULT_RERANKER_MODEL,
             device="cuda",
         )
 
-        pairs = [(query, c.text[:512]) for c in chunks]
+        pairs = [(query, c.text[:_RERANK_TRUNCATION_LENGTH]) for c in chunks]
         scores = reranker.predict(pairs)
 
         for chunk, score in zip(chunks, scores):
@@ -1044,7 +1074,7 @@ class VideoRAG:
                                     text=neigh["documents"][0],
                                     timestamp=meta.get("start_time", 0),
                                     scene_id=meta.get("scene_id", -1),
-                                    score=chunk.score * 0.8,  # slightly discounted
+                                    score=chunk.score * _TEMPORAL_NEIGHBOR_DISCOUNT,  # slightly discounted
                                     metadata=meta,
                                 )
                             )
@@ -1075,7 +1105,7 @@ class VideoRAG:
         for chunk in chunks[:top_n]:
             sources.append(
                 ChatSource(
-                    text=chunk.text[:200],
+                    text=chunk.text[:_SOURCE_PREVIEW_LENGTH],
                     timestamp=chunk.timestamp,
                     frame_path=chunk.frame_path,
                     scene_id=chunk.scene_id,
@@ -1651,7 +1681,7 @@ class VideoRAG:
         # No video_id filter → search all videos
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=top_k * 2,
+            n_results=top_k * _RETRIEVAL_FETCH_MULTIPLIER,
             where=None,
             include=["documents", "metadatas", "distances"],
         )

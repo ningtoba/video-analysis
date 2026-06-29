@@ -27,11 +27,9 @@ Usage:
     # result has .segments (list[ChapterSegment]) and .chapters (list[Chapter])
 """
 
-import json
 import logging
 import os
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -39,6 +37,32 @@ from typing import Any, Dict, List, Optional, Tuple
 from video_analysis.config import Config
 
 logger = logging.getLogger(__name__)
+
+# TextTiling algorithm defaults (NLTK)
+_TEXTTILE_PSEUDO_SENTENCE_SIZE = 200
+_TEXTTILE_BLOCK_COMPARISON_SIZE = 40
+
+# Segmentation thresholds
+_MIN_TEXT_CHARS_FOR_SEGMENT = 50
+_MIN_WORDS_FOR_TEXTTILING = 200
+_CHAPTER_WORDS_PER_GROUP = 150
+_DEFAULT_TARGET_CHAPTERS = 6
+_MAX_CHAPTERS_DEFAULT = 12
+_MIN_CHAPTERS_DEFAULT = 2
+_MIN_WORDS_FOR_LLM_TITLE = 30
+
+# LLM chapter title generation
+_LLM_MAX_INPUT_CHARS = 2000
+_LLM_TITLE_SANITY_MAX = 120
+_LLM_TITLE_MAX_CHARS = 60
+
+# Heuristic title fallback
+_HEURISTIC_SENTENCE_MIN_LEN = 20
+_HEURISTIC_SENTENCE_MAX_LEN = 200
+_HEURISTIC_TITLE_TRUNCATE = 57
+
+# Report generation
+_CHAPTER_PREVIEW_MAX_CHARS = 200
 
 
 # ---------------------------------------------------------------------------
@@ -146,8 +170,8 @@ class ChapterGenerator:
             # Use reasonable defaults — 200 word pseudo-sentence size,
             # which works well for transcript text at ~150 wpm.
             self._texttiler = TextTilingTokenizer(
-                k=200,  # pseudo-sentence size (words)
-                w=40,  # block comparison size
+                k=_TEXTTILE_PSEUDO_SENTENCE_SIZE,
+                w=_TEXTTILE_BLOCK_COMPARISON_SIZE,
                 stopwords=None,  # use NLTK default stopwords
             )
             logger.info("NLTK TextTilingTokenizer initialized.")
@@ -186,7 +210,7 @@ class ChapterGenerator:
                 seg_len = len(seg_text)
                 end = pos + seg_len
                 # Skip very short segments (<50 chars = noise)
-                if seg_len >= 50:
+                if seg_len >= _MIN_TEXT_CHARS_FOR_SEGMENT:
                     char_ranges.append((pos, end))
                 pos = end + 1  # +1 for whitespace
             return char_ranges
@@ -195,7 +219,7 @@ class ChapterGenerator:
             return []
 
     def _segment_uniform(
-        self, transcript: List[ChapterSegment], target_chapters: int = 6
+        self, transcript: List[ChapterSegment], target_chapters: int = _DEFAULT_TARGET_CHAPTERS
     ) -> List[List[ChapterSegment]]:
         """Fallback: divide transcript into uniform time-based segments.
 
@@ -251,7 +275,7 @@ class ChapterGenerator:
             List of segment groups.
         """
         if not scene_times or len(scene_times) < 2:
-            return self._segment_uniform(transcript, target_chapters=6)
+            return self._segment_uniform(transcript, target_chapters=_DEFAULT_TARGET_CHAPTERS)
 
         groups: List[List[ChapterSegment]] = []
         boundary_idx = 0
@@ -310,15 +334,14 @@ class ChapterGenerator:
             Tuple of (title: str, summary: str).
         """
         # Truncate input to avoid overflowing
-        max_input_chars = 2000
-        truncated_text = chapter_text[:max_input_chars]
+        truncated_text = chapter_text[:_LLM_MAX_INPUT_CHARS]
 
         prompt = (
             f"You are analyzing a video transcript. This is chapter "
             f"{chapter_index + 1} of {total_chapters}.\n\n"
             f"Transcript segment:\n{truncated_text}\n\n"
             f"Generate:\n"
-            f"1. A short, descriptive CHAPTER TITLE (max 60 chars, no quotes)\n"
+            f"1. A short, descriptive CHAPTER TITLE (max {_LLM_TITLE_MAX_CHARS} chars, no quotes)\n"
             f"2. A one-sentence CHAPTER SUMMARY (max 150 chars)\n\n"
             f'Format: {{"title": "...", "summary": "..."}}\n'
             f"Return only valid JSON, nothing else."
@@ -337,7 +360,7 @@ class ChapterGenerator:
             if title:
                 title = title.strip("\"' ")
                 summary = summary.strip("\"' ")
-                if len(title) <= 120:  # sanity check
+                if len(title) <= _LLM_TITLE_SANITY_MAX:
                     return title, summary
 
         # Fallback: generate a heuristic title
@@ -355,14 +378,14 @@ class ChapterGenerator:
         first_sentence = ""
         for s in sentences:
             s = s.strip()
-            if len(s) > 20 and len(s) < 200:
+            if _HEURISTIC_SENTENCE_MIN_LEN < len(s) < _HEURISTIC_SENTENCE_MAX_LEN:
                 first_sentence = s
                 break
 
         if first_sentence:
             title = (
-                first_sentence[:57] + "…"
-                if len(first_sentence) > 60
+                first_sentence[:_HEURISTIC_TITLE_TRUNCATE] + "…"
+                if len(first_sentence) > _LLM_TITLE_MAX_CHARS
                 else first_sentence
             )
         else:
@@ -463,7 +486,7 @@ class ChapterGenerator:
         segment_groups: List[List[ChapterSegment]] = []
         method = "uniform"
 
-        if total_words >= 200:  # TextTiling needs reasonable text volume
+        if total_words >= _MIN_WORDS_FOR_TEXTTILING:
             tiler_ok = self._init_texttiler()
             if tiler_ok:
                 full_text = self._build_transcript_paragraph(segments)
@@ -485,7 +508,7 @@ class ChapterGenerator:
 
         # Strategy 3: Uniform time-based fallback
         if not segment_groups:
-            target = min(max_chapters, max(min_chapters, total_words // 150))
+            target = min(max_chapters, max(min_chapters, total_words // _CHAPTER_WORDS_PER_GROUP))
             segment_groups = self._segment_uniform(segments, target_chapters=target)
             method = "uniform"
 
@@ -509,7 +532,7 @@ class ChapterGenerator:
             title = f"Chapter {idx + 1}"
             summary = ""
 
-            if use_llm_titles and chapter_words >= 30:
+            if use_llm_titles and chapter_words >= _MIN_WORDS_FOR_LLM_TITLE:
                 gen_title, gen_summary = self._generate_title_via_llm(
                     chapter_text, idx, len(segment_groups)
                 )
@@ -525,7 +548,7 @@ class ChapterGenerator:
                 summary = gen_summary
 
             # Extract a preview
-            preview = chapter_text[:200].replace("\n", " ").strip()
+            preview = chapter_text[:_CHAPTER_PREVIEW_MAX_CHARS].replace("\n", " ").strip()
 
             chapters.append(
                 Chapter(

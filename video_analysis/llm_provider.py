@@ -24,9 +24,51 @@ import os
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+_STDERR_TRUNCATE_LENGTH: int = 200
+_AVAILABILITY_CHECK_TIMEOUT: int = 5
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_json_response(raw: str) -> Optional[Dict[str, Any]]:
+    """Extract and parse JSON from an LLM response string.
+
+    Tries direct parse, then markdown code blocks, then brace-delimited extraction.
+    """
+    raw = raw.strip()
+    # Direct parse
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # Markdown code blocks
+    import re
+
+    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # { ... } extraction
+    brace_start = raw.find("{")
+    brace_end = raw.rfind("}")
+    if brace_start >= 0 and brace_end > brace_start:
+        try:
+            return json.loads(raw[brace_start : brace_end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Config
@@ -175,7 +217,7 @@ class HermesProvider(LLMProvider):
                 ["hermes", "--version"],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=_AVAILABILITY_CHECK_TIMEOUT,
             )
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -223,7 +265,7 @@ class HermesProvider(LLMProvider):
             logger.warning(
                 "Hermes CLI call failed (rc=%d): %s",
                 result.returncode,
-                result.stderr[:200],
+                result.stderr[:_STDERR_TRUNCATE_LENGTH],
             )
             return ""
         except FileNotFoundError:
@@ -253,7 +295,7 @@ class HermesProvider(LLMProvider):
         )
         if not raw:
             return None
-        return self._parse_json(raw)
+        return _parse_json_response(raw)
 
     async def stream_chat(
         self,
@@ -373,38 +415,6 @@ class HermesProvider(LLMProvider):
         if result:
             yield "\n"
 
-    @staticmethod
-    def _parse_json(raw: str) -> Optional[Dict[str, Any]]:
-        """Extract and parse JSON from LLM response."""
-        raw = raw.strip()
-        # Try direct parse first
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-        # Try to extract JSON from markdown code blocks
-        import re
-
-        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
-
-        # Try to find { ... } block
-        brace_start = raw.find("{")
-        brace_end = raw.rfind("}")
-        if brace_start >= 0 and brace_end > brace_start:
-            try:
-                return json.loads(raw[brace_start : brace_end + 1])
-            except json.JSONDecodeError:
-                pass
-
-        return None
-
-
 # ---------------------------------------------------------------------------
 # OpenAI-compatible provider
 # ---------------------------------------------------------------------------
@@ -458,7 +468,7 @@ class OpenAIProvider(LLMProvider):
                 headers={
                     "Authorization": f"Bearer {self._config.api_key}",
                 },
-                timeout=5,
+                timeout=_AVAILABILITY_CHECK_TIMEOUT,
             )
             return resp.status_code == 200
         except Exception:
@@ -520,7 +530,7 @@ class OpenAIProvider(LLMProvider):
                 message = choices[0].get("message", {})
                 content = message.get("content", "")
                 if content:
-                    return self._parse_json(content)
+                    return _parse_json_response(content)
         except (IndexError, KeyError, AttributeError):
             pass
 
@@ -544,7 +554,7 @@ class OpenAIProvider(LLMProvider):
         messages = self._build_messages(prompt, system)
         base = self._config.api_base.rstrip("/")
         if not base.endswith("/chat/completions"):
-            base = base.rstrip("/") + "/chat/completions"
+            base = base + "/chat/completions"
 
         headers = {
             "Content-Type": "application/json",
@@ -650,38 +660,6 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             logger.warning("OpenAI API call failed: %s", e)
             return None
-
-    @staticmethod
-    def _parse_json(raw: str) -> Optional[Dict[str, Any]]:
-        """Extract and parse JSON from LLM response."""
-        raw = raw.strip()
-        # Direct parse
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-        # Markdown code blocks
-        import re
-
-        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
-
-        # { ... } extraction
-        brace_start = raw.find("{")
-        brace_end = raw.rfind("}")
-        if brace_start >= 0 and brace_end > brace_start:
-            try:
-                return json.loads(raw[brace_start : brace_end + 1])
-            except json.JSONDecodeError:
-                pass
-
-        return None
-
 
 # ---------------------------------------------------------------------------
 # Factory

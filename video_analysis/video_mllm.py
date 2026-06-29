@@ -388,30 +388,6 @@ class VideoMLLM:
         """Ensure model is loaded, dispatching to the right backend."""
         return self.load()
 
-    def _build_messages(
-        self,
-        prompt: str,
-        frames: Optional[List[str]] = None,
-        video_path: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """Build chat messages for the correct backend format.
-
-        SmolVLM2 uses chat templates with video/image content blocks,
-        while VideoChat-Flash uses its image/video processor fields directly.
-        This method primarily prepares data for SmolVLM2; VideoChat-Flash
-        handles its own formatting in the processor.
-        """
-        if self._resolved_backend == "smolvlm2":
-            content = []
-            if frames:
-                for fp in frames:
-                    content.append({"type": "image", "path": fp})
-            if video_path:
-                content.append({"type": "video", "path": video_path})
-            content.append({"type": "text", "text": prompt})
-            return [{"role": "user", "content": content}]
-        return []
-
     def _decode_video_frames(
         self, video_path: str, num_frames: int = 32
     ) -> Optional[List[str]]:

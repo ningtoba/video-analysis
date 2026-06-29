@@ -683,7 +683,8 @@ class StreamingPipeline:
         window_seconds = max(window_seconds, 60)  # minimum 60s window
 
         # Walk from the most recent backwards, collecting chunks until
-        # we have window_seconds worth of content
+        # we have window_seconds worth of content.  Prepend accumulated
+        # data to preserve chronological order (we iterate newest first).
         keep_results: List[StreamingChunkResult] = []
         keep_scenes: List[SceneInfo] = []
         keep_transcripts: List[TranscriptSegment] = []
@@ -694,9 +695,9 @@ class StreamingPipeline:
             if kept_duration >= window_seconds:
                 break
             keep_results.insert(0, result)
-            keep_scenes.extend(result.scenes)
-            keep_transcripts.extend(result.transcript_segments)
-            keep_text.append(result.full_transcript)
+            keep_scenes = result.scenes + keep_scenes
+            keep_transcripts = result.transcript_segments + keep_transcripts
+            keep_text.insert(0, result.full_transcript)
             kept_duration += result.duration
 
         pruned = len(self._chunk_results) - len(keep_results)

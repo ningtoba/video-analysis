@@ -290,17 +290,6 @@ class Config:
     agent_enabled: bool = False  # overridden by AGENT_ENABLED env var
     agent_max_tools: int = 5  # max tool invocations per query
 
-    # Confidence-Aware Agent (v0.50.0 — per-evidence confidence scoring, Robust-TO inspired)
-    agent_confidence_enabled: bool = (
-        False  # overridden by AGENT_CONFIDENCE_ENABLED env var
-    )
-    agent_confidence_min_trust: float = (
-        0.3  # frames below this trustworthiness are skipped
-    )
-    agent_confidence_weight_mode: str = (
-        "tiered"  # "tiered" or "continuous"; overridden by AGENT_CONFIDENCE_WEIGHT_MODE
-    )
-
     # Hierarchical Multi-Agent Orchestrator (v0.51.0 — HiCrew-inspired multi-agent)
     orchestra_enabled: bool = False  # overridden by ORCHESTRA_ENABLED env var
     orchestra_max_agents: int = 5  # max specialist agents per query

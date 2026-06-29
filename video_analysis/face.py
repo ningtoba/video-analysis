@@ -300,7 +300,7 @@ class FaceRecognizer:
         self,
         all_embeddings: List[Tuple[str, List[float]]],
         threshold: Optional[float] = None,
-    ) -> Dict[str, List[int]]:
+    ) -> Dict[str, List[str]]:
         """Cluster face embeddings into identity groups.
 
         Uses agglomerative clustering with cosine distance and a

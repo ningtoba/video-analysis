@@ -1,11 +1,8 @@
-"""Benchmark infrastructure: GPUProfiler context manager and shared fixtures."""
+"""Benchmark infrastructure: GPUProfiler context manager."""
 
 import logging
 import time
-from pathlib import Path
 from typing import Any
-
-import pytest
 
 logger = logging.getLogger(__name__)
 
@@ -83,47 +80,3 @@ class GPUProfiler:
         """Whether GPU was available during profiling."""
         return self._gpu_available
 
-
-# ---------------------------------------------------------------------------
-# Pytest-benchmark fixture extras
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def benchmark_data_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Session-scoped temporary directory for benchmark artifacts."""
-    return tmp_path_factory.mktemp("benchmark_data")
-
-
-@pytest.fixture
-def sample_video_bytes() -> bytes:
-    """Return minimal valid MP4 bytes for pipeline throughput tests.
-
-    This is a trivial MP4 file (no audio track, 1 frame, 1x1 px) that
-    FFmpeg can decode.  It is *not* meant to exercise real video decode;
-    use it only to test that the benchmark harness itself works.
-    """
-    # Minimal MP4: 1x1 black pixel at 1 fps, 1 frame
-    import subprocess
-
-    dat = subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "color=c=black:s=1x1:d=1:r=1",
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-f",
-            "mp4",
-            "pipe:1",
-        ],
-        capture_output=True,
-        check=True,
-        timeout=15,
-    )
-    return dat.stdout

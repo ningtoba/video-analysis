@@ -28,6 +28,9 @@ from video_analysis.models import FrameInfo
 
 logger = logging.getLogger(__name__)
 
+# Processing batch size for GPU efficiency
+_CLASSIFY_BATCH_SIZE = 16
+
 # Default action categories covering common video scenarios.
 # These are open-vocabulary — X-CLIP scores each frame against each label.
 DEFAULT_ACTION_CATEGORIES = [
@@ -128,9 +131,8 @@ class ActionRecognizer:
         results: List[Tuple[FrameInfo, Optional[str], Optional[float]]] = []
 
         # Process frames in batch for GPU efficiency
-        batch_size = 16
-        for batch_start in range(0, len(frames), batch_size):
-            batch = frames[batch_start : batch_start + batch_size]
+        for batch_start in range(0, len(frames), _CLASSIFY_BATCH_SIZE):
+            batch = frames[batch_start : batch_start + _CLASSIFY_BATCH_SIZE]
             batch_images = []
             batch_indices = []
 

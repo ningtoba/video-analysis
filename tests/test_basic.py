@@ -1567,8 +1567,8 @@ def test_rag_multi_hop_no_subqueries():
     shutil.rmtree("/tmp/va_test_mh_empty", ignore_errors=True)
 
 
-def test_version_0_15_0():
-    """Test version is now 0.57.0."""
+def test_version_current():
+    """Test that the package version is the current release."""
     from video_analysis import __version__
 
     assert __version__ == "0.60.0"
@@ -1992,13 +1992,6 @@ def test_scene_graph_track_id_entity_matching():
     shutil.rmtree("/tmp/va_test_sg_tracks", ignore_errors=True)
 
 
-def test_version_0_20_0():
-    """Test version is now 0.57.0."""
-    from video_analysis import __version__
-
-    assert __version__ == "0.60.0"
-
-
 # ---------------------------------------------------------------------------
 # ColBERT-Att attention-weighted re-ranker tests
 # ---------------------------------------------------------------------------
@@ -2370,13 +2363,6 @@ def test_rag_mmr_fallback_no_sentence_transformers():
     shutil.rmtree("/tmp/va_test_mmr_fallback", ignore_errors=True)
 
 
-def test_version_0_34_0():
-    """Test that version is 0.57.0."""
-    import video_analysis
-
-    assert video_analysis.__version__ == "0.60.0"
-
-
 def test_evaluation_module():
     """Test that the evaluation module and its components import correctly."""
     from video_analysis.evaluation import (
@@ -2519,7 +2505,7 @@ if __name__ == "__main__":
     test_config_multi_hop_fields()
     test_rag_routed_retrieve_fallback()
     test_rag_multi_hop_no_subqueries()
-    test_version_0_19_0()
+    test_version_current()
     # v0.19.0 — entity tracking
     test_config_entity_tracking_defaults()
     test_config_entity_tracking_env_override()
@@ -2547,5 +2533,5 @@ if __name__ == "__main__":
     test_scene_graph_face_entity_extraction()
     test_rag_mmr_method_exists()
     test_rag_mmr_fallback_no_sentence_transformers()
-    test_version_0_34_0()
+    test_version_current()
     print("All tests passed! ✅")

@@ -11,16 +11,17 @@ Fast, CPU-only checks that run before expensive GPU stages:
 All operations are <1ms per frame, zero VRAM.
 """
 
+import logging
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import cv2
 import numpy as np
 
 from video_analysis.config import Config
 
-logger = __import__("logging").getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _load_frame(filepath: str) -> Optional[np.ndarray]:

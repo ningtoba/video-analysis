@@ -10,7 +10,6 @@ Each node auto-generates input/output ports from function signatures.
 
 import json
 import logging
-import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -19,11 +18,8 @@ import gradio as gr
 from video_analysis.config import Config
 from video_analysis.pipeline import VideoPipeline
 from video_analysis.rag import VideoRAG
-from video_analysis.models import VideoIndex
 
 logger = logging.getLogger(__name__)
-
-WORKFLOW_JSON = Path("data/workflow.json")
 
 
 # ── Pipeline Stage Functions (wrapped as Workflow nodes) ──

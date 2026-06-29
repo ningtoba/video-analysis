@@ -146,6 +146,37 @@ def _analyze_frame(
     return result
 
 
+def _build_analysis_html(analysis: dict) -> str:
+    """Render camera analysis results as HTML."""
+    obj_tags = ""
+    for obj in analysis.get("objects", []):
+        label = obj["label"]
+        conf = obj.get("confidence", 0)
+        obj_tags += f'<span class="object-tag">{label} ({conf:.0%})</span> '
+
+    desc_html = ""
+    if analysis.get("description"):
+        desc_html = (
+            f'<div class="description">'
+            f"<strong>Scene:</strong> {analysis['description']}"
+            f"</div>"
+        )
+
+    error_html = ""
+    if analysis.get("error"):
+        error_html = (
+            f'<p style="color:#f59e0b;font-size:0.85rem;margin-top:0.5rem;">'
+            f"⚠️ Partial error: {analysis['error']}</p>"
+        )
+
+    return f"""<div class="camera-results">
+        <h4>🎯 Detected Objects</h4>
+        <div>{obj_tags if obj_tags else '<span style="color:var(--text-muted);font-size:0.85rem;">No objects detected.</span>'}</div>
+        {desc_html}
+        {error_html}
+    </div>"""
+
+
 # ── Build the camera tab ────────────────────────────────────────────────
 
 
@@ -336,34 +367,7 @@ def inject_camera_tab(app, config: Optional[Config] = None):
                 # Run lightweight analysis
                 analysis = _analyze_frame(tmp_path, pipeline)
 
-                # Build results display
-                obj_tags = ""
-                for obj in analysis.get("objects", []):
-                    label = obj["label"]
-                    conf = obj.get("confidence", 0)
-                    obj_tags += f'<span class="object-tag">{label} ({conf:.0%})</span> '
-
-                desc_html = ""
-                if analysis.get("description"):
-                    desc_html = (
-                        f'<div class="description">'
-                        f"<strong>Scene:</strong> {analysis['description']}"
-                        f"</div>"
-                    )
-
-                error_html = ""
-                if analysis.get("error"):
-                    error_html = (
-                        f'<p style="color:#f59e0b;font-size:0.85rem;margin-top:0.5rem;">'
-                        f"⚠️ Partial error: {analysis['error']}</p>"
-                    )
-
-                html = f"""<div class="camera-results">
-                    <h4>🎯 Detected Objects</h4>
-                    <div>{obj_tags if obj_tags else '<span style="color:var(--text-muted);font-size:0.85rem;">No objects detected.</span>'}</div>
-                    {desc_html}
-                    {error_html}
-                </div>"""
+                html = _build_analysis_html(analysis)
 
                 status_val = (
                     '<span class="badge ready">● Analysis complete</span>'
@@ -385,12 +389,6 @@ def inject_camera_tab(app, config: Optional[Config] = None):
                     None,
                     '<span class="badge error">● Error</span>',
                 )
-            finally:
-                # Clean up temp file
-                try:
-                    os.unlink(tmp_path)
-                except Exception:
-                    pass
 
         capture_btn.click(
             fn=_do_capture,
@@ -447,35 +445,7 @@ def inject_camera_tab(app, config: Optional[Config] = None):
                     img.save(tmp_path, "JPEG", quality=90)
                     analysis = _analyze_frame(tmp_path, pipeline)
 
-                    obj_tags = ""
-                    for obj in analysis.get("objects", []):
-                        label = obj["label"]
-                        conf = obj.get("confidence", 0)
-                        obj_tags += (
-                            f'<span class="object-tag">{label} ({conf:.0%})</span> '
-                        )
-
-                    desc_html = ""
-                    if analysis.get("description"):
-                        desc_html = (
-                            f'<div class="description">'
-                            f"<strong>Scene:</strong> {analysis['description']}"
-                            f"</div>"
-                        )
-
-                    error_html = ""
-                    if analysis.get("error"):
-                        error_html = (
-                            f'<p style="color:#f59e0b;font-size:0.85rem;margin-top:0.5rem;">'
-                            f"⚠️ Partial error: {analysis['error']}</p>"
-                        )
-
-                    html = f"""<div class="camera-results">
-                        <h4>🎯 Detected Objects</h4>
-                        <div>{obj_tags if obj_tags else '<span style="color:var(--text-muted);font-size:0.85rem;">No objects detected.</span>'}</div>
-                        {desc_html}
-                        {error_html}
-                    </div>"""
+                    html = _build_analysis_html(analysis)
 
                     status_val = (
                         '<span class="badge ready">● Auto-analysis running</span>'

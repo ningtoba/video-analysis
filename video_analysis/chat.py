@@ -15,9 +15,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from video_analysis.config import Config
 from video_analysis.rag import VideoRAG, RetrievedChunk
@@ -25,6 +24,36 @@ from video_analysis.models import ChatMessage, ChatSource, format_timestamp
 from video_analysis.memory import ConversationMemory
 
 logger = logging.getLogger(__name__)
+
+
+# ── Shared prompt template components ────────────────────────────────────
+
+_SYSTEM_PROMPT_PREFIX = (
+    "You are a video analysis assistant. You answer questions about video "
+    "content based on the provided context.\n\n"
+    "The context includes:\n"
+    "- Timestamped transcript excerpts\n"
+    "- Scene descriptions and summaries\n"
+    "- Detected objects in frames\n"
+    "- OCR text visible in frames\n\n"
+    "Rules:\n"
+    "1. Answer based ONLY on the provided context\n"
+    "2. When you reference specific moments, include the timestamp in HH:MM:SS format\n"
+    "3. If the context doesn't have enough information, say so\n"
+    "4. Be concise and factual\n\n"
+)
+
+_PROMPT_SUFFIX = "Answer with timestamp citations where relevant:"
+
+
+def _build_system_prompt(*, context: str, extra_prefix: str = "") -> str:
+    """Build a complete system prompt by combining the shared prefix,
+    optional extra context (history/memory), the current context, and
+    the question.
+    """
+    parts = [extra_prefix] if extra_prefix else []
+    parts.append(f"Current context:\n{context}")
+    return _SYSTEM_PROMPT_PREFIX + "\n".join(parts)
 
 
 class VideoChat:
@@ -316,12 +345,17 @@ class VideoChat:
         self.history.append(message)
         return message
 
-    def _ask_rag(self, query: str, video_id: Optional[str] = None) -> ChatMessage:
+    def _retrieve_chunks(
+        self, query: str, video_id: Optional[str] = None
+    ) -> Tuple[List[RetrievedChunk], str]:
+        """Select and execute the best retrieval strategy for a query.
+
+        Returns a (chunks, method_name) tuple.  The method name is used
+        for metrics recording.
+        """
         import time as _time
 
         _start = _time.perf_counter()
-        # Retrieve relevant context — use agentic retrieval if enabled,
-        # otherwise use routed retrieval (or standard retrieval)
         if (
             self.config.event_causal_rag_enabled
             and self.config.event_causal_rag_in_chat
@@ -341,7 +375,6 @@ class VideoChat:
         else:
             chunks = self.rag.retrieve(query, video_id=video_id)
             _method = "simple"
-
         _retrieval_dur = _time.perf_counter() - _start
 
         # Record retrieval metrics
@@ -356,6 +389,12 @@ class VideoChat:
             )
         except Exception:
             pass
+        return chunks, _method
+
+    def _ask_rag(self, query: str, video_id: Optional[str] = None) -> ChatMessage:
+        # Retrieve relevant context — use agentic retrieval if enabled,
+        # otherwise use routed retrieval (or standard retrieval)
+        chunks, _method = self._retrieve_chunks(query, video_id)
 
         if not chunks:
             return ChatMessage(
@@ -432,21 +471,7 @@ class VideoChat:
                 logger.info("Video MLLM QA returned None — falling back to RAG path")
 
         # RAG-based retrieval + LLM (default path)
-        if (
-            self.config.event_causal_rag_enabled
-            and self.config.event_causal_rag_in_chat
-        ):
-            chunks = self.rag.event_retrieve(query, video_id=video_id)
-        elif self.config.agentic_retrieval_enabled:
-            chunks = self.rag.agentic_retrieve(query, video_id=video_id)
-        elif (
-            self.config.query_routing_enabled
-            or self.config.scene_graph_enabled
-            or self.config.multi_hop_enabled
-        ):
-            chunks = self.rag.routed_retrieve(query, video_id=video_id)
-        else:
-            chunks = self.rag.retrieve(query, video_id=video_id)
+        chunks, _ = self._retrieve_chunks(query, video_id)
         if video_id and chunks:
             chunks = self.rag.expand_temporal_context(chunks, video_id)
 
@@ -509,51 +534,13 @@ class VideoChat:
         self.history = []
 
     def _build_prompt(self, query: str, context: str) -> str:
-        return f"""You are a video analysis assistant. You answer questions about video content based on the provided context.
-
-The context includes:
-- Timestamped transcript excerpts
-- Scene descriptions and summaries
-- Detected objects in frames
-- OCR text visible in frames
-
-Rules:
-1. Answer based ONLY on the provided context
-2. When you reference specific moments, include the timestamp in HH:MM:SS format
-3. If the context doesn't have enough information, say so
-4. Be concise and factual
-
-Context:
-{context}
-
-Question: {query}
-
-Answer with timestamp citations where relevant:"""
+        sys_part = _build_system_prompt(context=context)
+        return f"{sys_part}\n\nQuestion: {query}\n\n{_PROMPT_SUFFIX}"
 
     def _build_prompt_with_history(self, query: str, context: str, history: str) -> str:
-        return f"""You are a video analysis assistant. You answer questions about video content based on the provided context.
-
-The context includes:
-- Timestamped transcript excerpts
-- Scene descriptions and summaries
-- Detected objects in frames
-- OCR text visible in frames
-
-Rules:
-1. Answer based ONLY on the provided context
-2. When you reference specific moments, include the timestamp in HH:MM:SS format
-3. If the context doesn't have enough information, say so
-4. Be concise and factual
-
-Previous conversation:
-{history}
-
-Current context:
-{context}
-
-Question: {query}
-
-Answer with timestamp citations where relevant:"""
+        extra = f"Previous conversation:\n{history}"
+        sys_part = _build_system_prompt(context=context, extra_prefix=extra)
+        return f"{sys_part}\n\nQuestion: {query}\n\n{_PROMPT_SUFFIX}"
 
     # ------------------------------------------------------------------
     # Conversation Memory helpers
@@ -587,28 +574,8 @@ Answer with timestamp citations where relevant:"""
         self, query: str, context: str, memory_context: str
     ) -> str:
         """Build a prompt that includes conversation memory context."""
-        return f"""You are a video analysis assistant. You answer questions about video content based on the provided context.
-
-The context includes:
-- Timestamped transcript excerpts
-- Scene descriptions and summaries
-- Detected objects in frames
-- OCR text visible in frames
-
-Rules:
-1. Answer based ONLY on the provided context
-2. When you reference specific moments, include the timestamp in HH:MM:SS format
-3. If the context doesn't have enough information, say so
-4. Be concise and factual
-
-{memory_context}
-
-Current context:
-{context}
-
-Question: {query}
-
-Answer with timestamp citations where relevant:"""
+        sys_part = _build_system_prompt(context=context, extra_prefix=memory_context)
+        return f"{sys_part}\n\nQuestion: {query}\n\n{_PROMPT_SUFFIX}"
 
     def _build_prompt_with_history_and_memory(
         self, query: str, context: str, history: str, memory_context: str
@@ -619,26 +586,6 @@ Answer with timestamp citations where relevant:"""
             if memory_context
             else [f"Previous conversation:\n{history}"]
         )
-        combined_memory = "\n\n".join(parts)
-        return f"""You are a video analysis assistant. You answer questions about video content based on the provided context.
-
-The context includes:
-- Timestamped transcript excerpts
-- Scene descriptions and summaries
-- Detected objects in frames
-- OCR text visible in frames
-
-Rules:
-1. Answer based ONLY on the provided context
-2. When you reference specific moments, include the timestamp in HH:MM:SS format
-3. If the context doesn't have enough information, say so
-4. Be concise and factual
-
-{combined_memory}
-
-Current context:
-{context}
-
-Question: {query}
-
-Answer with timestamp citations where relevant:"""
+        extra = "\n\n".join(parts)
+        sys_part = _build_system_prompt(context=context, extra_prefix=extra)
+        return f"{sys_part}\n\nQuestion: {query}\n\n{_PROMPT_SUFFIX}"

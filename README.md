@@ -20,7 +20,7 @@
 
 ## ✨ Features
 
-- **🌐 Full REST API** (v0.49.0) — comprehensive HTTP API with 16+ endpoints including async video processing via background job queue; list, detail, delete, search, SSE streaming, transcript/chapter retrieval, frame extraction, job status polling, **evaluation report history/comparison**, **rate-limited with structured error responses**, **Python client SDK**; auto-generated OpenAPI docs at `/docs`
+- **🌐 Full REST API** (v0.60.0) — comprehensive HTTP API with 30+ endpoints including async video processing via background job queue; list, detail, delete, search, SSE streaming, transcript/chapter retrieval, frame extraction, job status polling, **evaluation report history/comparison**, **rate-limited with structured error responses**, **Python client SDK**, **knowledge graph endpoints**, **pipeline health endpoints**, **webhook notifications**; auto-generated OpenAPI docs at `/docs`
 |- **📷 Webcam Capture** (v0.41.0) — real-time webcam capture and frame analysis tab in the Gradio UI; supports live preview, capture & analyze, and continuous monitoring mode
 |- **🧠 MLLM Streaming Q&A** (v0.41.0) — token-by-token SSE streaming for LLM responses from both Hermes CLI and OpenAI-compatible backends; enables real-time chat updates in the Gradio UI and REST API
 |- **📡 Live Stream Analysis** (v0.40.0) — capture and analyze live RTMP/RTSP/HLS streams in real-time with auto-reconnect, sliding window context, and incremental indexing; connect OBS, IP cameras, and streaming platforms directly to the analysis pipeline
@@ -31,14 +31,14 @@
 |- **📊 Monitoring Dashboard** (v0.46.0) — real-time system metrics dashboard within the Gradio UI: live pipeline run counters, GPU memory usage, job queue status viewer, and interactive evaluation runner for on-demand benchmark execution
 - **🧪 Evaluation Suite** (v0.48.0) — 5 evaluation tasks (retrieval_precision, scene_boundary_accuracy, ocr_accuracy, action_recognition_quality, frame_compression_efficiency) with 44 dedicated harness tests; benchmark tests gracefully handle missing pytest-benchmark; **auto-persisted reports** with **cross-report comparison dashboard** (Gradio Tab 9: 📈 Eval Comparison) for regression/improvement tracking across pipeline versions; **3 REST API endpoints** for programmatic access to report history, full reports, and comparisons
 |- **🎬 Smart Video Analysis** — Scene detection, key frame extraction, transcription (faster-whisper), speaker diarization (PyAnnote), OCR text extraction (PaddleOCR PP-OCRv6 — +4.6% detection, +5.1% recognition over v5), object detection (YOLO), semantic scene description (OpenCLIP), **zero-shot action recognition (X-CLIP)**, **DINOv2 perceptual frame compression (LongVU-style)**
-||- **🧠 Persistent Video Knowledge Graph** (v0.52.0) — SQLite-backed cross-video entity & relationship store that builds persistent knowledge across all analyzed videos; tracks people, objects, actions, and concepts with frequency counters, typed relationships, cross-video search, and chronological timeline; injectable as LLM context for context-aware queries
-||- **🧩 Event-Causal RAG** (v0.57.0) — semantic event-level video segmentation with State-Event-State (SES) graphs and bidirectional causal-topological retrieval (arXiv:2605.06185); 3-tier segmentation (LLM → transcript-coherence → temporal-grid), DualStoreMemory for fused semantic + causal retrieval, forward/backward causal path analysis
-||- **🔌 Event-Causal RAG Production Wiring** (v0.58.0) — event-level retrieval integrated into the chat pipeline (VideoRAG.event_retrieve()), auto-indexing during video processing (event_index_video() called after index_video()), and persistent KnowledgeGraph storage for events and causal/temporal relations; new Gradio "⏱ Events" tab for timeline visualization and event-level querying; config flags: EVENT_CAUSAL_RAG_INDEX_ON_PROCESS (default true), EVENT_CAUSAL_RAG_IN_CHAT (default false)
-||- **💭 Streaming Thinking** (v0.57.0) — amortized reasoning during real-time video streaming (arXiv:2603.12262); per-chunk entity accumulation, causal prediction (forward thinking), causal explanation (backward thinking), question generation, and incremental answer engine for live RTMP/RTSP/HLS streams
-|||- **🔔 Webhook Notifications** (v0.59.0) — event-driven HTTP POST callbacks on pipeline.complete, eval.complete, and health.alert/health.critical events; configurable via WEBHOOK_URL env var (comma-separated URLs) or Config fields; zero external dependencies — pure Python stdlib
-||- **🎯 Adaptive Pipeline Scaling** (v0.60.0) — intelligent per-video quality/resource auto-tuning via AdaptivePipelineScaler; 3 explicit policies (conservative/balanced/performance) + auto mode that selects based on duration and resolution; VRAM-aware auto-downgrade prevents OOM on low-memory GPUs; long videos get aggressive compression, short high-res videos get maximum detail; integrates seamlessly with existing audio-only/auto processing modes
-||- **🩺 Pipeline Health Monitor** (v0.52.0)
-||- **🧠 Quad-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M), VideoChat-Flash 2B (MIT, ICLR 2026), **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)**, or **InternVideo3-8B (OpenGVLab, June 2026, SOTA open-weight video MLLM — 73.8 Video-MME, MCR reasoning, M^2LA KV-cache compression)**
+  - **🧠 Persistent Video Knowledge Graph** (v0.52.0) — SQLite-backed cross-video entity & relationship store that builds persistent knowledge across all analyzed videos; tracks people, objects, actions, and concepts with frequency counters, typed relationships, cross-video search, and chronological timeline; injectable as LLM context for context-aware queries
+  - **🧩 Event-Causal RAG** (v0.57.0) — semantic event-level video segmentation with State-Event-State (SES) graphs and bidirectional causal-topological retrieval (arXiv:2605.06185); 3-tier segmentation (LLM → transcript-coherence → temporal-grid), DualStoreMemory for fused semantic + causal retrieval, forward/backward causal path analysis
+  - **🔌 Event-Causal RAG Production Wiring** (v0.58.0) — event-level retrieval integrated into the chat pipeline (VideoRAG.event_retrieve()), auto-indexing during video processing (event_index_video() called after index_video()), and persistent KnowledgeGraph storage for events and causal/temporal relations; new Gradio "⏱ Events" tab for timeline visualization and event-level querying; config flags: EVENT_CAUSAL_RAG_INDEX_ON_PROCESS (default true), EVENT_CAUSAL_RAG_IN_CHAT (default false)
+  - **💭 Streaming Thinking** (v0.57.0) — amortized reasoning during real-time video streaming (arXiv:2603.12262); per-chunk entity accumulation, causal prediction (forward thinking), causal explanation (backward thinking), question generation, and incremental answer engine for live RTMP/RTSP/HLS streams
+    - **🔔 Webhook Notifications** (v0.59.0) — event-driven HTTP POST callbacks on pipeline.complete, eval.complete, and health.alert/health.critical events; configurable via WEBHOOK_URL env var (comma-separated URLs) or Config fields; zero external dependencies — pure Python stdlib
+  - **🎯 Adaptive Pipeline Scaling** (v0.60.0) — intelligent per-video quality/resource auto-tuning via AdaptivePipelineScaler; 3 explicit policies (conservative/balanced/performance) + auto mode that selects based on duration and resolution; VRAM-aware auto-downgrade prevents OOM on low-memory GPUs; long videos get aggressive compression, short high-res videos get maximum detail; integrates seamlessly with existing audio-only/auto processing modes
+  - **🩺 Pipeline Health Monitor** (v0.52.0)
+  - **🧠 Quad-Backend Video MLLM** — SmolVLM2 (Apache 2.0, transformers-native, 2.2B/500M/256M), VideoChat-Flash 2B (MIT, ICLR 2026), **Qwen3-VL-30B-A3B (Apache 2.0, MoE 30B/3B active, FP8, 128K context via vLLM/production server)**, or **InternVideo3-8B (OpenGVLab, June 2026, SOTA open-weight video MLLM — 73.8 Video-MME, MCR reasoning, M^2LA KV-cache compression)**
 - **🌐 YouTube URL Import** — Download videos directly from YouTube, Vimeo, and other platforms via yt-dlp
 - **📦 Batch Processing** — Queue videos by URL or file upload for sequential batch analysis
 - **💬 AI Chatbot** — Ask questions about video content with timestamped source citations
@@ -169,23 +169,23 @@ User Question
 | `agent` | `video_analysis/agent.py` | Agentic Video Understanding Agent — multi-tool video analysis agent |
 | `chapters` | `video_analysis/chapters.py` | Video content chaptering — topic segmentation & LLM chapter title generation |
 | `evaluation` | `video_analysis/evaluation.py` | Pipeline evaluation harness — benchmark-driven quality regression detection (v0.44.0) |
-|| `job_queue` | `video_analysis/job_queue.py` | In-process async job queue — background video processing with status polling |
-|| `curator` | `video_analysis/curator.py` | Autonomous Video Curator — closed-loop MCR exploration agent (v0.45.0) |
-|| `comparison` | `ui/comparison.py` | Cross-report eval comparison dashboard — historical browser, metric diff, regression tracking (v0.48.0) |
-|| `telemetry` | `video_analysis/telemetry.py` | OpenTelemetry distributed tracing — pipeline, RAG, and API spans with OTLP export (v0.49.0) |
-|rate_limiter|`video_analysis/rate_limiter.py`|In-memory token bucket rate limiter for REST API (v0.49.0)|
-|error_handlers|`video_analysis/error_handlers.py`|Structured JSON error responses for REST API (v0.49.0)|
-|||client|`video_analysis/client.py`|Python API client SDK for the REST API (v0.49.0)|
-|||agent_confidence|`video_analysis/agent_confidence.py`|Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence weighting, tiered weighting (v0.50.0)|
-|||report|`video_analysis/report.py`|Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0)|
-|||knowledge_graph|`ui/knowledge_graph.py`|Gradio Knowledge Graph Explorer tab — entity browsing, timeline, relationships, LLM context (v0.53.0)|
-|||internvideo3|`video_analysis/backends/internvideo3.py`|InternVideo3-8B video MLLM backend — SOTA open-weight with MCR reasoning, M^2LA, 73.8 Video-MME (v0.54.0)|
+| `job_queue` | `video_analysis/job_queue.py` | In-process async job queue — background video processing with status polling |
+| `curator` | `video_analysis/curator.py` | Autonomous Video Curator — closed-loop MCR exploration agent (v0.45.0) |
+| `comparison` | `ui/comparison.py` | Cross-report eval comparison dashboard — historical browser, metric diff, regression tracking (v0.48.0) |
+| `telemetry` | `video_analysis/telemetry.py` | OpenTelemetry distributed tracing — pipeline, RAG, and API spans with OTLP export (v0.49.0) |
+| `rate_limiter` | `video_analysis/rate_limiter.py` | In-memory token bucket rate limiter for REST API (v0.49.0) |
+| `error_handlers` | `video_analysis/error_handlers.py` | Structured JSON error responses for REST API (v0.49.0) |
+| `client` | `video_analysis/client.py` | Python API client SDK for the REST API (v0.49.0) |
+| `agent_confidence` | `video_analysis/agent_confidence.py` | Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence weighting, tiered weighting (v0.50.0) |
+| `report` | `video_analysis/report.py` | Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0) |
+| `knowledge_graph` | `ui/knowledge_graph.py` | Gradio Knowledge Graph Explorer tab — entity browsing, timeline, relationships, LLM context (v0.53.0) |
+| `internvideo3` | `video_analysis/backends/internvideo3.py` | InternVideo3-8B video MLLM backend — SOTA open-weight with MCR reasoning, M^2LA, 73.8 Video-MME (v0.54.0) |
 
 ## 💻 Tech Stack
 
 | Component | Choice | Why |
 |-----------|--------|-----|
-| **Backend** | Python 3.14 + FastAPI | Async, fast, built-in |
+| **Backend** | Python 3.11 + FastAPI | Async, fast, built-in |
 | **UI Framework** | Gradio 6 Blocks | Best video + chat components, custom CSS/JS |
 | **Transcription** | faster-whisper (large-v3) | ~12× realtime on RTX 4070, int8 quantized |
 | **Speaker Diarization** | PyAnnote Audio 3.1 | Gold-standard speaker labeling, optional fallback |
@@ -200,9 +200,9 @@ User Question
 | **Re-ranker** | cross-encoder/ms-marco-MiniLM (default) + optional ColBERTv2 (RAGatouille) | Dual re-ranking for precision |
 | **Video Import** | yt-dlp | Downloads from YouTube, Vimeo, Twitch, and 1000+ sites |
 | **LLM** | DeepSeek-V4-Flash (via Hermes CLI) or any OpenAI-compatible API (vLLM, Ollama, llama.cpp, TGI) via `LLM_PROVIDER=openai`
-| **GPU** | RTX 4070 (CUDA 13.3) | All models run with GPU acceleration |
-|| **Live Stream** | FFmpeg `-re` capture | RTMP/RTSP/HLS with auto-reconnect and sliding window (v0.40.0) |
-|| **Video MLLM** | SmolVLM2 / VideoChat-Flash / Qwen3-VL-30B-A3B FP8 / **InternVideo3-8B (vLLM)** | Quad-backend for scene description, summarization, video-native Q&A |
+| **GPU** | RTX 4070 (CUDA 12.8) | All models run with GPU acceleration |
+| **Live Stream** | FFmpeg `-re` capture | RTMP/RTSP/HLS with auto-reconnect and sliding window (v0.40.0) |
+| **Video MLLM** | SmolVLM2 / VideoChat-Flash / Qwen3-VL-30B-A3B FP8 / **InternVideo3-8B (vLLM)** | Quad-backend for scene description, summarization, video-native Q&A |
 
 ## 🔧 Configuration
 
@@ -491,4 +491,4 @@ Dashboard panels:
 |- [x] **REST API: Pipeline Health Endpoints** (v0.53.0) — 4 new endpoints exposing PipelineHealthMonitor (runs report, summary, alerts, alert acknowledge) for automated health checks and observability
 |- [x] **Gradio Knowledge Graph Explorer Tab** (v0.53.0) — Tab 10 in the Gradio UI for visual entity browsing, timeline exploration, entity type filtering, relationship visualization, and LLM context injection
 |- [x] **InternVideo3-8B Backend** (v0.54.0) — SOTA open-weight video MLLM with MCR reasoning, M^2LA KV-cache compression, 73.8 Video-MME, three deployment modes (vLLM server/offline/transformers)
-|MIT
+
