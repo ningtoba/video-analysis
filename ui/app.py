@@ -308,7 +308,6 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                         chatbot = gr.Chatbot(
                             label="Conversation",
                             height=480,
-                            bubble_full_width=False,
                             layout="panel",
                         )
                         chat_input = gr.Textbox(
