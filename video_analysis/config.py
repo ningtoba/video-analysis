@@ -113,7 +113,12 @@ class Config:
     quality_skip_ocr_on_blurry: bool = True  # skip OCR on blurry/static frames
     quality_skip_yolo_on_dark: bool = True  # skip YOLO on too dark/bright frames
 
-    # LLM
+    # LLM — BYOK (Bring Your Own Key) for cloud inference, or local models
+    # Set llm_provider to use cloud APIs instead of local inference.
+    # For local: leave api_key empty and ensure hermes/ollama/vllm is running.
+    llm_provider: str = "local"  # "local" | "openai" | "anthropic" | "groq" | "deepseek" | "google"
+    llm_api_key: str = os.environ.get("LLM_API_KEY", "")  # BYOK — set via env or Settings UI
+    llm_api_base: str = ""  # custom API base URL (e.g. http://localhost:1234/v1 for LM Studio)
     llm_model: str = "deepseek-ai/DeepSeek-V4-Flash"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 2048

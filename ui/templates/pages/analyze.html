@@ -10,7 +10,10 @@
             hx-swap="innerHTML"
             @submit="busy=true">
         <input type="file" name="file" accept="video/*,.mkv,.webm,.mov,.avi"
+               @change="const f=$event.target.files[0];if(f){const u=URL.createObjectURL(f);$refs.preview.src=u;$refs.preview.style.display='block';$refs.previewName.textContent=f.name+' ('+(f.size/1024/1024).toFixed(1)+' MB)'}"
                style="padding:0.6rem;background:var(--surface-alt);border:2px dashed var(--border);border-radius:var(--radius-md);width:100%;cursor:pointer;margin-bottom:var(--space-sm);">
+        <div x-ref="previewName" class="text-xs text-muted mb-sm"></div>
+        <video x-ref="preview" controls style="width:100%;max-height:280px;background:#000;display:none;border-radius:var(--radius-md);margin-bottom:var(--space-sm);"></video>
         <div style="display:flex;align-items:center;gap:var(--space-sm);margin:var(--space-sm) 0;color:var(--text-muted);font-size:var(--text-xs);">
           <span style="flex:1;height:1px;background:var(--border);"></span><span>or paste URL</span><span style="flex:1;height:1px;background:var(--border);"></span>
         </div>
