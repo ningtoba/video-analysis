@@ -1,0 +1,14 @@
+<div class="card">
+  <div class="flex items-center justify-between mb-md">
+    <h3 class="mb-0">⏱ Event-Causal Timeline</h3>
+    <button class="btn btn-secondary btn-sm"
+            hx-get="/api/kg/timeline" hx-target="#event-timeline-content" hx-swap="innerHTML">
+      🔄 Refresh
+    </button>
+  </div>
+  <div id="event-timeline-content" hx-get="/api/kg/timeline" hx-trigger="load" hx-swap="innerHTML">
+    <div class="text-center" style="padding:var(--space-2xl);">
+      <span class="spinner"></span> <span class="text-muted text-sm">Loading events...</span>
+    </div>
+  </div>
+</div>

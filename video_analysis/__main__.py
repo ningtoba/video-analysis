@@ -363,10 +363,18 @@ def main():
             parser.error("--video is required in CLI mode")
         cli_mode(args)
     else:
-        from ui.app import launch
+        from ui.server import create_app
 
-        launch(
-            no_health=args.no_health,
+        import uvicorn
+
+        config = Config()
+        app = create_app(config)
+
+        uvicorn.run(
+            app,
+            host=config.ui_host,
+            port=config.ui_port,
+            log_level="info",
         )
 
 

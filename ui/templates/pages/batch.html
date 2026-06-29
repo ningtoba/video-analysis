@@ -1,0 +1,31 @@
+<div class="grid-2">
+  <div>
+    <div class="card">
+      <h3>📦 Batch Import</h3>
+      <p class="text-muted text-sm">Process multiple videos at once.</p>
+      <form hx-post="/api/videos/process"
+            hx-encoding="multipart/form-data"
+            hx-target="#batch-result"
+            hx-swap="innerHTML">
+        <textarea name="urls" placeholder="https://youtube.com/watch?v=...
+https://youtube.com/watch?v=..." rows="6"
+                  style="margin-bottom:var(--space-sm);"></textarea>
+        <input type="file" name="files" multiple accept="video/*,.mkv,.webm,.mov,.avi"
+               style="margin-bottom:var(--space-sm);padding:0.5rem;background:var(--surface-alt);border:1px dashed var(--border);border-radius:var(--radius-md);">
+        <div class="flex gap-sm">
+          <button type="submit" class="btn btn-primary">➕ Add to Queue</button>
+          <button type="button" class="btn btn-secondary">▶️ Process All</button>
+          <button type="button" class="btn btn-secondary">🗑 Clear Queue</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <h3>Queue Status</h3>
+      <div id="batch-result">
+        <p class="text-muted text-sm">Queue is empty.</p>
+      </div>
+    </div>
+  </div>
+</div>

@@ -336,5 +336,5 @@ def inject_comparison_tab(
             outputs=output,
         )
 
-    # Inject CSS
-    gr.HTML(f"<style>{COMPARISON_DARK_CSS}</style>")
+        # Inject CSS (inside Tab so it's not a direct child of Tabs)
+        gr.HTML(f"<style>{COMPARISON_DARK_CSS}</style>")

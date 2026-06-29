@@ -46,7 +46,7 @@
 - **✂️ Clip Export** — Export precise video clips at any timestamp range from the UI
 - **📚 Video Library** — Multi-video management with searchable library tab
 - **🖼️ Timeline Preview** — Sprite sheet generation for visual timeline browsing (hover to preview frames)
-- **🎨 Polished UI** — Gradio 6 dark theme with tabs (Analysis, Batch, Library), responsive layout, real-time progress
+- **🎨 Production Web UI** — FastAPI + Jinja2 + HTMX + Alpine.js dark theme with 10 tabs, lazy-loading, SSE streaming, WebSocket progress (~30 KB JS, no Node.js build step)
 - **⚡ GPU Accelerated** — RTX 4070 CUDA support for all models with sequential loading to manage 12GB VRAM
 - **🔒 100% Local** — No API keys, no cloud services, all processing on your hardware
 |- **🧑‍🤝‍🧑 Face Recognition** — InsightFace (SCRFD-10G + ArcFace W50) for face detection, 512-d embeddings, and cross-video person identity matching (optional, ~1.1 GB VRAM)
@@ -160,9 +160,11 @@ User Question
 | `models` | `video_analysis/models.py` | Data models — VideoIndex, SceneInfo, FrameInfo, ChatMessage |
 | `config` | `video_analysis/config.py` | Configuration with sensible defaults (auth, frame sampling, CLIP dedup) |
 | `face_recognition` | `video_analysis/face.py` | InsightFace face detection & recognition — DetectedFace, FaceRecognizer, clustering |
-| `ui/app` | `ui/app.py` | Gradio web interface with dark theme, tabs, library, clip export, batch queue, URL import |
-| `ui/utils` | `ui/utils.py` | Shared UI utility functions (importable without gradio) |
-| `ui/workflow` | `ui/workflow.py` | Gradio 6 Workflow visual pipeline builder (gr.Workflow canvas) |
+| `ui/server` | `ui/server.py` | FastAPI app factory with Jinja2 templates, HTMX partials, WebSocket job progress, static files |
+| `ui/routes` | `ui/routes/` | Route handlers per tab (analysis, import, batch, search, library, camera, monitor, comparison, knowledge_graph, event_timeline) |
+| `ui/templates` | `ui/templates/` | Jinja2 templates — base layout, 10 page templates, HTMX partials |
+| `ui/static` | `ui/static/` | Static assets — dark theme CSS, Alpine.js app shell, timeline preview JS, camera JS |
+| `ui/utils` | `ui/utils.py` | Shared UI utility functions (URL parsing, HTML rendering) |
 | `streaming` | `video_analysis/streaming.py` | Real-time streaming/chunked video analysis (StreamingVLM-inspired) |
 | `federation` | `video_analysis/federation.py` | Federated MCP-based cross-instance video search |
 | `backends` | `video_analysis/backends/` | MLLM backend implementations (Qwen3-VL-30B-A3B with vLLM + FP8) |
@@ -178,7 +180,7 @@ User Question
 | `client` | `video_analysis/client.py` | Python API client SDK for the REST API (v0.49.0) |
 | `agent_confidence` | `video_analysis/agent_confidence.py` | Robust-TO inspired confidence-aware agent — per-frame trustworthiness, evidence weighting, tiered weighting (v0.50.0) |
 | `report` | `video_analysis/report.py` | Structured video report generation — comprehensive JSON schema from pipeline results (v0.50.0) |
-| `knowledge_graph` | `ui/knowledge_graph.py` | Gradio Knowledge Graph Explorer tab — entity browsing, timeline, relationships, LLM context (v0.53.0) |
+| `knowledge_graph` | `ui/routes/knowledge_graph.py` | Knowledge Graph Explorer tab — entity browsing, timeline, relationships, LLM context (v0.53.0) |
 | `internvideo3` | `video_analysis/backends/internvideo3.py` | InternVideo3-8B video MLLM backend — SOTA open-weight with MCR reasoning, M^2LA, 73.8 Video-MME (v0.54.0) |
 
 ## 💻 Tech Stack
@@ -186,7 +188,7 @@ User Question
 | Component | Choice | Why |
 |-----------|--------|-----|
 | **Backend** | Python 3.11 + FastAPI | Async, fast, built-in |
-| **UI Framework** | Gradio 6 Blocks | Best video + chat components, custom CSS/JS |
+| **UI Framework** | FastAPI + Jinja2 + HTMX + Alpine.js | Production web stack, ~30 KB JS, no build step |
 | **Transcription** | faster-whisper (large-v3) | ~12× realtime on RTX 4070, int8 quantized |
 | **Speaker Diarization** | PyAnnote Audio 3.1 | Gold-standard speaker labeling, optional fallback |
 | **OCR** | PaddleOCR | Best accuracy for natural scenes, CPU mode |
@@ -223,10 +225,9 @@ Set via environment variables or edit `video_analysis/config.py`:
 | `OCR_ENABLED` | `true` | Enable PaddleOCR text extraction |
 | `DIARIZE_ENABLED` | `true` | Enable PyAnnote speaker diarization |
 | `YT_DLP_ENABLED` | `true` | Enable YouTube/URL video import |
-| `UI_HOST` | `0.0.0.0` | Web UI bind address |
-| `UI_PORT` | `7860` | Web UI port |
-| `GRADIO_USER` | `admin` | UI auth username |
-| `GRADIO_PASSWORD` | (unset) | UI auth password — set to enable authentication |
+| `VIDEO_ANALYSIS_HOST` | `0.0.0.0` | Web UI bind address |
+| `VIDEO_ANALYSIS_PORT` | `7860` | Web UI port |
+| `HF_TOKEN` | (unset) | Hugging Face API token for gated models & higher rate limits |
 | `ADAPTIVE_FRAME_SAMPLING` | `false` | Enable motion-based adaptive frame sampling |
 | `ADAPTIVE_FRAME_SAMPLING_SENSITIVITY` | `0.3` | Sampling density near scene boundaries |
 | `CLIP_FRAME_DEDUP` | `false` | Enable CLIP-similarity frame deduplication |
@@ -398,7 +399,8 @@ Dashboard panels:
 - [x] Core video analysis pipeline
 - [x] RAG indexing and retrieval
 - [x] Chat interface with source citations
-- [x] Gradio web UI
+- [x] Production web UI — FastAPI + Jinja2 + HTMX + Alpine.js (v0.61.0, replaced Gradio)
+- [x] Gradio web UI (v0.1–v0.60, legacy)
 - [x] OpenCLIP zero-shot scene classification
 - [x] Thumbnail sprite sheets for timeline preview
 - [x] Clip export (jump to precise moments)
@@ -417,7 +419,7 @@ Dashboard panels:
 - [x] Frame preview on timeline hover (CSS sprite sheet overlay)
 - [x] ColBERTv2 late-interaction re-ranking
 - [x] Semantic video search (cross-video, multimodal — Qwen3-VL-Embedding + Video Search tab)
-- [x] Gradio auth via env vars
+- [x] HF_TOKEN support for gated models and higher rate limits
 - [x] Motion-based adaptive frame sampling
 - [x] CLIP-similarity frame deduplication
 - [x] Action recognition (X-CLIP — zero-shot open-vocabulary action detection, ~4GB VRAM)

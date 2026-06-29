@@ -1,0 +1,36 @@
+<div class="grid-2">
+  <div>
+    <div class="card" hx-get="/api/kg/stats" hx-trigger="load" hx-swap="innerHTML">
+      <h3>🧠 Knowledge Graph</h3>
+      <span class="spinner"></span> <span class="text-muted text-sm">Loading stats...</span>
+    </div>
+    <div class="card mt-md" hx-get="/api/kg/timeline" hx-trigger="load" hx-swap="innerHTML">
+      <h3>📅 Timeline</h3>
+      <span class="spinner"></span> <span class="text-muted text-sm">Loading...</span>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <h3>🔍 Search Entities</h3>
+      <form hx-get="/api/kg/entities" hx-target="#kg-entities" hx-swap="innerHTML"
+            class="flex flex-col gap-sm">
+        <input type="text" name="query" placeholder="e.g. Alice, car, running...">
+        <select name="type">
+          <option value="">All types</option>
+          <option value="person">Person</option>
+          <option value="object">Object</option>
+          <option value="action">Action</option>
+          <option value="location">Location</option>
+          <option value="concept">Concept</option>
+          <option value="event">Event</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Search</button>
+      </form>
+      <div id="kg-entities" class="mt-md"></div>
+    </div>
+    <div class="card mt-md" hx-get="/api/kg/context" hx-trigger="load" hx-swap="innerHTML">
+      <h3>📝 Context</h3>
+      <span class="spinner"></span> <span class="text-muted text-sm">Loading...</span>
+    </div>
+  </div>
+</div>

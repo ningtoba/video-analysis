@@ -373,6 +373,10 @@ class Config:
         "ADAPTIVE_SCALING_POLICY", "auto"
     )  # "conservative", "balanced", "performance", "auto"
 
+    # Hugging Face authentication token for gated model access and higher rate limits.
+    # Set via HF_TOKEN env var (standard Hugging Face convention).
+    hf_token: str = os.environ.get("HF_TOKEN", "")
+
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
         self.video_dir = self.data_dir / "videos"

@@ -1,0 +1,123 @@
+<div class="grid-2" x-data="{ videoId: '', videoPath: '', busy: false }"
+     @va:video-ready.window="videoId = $event.detail.videoId; videoPath = $event.detail.videoPath; busy = false">
+  <!-- LEFT: Upload, Player, Progress, Export -->
+  <div>
+    <div class="card mb-md">
+      <h3>📹 Upload Video or Paste URL</h3>
+      <form hx-post="/analysis/process"
+            hx-encoding="multipart/form-data"
+            hx-target="#progress-area"
+            hx-swap="innerHTML"
+            hx-indicator="#upload-spinner"
+            @submit="busy = true">
+        <div class="flex flex-col gap-sm">
+          <input type="file" name="file" accept="video/*,.mkv,.webm,.mov,.avi"
+                 style="padding:0.5rem;background:var(--surface-alt);border:1px dashed var(--border);border-radius:var(--radius-md);cursor:pointer;">
+          <div class="flex items-center gap-sm" style="margin:var(--space-sm) 0;">
+            <span style="color:var(--text-muted);font-size:var(--text-xs);">— or paste URL —</span>
+          </div>
+          <div class="flex gap-sm">
+            <input type="url" name="url" placeholder="https://www.youtube.com/watch?v=..."
+                   style="flex:1;">
+            <button type="button" class="btn btn-secondary btn-sm"
+                    hx-post="/analysis/process-url"
+                    hx-include="[name='url']"
+                    hx-target="#progress-area"
+                    hx-swap="innerHTML"
+                    hx-indicator="#upload-spinner">
+              🌐 Download & Analyze
+            </button>
+          </div>
+          <div class="flex gap-sm mt-sm">
+            <button type="submit" class="btn btn-primary btn-lg" style="flex:2;"
+                    :disabled="busy">
+              ⚡ Analyze Upload
+            </button>
+            <button type="button" class="btn btn-secondary"
+                    @click="videoId='';videoPath='';busy=false;document.getElementById('progress-area').innerHTML='';document.getElementById('chat-messages').innerHTML='<div class=text-center><p class=text-muted>Upload a video to start.</p></div>'">
+              🗑 Clear
+            </button>
+          </div>
+        </div>
+      </form>
+      <div id="upload-spinner" class="htmx-indicator mt-sm text-center">
+        <span class="spinner"></span> <span class="text-sm text-muted">Working...</span>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progress-area" class="mb-md"></div>
+
+    <!-- Video Player (only renders src when videoId is set) -->
+    <div x-show="videoPath" class="card mb-md" style="padding:0;overflow:hidden;">
+      <video x-bind:src="videoId ? '/data/videos/' + videoId + '.mp4' : ''"
+             controls style="width:100%;max-height:400px;background:#000;"
+             id="main-video-player"></video>
+    </div>
+
+    <!-- Clip Export -->
+    <div x-show="videoPath" class="card">
+      <h4>✂️ Export Clip</h4>
+      <div class="flex gap-sm items-end flex-wrap">
+        <div>
+          <label class="text-xs text-muted">Start (s)</label>
+          <input type="number" id="clip-start" value="0" min="0" style="width:90px;">
+        </div>
+        <div>
+          <label class="text-xs text-muted">End (s)</label>
+          <input type="number" id="clip-end" value="10" min="0" style="width:90px;">
+        </div>
+        <button class="btn btn-primary btn-sm"
+                hx-post="/analysis/export-clip"
+                hx-include="#clip-start,#clip-end"
+                hx-target="#clip-result"
+                hx-swap="innerHTML">
+          ✂️ Export
+        </button>
+      </div>
+      <div id="clip-result" class="mt-sm"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Chat -->
+  <div>
+    <div class="card" style="display:flex;flex-direction:column;height:620px;">
+      <h3>💬 Ask About the Video</h3>
+      <div id="chat-messages"
+           class="overflow-auto flex-1"
+           style="display:flex;flex-direction:column;gap:var(--space-md);padding:var(--space-sm) 0;">
+        <div class="text-center text-muted text-sm" id="chat-placeholder">
+          <p>Upload a video, then ask questions about it here.</p>
+        </div>
+      </div>
+      <form id="chat-form"
+            hx-post="/analysis/chat"
+            hx-target="#chat-messages"
+            hx-swap="beforeend"
+            hx-indicator="#chat-spinner"
+            @submit="document.getElementById('chat-placeholder')?.remove()"
+            style="border-top:1px solid var(--border);padding-top:var(--space-md);">
+        <input type="hidden" name="video_id" :value="videoId">
+        <div class="flex gap-sm">
+          <input type="text" name="message" placeholder="e.g., What objects are visible? What is being discussed?"
+                 style="flex:1;" autocomplete="off" id="chat-input">
+          <button type="submit" class="btn btn-primary" :disabled="!videoId">
+            Send ➤
+          </button>
+        </div>
+        <div class="flex items-center gap-sm mt-sm">
+          <input type="checkbox" name="show_sources" value="true" checked id="show-sources-check">
+          <label for="show-sources-check" class="text-xs text-muted">Show sources</label>
+          <span id="chat-spinner" class="spinner htmx-indicator" style="margin-left:auto;"></span>
+          <button type="button" class="btn btn-secondary btn-sm"
+                  hx-post="/analysis/chat/clear"
+                  hx-target="#chat-messages"
+                  hx-swap="innerHTML"
+                  style="margin-left:auto;">
+            Clear Chat
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

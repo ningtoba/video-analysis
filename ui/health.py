@@ -347,10 +347,23 @@ def create_health_app(config: Config) -> FastAPI:
 
         if config.rate_limit_enabled:
 
+            # Path prefixes that are NEVER rate-limited — static assets and
+            # Gradio internal endpoints are served by the framework itself and
+            # would cause indefinite loading if throttled.
+            _UNRATED_PATH_PREFIXES = (
+                "/assets/",
+                "/static/",
+                "/gradio_api/",
+                "/theme.css",
+                "/favicon.ico",
+                "/manifest.json",
+            )
+
             @app.middleware("http")
             async def rate_limit_middleware(request, call_next):
-                # Skip rate limiting for health endpoint
-                if request.url.path == "/health":
+                # Skip rate limiting for health endpoint and static/Gradio assets
+                path = request.url.path
+                if path == "/health" or path.startswith(_UNRATED_PATH_PREFIXES):
                     return await call_next(request)
 
                 client_ip = request.client.host if request.client else "unknown"

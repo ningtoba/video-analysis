@@ -151,7 +151,6 @@ def build_workflow(config: Optional[Config] = None) -> gr.Blocks:
             bind=bind_map,
             edges=default_edges,
             graph=str(graph_path),
-            label="Video Analysis Pipeline",
         )
 
         gr.Markdown("---")
@@ -163,40 +162,40 @@ def build_workflow(config: Optional[Config] = None) -> gr.Blocks:
     return workflow_app
 
 
-def inject_workflow_tab(app: gr.Blocks, config: Config):
-    """Inject a Workflow tab into an existing Blocks app.
+def inject_workflow_tab(config: Config):
+    """Inject a Workflow tab into the current Gradio Tabs context.
 
-    This is used when the Workflow is embedded as a tab alongside the
-    main Gradio app.
+    Called from within an active ``with gr.Tabs():`` block, so the
+    TabItem is added directly to the current render context — no need
+    for a nested ``with app:`` (which would create a circular
+    parent-child reference with the outer Blocks context).
     """
-    with app:
-        with gr.TabItem("🧩 Pipeline", id="workflow"):
-            gr.Markdown("### 🧩 Visual Pipeline Builder")
-            gr.Markdown(
-                "Connect pipeline stages visually. Drag nodes, wire ports, "
-                "and run the full analysis pipeline from the canvas."
-            )
+    with gr.TabItem("🧩 Pipeline", id="workflow"):
+        gr.Markdown("### 🧩 Visual Pipeline Builder")
+        gr.Markdown(
+            "Connect pipeline stages visually. Drag nodes, wire ports, "
+            "and run the full analysis pipeline from the canvas."
+        )
 
-            bind_map = {
-                "Download URL": stage_download_url,
-                "Process Video": stage_process_video,
-                "Index Video": stage_index_video,
-                "Ask Question": stage_ask_question,
-            }
+        bind_map = {
+            "Download URL": stage_download_url,
+            "Process Video": stage_process_video,
+            "Index Video": stage_index_video,
+            "Ask Question": stage_ask_question,
+        }
 
-            default_edges = [
-                ("Download URL", "Process Video"),
-                ("Process Video", "Index Video"),
-                ("Index Video", "Ask Question"),
-            ]
+        default_edges = [
+            ("Download URL", "Process Video"),
+            ("Process Video", "Index Video"),
+            ("Index Video", "Ask Question"),
+        ]
 
-            graph_path = config.data_dir / "workflow.json"
-            if not graph_path.exists():
-                graph_path.parent.mkdir(parents=True, exist_ok=True)
+        graph_path = config.data_dir / "workflow.json"
+        if not graph_path.exists():
+            graph_path.parent.mkdir(parents=True, exist_ok=True)
 
-            gr.Workflow(
-                bind=bind_map,
-                edges=default_edges,
-                graph=str(graph_path),
-                label="Video Analysis Pipeline",
-            )
+        gr.Workflow(
+            bind=bind_map,
+            edges=default_edges,
+            graph=str(graph_path),
+        )

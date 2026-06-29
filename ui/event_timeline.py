@@ -194,7 +194,7 @@ def inject_event_timeline_tab(app: gr.Blocks, config: Config) -> None:
         # Video selector
         with gr.Row():
             video_dropdown = gr.Dropdown(
-                choices=_get_video_list(rag),
+                choices=[""] + _get_video_list(rag),
                 label="Select Video",
                 value="",
                 interactive=True,

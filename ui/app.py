@@ -224,14 +224,18 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
     chat_session = VideoChat(rag, config)
 
     with gr.Blocks(
-        css=CSS + LIBRARY_CSS,
-        theme=gr.themes.Soft(
+        title="Video Analysis Platform",
+    ) as app:
+        # In Gradio 6, theme and css moved from Blocks() to launch().
+        # Set as attributes to avoid deprecation warning while keeping
+        # compatibility with gr.mount_gradio_app().
+        app.theme = gr.themes.Soft(
             primary_hue="violet",
             neutral_hue="slate",
             font=gr.themes.GoogleFont("Inter"),
-        ),
-        title="Video Analysis Platform",
-    ) as app:
+        )
+        app.css = CSS + LIBRARY_CSS
+
         # -- state --
         vid = gr.State("")
         vpath = gr.State("")
@@ -443,7 +447,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
 
             # ============ TAB 6: PIPELINE WORKFLOW (Gradio 6 Workflow) ============
             if config.workflow_enabled:
-                inject_workflow_tab(app, config)
+                inject_workflow_tab(config)
 
             # ============ TAB 7: CAMERA (Webcam Live Capture) ============
             inject_camera_tab(app, config)
@@ -496,7 +500,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 yield (
                     _progress_html(0, "Starting..."),
                     status,
-                    True,
+                    gr.update(visible=True),
                     None,
                     state_vid,
                     state_vid,
@@ -512,7 +516,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 yield (
                     _progress_html(1, "Extracting audio & detecting scenes..."),
                     status,
-                    True,
+                    gr.update(visible=True),
                     None,
                     state_vid,
                     state_vid,
@@ -525,7 +529,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 yield (
                     _progress_html(6, "Indexing content for Q&A..."),
                     status,
-                    True,
+                    gr.update(visible=True),
                     None,
                     state_vid,
                     state_vid,
@@ -544,7 +548,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                         f"Complete - {_video_summary(index)}",
                     ),
                     status,
-                    True,
+                    gr.update(visible=True),
                     video_path_str,
                     pid,
                     video_path_str,
@@ -557,7 +561,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 yield (
                     _progress_html(-1, f"❌ {str(e)[:200]}"),
                     status,
-                    True,
+                    gr.update(visible=True),
                     None,
                     state_vid,
                     state_vid,
@@ -598,7 +602,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 yield (
                     _progress_html(0, "Downloading video from URL..."),
                     status,
-                    True,
+                    gr.update(visible=True),
                     None,
                     state_vid,
                     state_vid,
@@ -611,7 +615,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                     yield (
                         _progress_html(-1, "❌ Failed to download video"),
                         status,
-                        True,
+                        gr.update(visible=True),
                         None,
                         state_vid,
                         state_vid,
@@ -624,7 +628,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 yield (
                     _progress_html(1, "Processing downloaded video..."),
                     status,
-                    True,
+                    gr.update(visible=True),
                     None,
                     state_vid,
                     state_vid,
@@ -636,7 +640,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 yield (
                     _progress_html(6, "Indexing content for Q&A..."),
                     status,
-                    True,
+                    gr.update(visible=True),
                     None,
                     state_vid,
                     state_vid,
@@ -655,7 +659,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                         f"Complete - {_video_summary(index)}",
                     ),
                     status,
-                    True,
+                    gr.update(visible=True),
                     str(downloaded),
                     index.video_id,
                     str(downloaded),
@@ -668,7 +672,7 @@ def build(config: Optional[Config] = None) -> gr.Blocks:
                 yield (
                     _progress_html(-1, f"❌ {str(e)[:200]}"),
                     status,
-                    True,
+                    gr.update(visible=True),
                     None,
                     state_vid,
                     state_vid,
@@ -1634,6 +1638,8 @@ def launch(
             share=cfg.ui_share,
             show_error=True,
             quiet=False,
+            css=gradio_app.css,
+            theme=gradio_app.theme,
         )
         return
 

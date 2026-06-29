@@ -15,7 +15,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import gradio as gr
 
@@ -174,10 +174,16 @@ def _build_system_metrics_html(metrics: Dict[str, Any]) -> str:
 
 def _build_job_queue_html(cfg: Config) -> str:
     """Build the job queue status section."""
+    import asyncio
+    import inspect
+
     try:
         jm = get_default_manager()
         raw = jm.list_jobs()
         # Work with both sync mocks and real async managers
+        if inspect.iscoroutine(raw):
+            # Called during synchronous UI construction — run inline
+            raw = asyncio.run(raw)
         jobs = list(raw) if isinstance(raw, (list, tuple)) else []
     except Exception:
         return '<div class="monitor-card">Job queue not available (no manager instance).</div>'
