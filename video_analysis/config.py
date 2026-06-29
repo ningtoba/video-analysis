@@ -20,19 +20,13 @@ class Config:
     thumbnails_dir: Path = field(init=False)
     chroma_path: Path = field(init=False)
 
-    # ASR (Automatic Speech Recognition)
-    # Qwen3-ASR is the current SOTA open-source ASR model (Jan 2026):
-    #   1.7B: 5.76% avg WER across 52 languages, unified streaming+offline,
-    #   word-level timestamps, context biasing, Apache 2.0
-    #   0.6B: fast variant (0.064 RTF) for real-time / CPU deployment
-    # Alternatives: faster-whisper large-v3 (7.44% WER, MIT, proven),
-    #   Moonshine Voice (245M, 6.65% WER, MIT, CPU-only),
-    #   Parakeet TDT 0.6B (NVIDIA, 25 languages, 2000x RTF, CPU-fast)
-    asr_backend: str = "faster-whisper"  # "faster-whisper" | "qwen3-asr" | "moonshine" | "parakeet"
-    whisper_model: str = "large-v3"  # only used when asr_backend=faster-whisper
-    whisper_device: str = "cuda"
-    whisper_compute_type: str = "int8_float16"
-    qwen_asr_model: str = "Qwen/Qwen3-ASR-1.7B"  # 1.7B or 0.6B
+    # ASR — faster-whisper (CTranslate2) is the only implemented backend.
+    # Qwen3-ASR, Moonshine, and Parakeet are noted as future options but
+    # have no pipeline integration code yet.
+    asr_backend: str = "faster-whisper"  # "faster-whisper" only (others not yet implemented)
+    whisper_model: str = "large-v3"       # "large-v3", "large-v3-turbo", "large-v2", "medium", "small", "tiny"
+    whisper_device: str = "cuda"          # "cuda" or "cpu"
+    whisper_compute_type: str = "int8_float16"  # "int8_float16", "float16", "int8"
 
     # OpenCLIP — scene classification & visual embeddings
     # ViT-L-14-quickgelu (DFN5B): best overall CLIP, 79.1% ImageNet zero-shot
@@ -64,22 +58,24 @@ class Config:
         "bytetrack.yaml"  # overridden by ENTITY_TRACKER_TYPE env var  # "bytetrack.yaml" or "botsort.yaml"
     )
 
-    # RAG — Embedding (2026 state-of-the-art)
-    # BGE-M3 (BAAI, 568M, MIT): production workhorse, dense+sparse+multi-vector,
-    #   100+ languages, 8192 ctx. MTEB English ~64-67, strong cross-lingual.
-    # BGE-VL-base (BAAI, 150M, MIT): multimodal text+image+composed, ~0.8GB VRAM.
-    # Qwen3-Embedding-4B (Apache 2.0): #1 MTEB multilingual at 70.58.
-    # Qwen3-Embedding-8B: highest accuracy, needs A100-class GPU.
-    # NV-Embed-v2 (NVIDIA, 7.85B): #1 MTEB English at 72.31, research license.
-    # nomic-embed-text-v2 (Nomic, 137M): lightweight, fast, good for basic search.
-    embedding_model: str = "BAAI/BGE-M3"  # "BAAI/BGE-M3" | "BAAI/BGE-VL-base" | "Qwen/Qwen3-Embedding-4B" | "Qwen/Qwen3-Embedding-8B" | "nvidia/NV-Embed-v2" | "nomic-ai/nomic-embed-text-v2"
-    text_embedding_model: str = "nomic-ai/nomic-embed-text-v2"
-    multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-2B"  # cross-modal: text+image+video
+    # RAG — Embedding
+    # Primary: BGE-VL-base (150M, MIT, multimodal text+image+composed, ~0.8GB VRAM).
+    #   This is the ONLY embedding model with a dedicated code path in rag.py
+    #   (_load_bge_vl). It supports text-only, image-only, and composed embeddings.
+    # Fallback: nomic-embed-text-v2 (137M) via SentenceTransformer, for when
+    #   BGE-VL fails to load. Has built-in prefix normalization.
+    # Opt-in multimodal: Qwen3-VL-Embedding-2B (Apache 2.0), only when
+    #   multimodal_embedding_enabled=True. Separate legacy code path.
+    # NOTE: BGE-M3 and Qwen3-Embedding are NOT currently integrated;
+    #   they would fall through to the SentenceTransformer fallback path.
+    embedding_model: str = "BAAI/BGE-VL-base"  # "BAAI/BGE-VL-base" only (primary code path)
+    text_embedding_model: str = "nomic-ai/nomic-embed-text-v2"  # SentenceTransformer fallback
+    multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-2B"  # opt-in legacy path
     multimodal_embedding_enabled: bool = bool(
         os.environ.get("MULTIMODAL_EMBEDDING", "false").lower() == "true"
     )
-    # Reranker — bge-reranker-v2-m3 (BAAI, 568M, MIT) is the standard pairing with BGE-M3
-    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    # Reranker — cross-encoder/ms-marco-MiniLM-L-6-v2 is hardcoded in rag.py
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     chroma_collection: str = "video_analysis"
     top_k_retrieval: int = 20
     top_k_rerank: int = 5
@@ -113,13 +109,15 @@ class Config:
     quality_skip_ocr_on_blurry: bool = True  # skip OCR on blurry/static frames
     quality_skip_yolo_on_dark: bool = True  # skip YOLO on too dark/bright frames
 
-    # LLM — BYOK (Bring Your Own Key) for cloud inference, or local models
-    # Set llm_provider to use cloud APIs instead of local inference.
-    # For local: leave api_key empty and ensure hermes/ollama/vllm is running.
-    llm_provider: str = "local"  # "local" | "openai" | "anthropic" | "groq" | "deepseek" | "google"
-    llm_api_key: str = os.environ.get("LLM_API_KEY", "")  # BYOK — set via env or Settings UI
-    llm_api_base: str = ""  # custom API base URL (e.g. http://localhost:1234/v1 for LM Studio)
-    llm_model: str = "deepseek-ai/DeepSeek-V4-Flash"
+    # LLM — two working backends: Hermes CLI (local) and OpenAI-compatible API.
+    # The OpenAI-compatible backend can reach any provider that speaks the
+    # /v1/chat/completions protocol (OpenAI, DeepSeek, Groq, Anthropic via
+    # proxy, Ollama, vLLM, LM Studio, llama.cpp, TGI, etc.) by setting
+    # llm_api_base and llm_api_key appropriately.
+    llm_provider: str = "hermes"  # "hermes" (local CLI) or "openai" (OpenAI-compatible API)
+    llm_api_key: str = os.environ.get("LLM_API_KEY", "")  # required for OpenAI-compatible
+    llm_api_base: str = ""  # custom base URL (e.g. https://api.deepseek.com/v1, http://localhost:1234/v1)
+    llm_model: str = "deepseek-ai/DeepSeek-V4-Flash"  # model name sent to the API
     llm_temperature: float = 0.3
     llm_max_tokens: int = 2048
 

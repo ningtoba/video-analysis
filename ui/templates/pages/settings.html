@@ -4,10 +4,10 @@
     <div class="flex items-center justify-between flex-wrap gap-sm">
       <div>
         <h3 class="mb-0">⚙️ Pipeline Configuration</h3>
-        <p class="text-muted text-sm mb-0 mt-sm">All settings are editable and persisted to disk. Changes take effect on the next pipeline run. No .env required.</p>
+        <p class="text-muted text-sm mb-0 mt-sm">Only shows options with working pipeline integration. Changes saved to <code>data/config.json</code>.</p>
       </div>
       <button class="btn btn-primary" @click="saving=true;fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)}).then(r=>r.json()).then(d=>{cfg=d;saving=false;saved=true;setTimeout(()=>saved=false,2000)})">
-        <span x-show="!saving && !saved">💾 Save All</span>
+        <span x-show="!saving && !saved">💾 Save</span>
         <span x-show="saving"><span class="spinner"></span> Saving...</span>
         <span x-show="saved" style="color:var(--success);">✓ Saved!</span>
       </button>
@@ -19,75 +19,63 @@
   </div>
 
   <div x-show="loaded" class="grid-2">
-    <!-- ── Speech Recognition ── -->
+
+    <!-- ── ASR ── -->
     <div class="card">
-      <h4>🎙️ Speech Recognition (ASR)</h4>
+      <h4>🎙️ Speech Recognition</h4>
       <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
-        <a href="https://huggingface.co/Qwen/Qwen3-ASR-1.7B" target="_blank">Qwen3-ASR</a> (5.76% WER, 52 langs, Apache 2.0) |
-        <a href="https://github.com/UsefulSensors/moonshine" target="_blank">Moonshine</a> (245M, 6.65% WER, MIT, CPU-only) |
-        <a href="https://github.com/SYSTRAN/faster-whisper" target="_blank">faster-whisper</a> (7.44% WER, MIT, proven)
+        <a href="https://github.com/SYSTRAN/faster-whisper" target="_blank">faster-whisper</a> — CTranslate2-accelerated Whisper.
+        Qwen3-ASR, Moonshine, Parakeet not yet integrated.
       </p>
-      <label class="text-xs text-muted">ASR Backend
-        <select x-model="cfg.asr_backend" class="mt-xs">
-          <option value="qwen3-asr">Qwen3-ASR 1.7B — SOTA accuracy, streaming+offline unified, 52 languages ★</option>
-          <option value="faster-whisper">faster-whisper large-v3 — proven, MIT, 99+ languages</option>
-          <option value="moonshine">Moonshine Voice 245M — 6.65% WER, MIT, CPU-only, fast</option>
-          <option value="parakeet">Parakeet TDT 0.6B — 2000x RTF, 25 languages, CPU-fast</option>
-        </select></label>
-      <label class="text-xs text-muted">Qwen3-ASR Model Size
-        <select x-model="cfg.qwen_asr_model" class="mt-xs">
-          <option value="Qwen/Qwen3-ASR-1.7B">1.7B — flagship, best accuracy</option>
-          <option value="Qwen/Qwen3-ASR-0.6B">0.6B — fast, 0.064 RTF, CPU-friendly</option>
-        </select></label>
-      <label class="text-xs text-muted">Whisper Model (fallback)
+      <label class="text-xs text-muted">Model
         <select x-model="cfg.whisper_model" class="mt-xs">
-          <option value="large-v3">large-v3 — 1.55B, 7.44% WER</option>
+          <option value="large-v3">large-v3 — 1.55B, best accuracy</option>
           <option value="large-v3-turbo">large-v3-turbo — 809M, 6x faster</option>
           <option value="large-v2">large-v2 — 1.55B</option>
           <option value="medium">medium — 769M</option>
-          <option value="small">small — 244M</option>
+          <option value="small">small — 244M, CPU-friendly</option>
         </select></label>
       <div class="grid-2 gap-sm">
         <label class="text-xs text-muted">Device <select x-model="cfg.whisper_device" class="mt-xs"><option value="cuda">GPU (CUDA)</option><option value="cpu">CPU</option></select></label>
-        <label class="text-xs text-muted">Precision <select x-model="cfg.whisper_compute_type" class="mt-xs"><option value="int8_float16">int8_float16</option><option value="float16">float16</option><option value="int8">int8</option></select></label>
+        <label class="text-xs text-muted">Precision <select x-model="cfg.whisper_compute_type" class="mt-xs"><option value="int8_float16">int8_float16 (fast)</option><option value="float16">float16</option><option value="int8">int8</option></select></label>
       </div>
     </div>
 
-    <!-- ── Vision: CLIP ── -->
+    <!-- ── CLIP ── -->
     <div class="card">
-      <h4>🖼️ Scene Classification (OpenCLIP)</h4>
+      <h4>🖼️ Scene Classification</h4>
       <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
-        <a href="https://github.com/mlfoundations/open_clip" target="_blank">OpenCLIP</a> — zero-shot visual scene labeling & visual embeddings
+        <a href="https://github.com/mlfoundations/open_clip" target="_blank">OpenCLIP</a> — zero-shot visual labeling. All models work with the OpenCLIP library.
       </p>
       <label class="text-xs text-muted">CLIP Model
         <select x-model="cfg.clip_model" class="mt-xs">
           <option value="ViT-L-14-quickgelu">ViT-L-14 DFN5B — best balance, 768d ★</option>
-          <option value="ViT-H-14-quickgelu">ViT-H-14 DFN5B — top accuracy, 1024d, 16GB+ VRAM</option>
-          <option value="ViT-SO400M-14-SigLIP-384">SigLIP SO400M — strong multilingual, high-res</option>
-          <option value="ViT-B-32">ViT-B-32 laion2b — fastest, 512d, lowest VRAM</option>
+          <option value="ViT-H-14-quickgelu">ViT-H-14 DFN5B — top accuracy, 16GB+ VRAM</option>
+          <option value="ViT-SO400M-14-SigLIP-384">SigLIP SO400M — multilingual, high-res</option>
+          <option value="ViT-B-32">ViT-B-32 laion2b — fastest, 512d</option>
         </select></label>
-      <label class="text-xs text-muted">Pretraining Dataset
+      <label class="text-xs text-muted">Dataset
         <select x-model="cfg.clip_pretrained_dataset" class="mt-xs">
-          <option value="dfn5b">DFN5B — best quality (ViT-L/H) ★</option>
-          <option value="webli">WebLI — multilingual (SigLIP)</option>
-          <option value="laion2b_s34b_b79k">LAION-2B — classic (ViT-B)</option>
+          <option value="dfn5b">DFN5B — best quality</option>
+          <option value="webli">WebLI — multilingual</option>
+          <option value="laion2b_s34b_b79k">LAION-2B — classic</option>
         </select></label>
     </div>
 
-    <!-- ── Object Detection ── -->
+    <!-- ── YOLO ── -->
     <div class="card">
-      <h4>🎯 Object Detection (YOLO)</h4>
+      <h4>🎯 Object Detection</h4>
       <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
-        <a href="https://docs.ultralytics.com/models/yolo26" target="_blank">YOLO26</a> (Jan 2026) — NMS-free, 43% faster CPU, end-to-end
+        <a href="https://docs.ultralytics.com/models/yolo26" target="_blank">Ultralytics YOLO</a>. All variants supported.
       </p>
-      <label class="text-xs text-muted">YOLO Model
+      <label class="text-xs text-muted">Model
         <select x-model="cfg.yolo_model" class="mt-xs">
           <option value="yolo26x.pt">YOLO26x — 57.5 mAP, 55.7M params ★</option>
           <option value="yolo26l.pt">YOLO26l — 55.0 mAP, 24.8M</option>
           <option value="yolo26m.pt">YOLO26m — 53.1 mAP, 20.4M</option>
           <option value="yolo26s.pt">YOLO26s — 48.6 mAP, 9.5M</option>
-          <option value="yolo26n.pt">YOLO26n — 40.9 mAP, 2.4M, CPU-real-time</option>
-          <option value="yolo11x.pt">YOLO11x — previous gen, 54.7 mAP</option>
+          <option value="yolo26n.pt">YOLO26n — 40.9 mAP, 2.4M (CPU)</option>
+          <option value="yolo11x.pt">YOLO11x — 54.7 mAP (previous gen)</option>
         </select></label>
       <div class="grid-2 gap-sm">
         <label class="text-xs text-muted">Confidence <input type="number" x-model="cfg.yolo_confidence" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
@@ -96,63 +84,97 @@
       <label class="flex items-center gap-sm text-xs text-muted mt-sm"><input type="checkbox" x-model="cfg.entity_tracking_enabled"> Entity Tracking</label>
     </div>
 
-    <!-- ── Embeddings & RAG ── -->
+    <!-- ── Embeddings ── -->
     <div class="card">
-      <h4>🧠 Embeddings & Retrieval (RAG)</h4>
+      <h4>🧠 Embeddings & Retrieval</h4>
       <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
-        <a href="https://huggingface.co/BAAI/bge-m3" target="_blank">BGE-M3</a> (568M, MIT, dense+sparse+multi-vector, 100+ langs) |
-        <a href="https://huggingface.co/Qwen/Qwen3-Embedding-4B" target="_blank">Qwen3-Embedding</a> (4B, Apache 2.0, MTEB #1 multilingual) |
-        <a href="https://huggingface.co/BAAI/bge-reranker-v2-m3" target="_blank">bge-reranker-v2-m3</a>
+        Primary: <a href="https://huggingface.co/BAAI/BGE-VL-base" target="_blank">BGE-VL-base</a> (150M, MIT, multimodal).
+        Fallback: <a href="https://huggingface.co/nomic-ai/nomic-embed-text-v2" target="_blank">nomic-embed-text-v2</a> (137M) via SentenceTransformer.
       </p>
-      <label class="text-xs text-muted">Embedding Model
+      <label class="text-xs text-muted">Primary Embedding Model
         <select x-model="cfg.embedding_model" class="mt-xs">
-          <option value="BAAI/BGE-M3">BGE-M3 (568M, MIT, 100+ langs, hybrid dense+sparse) ★</option>
-          <option value="Qwen/Qwen3-Embedding-4B">Qwen3-Embedding-4B (Apache 2.0, MTEB #1 multilingual)</option>
-          <option value="Qwen/Qwen3-Embedding-8B">Qwen3-Embedding-8B (max accuracy, needs A100)</option>
-          <option value="nvidia/NV-Embed-v2">NV-Embed-v2 (7.85B, MTEB English #1)</option>
-          <option value="BAAI/BGE-VL-base">BGE-VL-base (150M, MIT, multimodal text+image)</option>
-          <option value="nomic-ai/nomic-embed-text-v2">Nomic Embed v2 (137M, lightweight, fast)</option>
+          <option value="BAAI/BGE-VL-base">BGE-VL-base (150M, MIT, multimodal) ★</option>
+          <option value="BAAI/BGE-VL-large">BGE-VL-large (larger variant)</option>
         </select></label>
-      <label class="text-xs text-muted">Reranker
-        <select x-model="cfg.reranker_model" class="mt-xs">
-          <option value="BAAI/bge-reranker-v2-m3">bge-reranker-v2-m3 (568M, MIT) ★</option>
-          <option value="BAAI/bge-reranker-v2-gemma">bge-reranker-v2-gemma (lightweight)</option>
-          <option value="cross-encoder/ms-marco-MiniLM-L-6-v2">ms-marco-MiniLM-L-6 (fast, basic)</option>
-          <option value="">None (skip reranking)</option>
+      <label class="text-xs text-muted">Fallback (SentenceTransformer)
+        <select x-model="cfg.text_embedding_model" class="mt-xs">
+          <option value="nomic-ai/nomic-embed-text-v2">nomic-embed-text-v2 (137M) ★</option>
+          <option value="nomic-ai/nomic-embed-text-v1.5">nomic-embed-text-v1.5</option>
+          <option value="BAAI/bge-small-en-v1.5">bge-small-en-v1.5 (lightweight)</option>
+          <option value="BAAI/bge-base-en-v1.5">bge-base-en-v1.5</option>
         </select></label>
       <div class="grid-3 gap-sm">
-        <label class="text-xs text-muted">Top-K Retrieve <input type="number" x-model="cfg.top_k_retrieval" min="5" max="100" class="mt-xs"></label>
-        <label class="text-xs text-muted">Top-K Rerank <input type="number" x-model="cfg.top_k_rerank" min="1" max="20" class="mt-xs"></label>
-        <label class="text-xs text-muted">Temp Window <input type="number" x-model="cfg.temporal_window" min="0" max="10" class="mt-xs"></label>
+        <label class="text-xs text-muted">Top-K <input type="number" x-model="cfg.top_k_retrieval" min="5" max="100" class="mt-xs"></label>
+        <label class="text-xs text-muted">Rerank <input type="number" x-model="cfg.top_k_rerank" min="1" max="20" class="mt-xs"></label>
+        <label class="text-xs text-muted">Temporal ±<input type="number" x-model="cfg.temporal_window" min="0" max="10" class="mt-xs"></label>
       </div>
-      <div class="flex flex-wrap gap-sm mt-sm">
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.mmr_diversity_enabled"> MMR Diversity</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.multimodal_embedding_enabled"> Multimodal Embed (Qwen3-VL)</label>
+      <label class="flex items-center gap-sm text-xs text-muted mt-sm"><input type="checkbox" x-model="cfg.mmr_diversity_enabled"> MMR Diversity Re-Ranking</label>
+    </div>
+
+    <!-- ── LLM / BYOK ── -->
+    <div class="card">
+      <h4>💬 Chat LLM (BYOK)</h4>
+      <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
+        <strong>Hermes:</strong> local CLI (<code>hermes chat -q</code>). No key needed.<br>
+        <strong>OpenAI-compatible:</strong> any API speaking <code>/v1/chat/completions</code>
+        (OpenAI, DeepSeek, Groq, Ollama, vLLM, LM Studio, llama.cpp, Anthropic via proxy).
+      </p>
+      <label class="text-xs text-muted">Provider
+        <select x-model="cfg.llm_provider" class="mt-xs">
+          <option value="hermes">💻 Hermes CLI — local, no key needed</option>
+          <option value="openai">☁️ OpenAI-compatible API — any /v1/chat/completions endpoint</option>
+        </select></label>
+      <label class="text-xs text-muted">Model Name
+        <input type="text" x-model="cfg.llm_model" placeholder="deepseek-ai/DeepSeek-V4-Flash" class="mt-xs"></label>
+      <div class="grid-2 gap-sm">
+        <label class="text-xs text-muted">API Key (optional for local)
+          <input :type="cfg.llm_api_key ? 'password' : 'text'" x-model="cfg.llm_api_key"
+                 :placeholder="cfg.llm_provider === 'hermes' ? 'not needed for Hermes' : 'sk-... or dl-...'" class="mt-xs"></label>
+        <label class="text-xs text-muted">API Base URL
+          <input type="text" x-model="cfg.llm_api_base"
+                 placeholder="https://api.deepseek.com/v1 | http://localhost:1234/v1" class="mt-xs"></label>
       </div>
+      <div class="grid-2 gap-sm mt-sm">
+        <label class="text-xs text-muted">Temperature <input type="number" x-model="cfg.llm_temperature" step="0.1" min="0" max="2" class="mt-xs"></label>
+        <label class="text-xs text-muted">Max Tokens <input type="number" x-model="cfg.llm_max_tokens" min="256" max="32768" step="256" class="mt-xs"></label>
+      </div>
+      <details class="mt-sm"><summary class="text-xs text-muted">💡 How to use with...</summary>
+        <div class="text-xs text-muted mt-sm" style="line-height:1.8;">
+          <strong>OpenAI:</strong> provider=openai, base=<code>https://api.openai.com/v1</code>, key=sk-..., model=gpt-4o<br>
+          <strong>DeepSeek:</strong> provider=openai, base=<code>https://api.deepseek.com/v1</code>, key=sk-..., model=deepseek-chat<br>
+          <strong>Groq:</strong> provider=openai, base=<code>https://api.groq.com/openai/v1</code>, key=gsk_..., model=llama-4-maverick<br>
+          <strong>Ollama:</strong> provider=openai, base=<code>http://localhost:11434/v1</code>, key=ollama, model=llama3.3<br>
+          <strong>LM Studio:</strong> provider=openai, base=<code>http://localhost:1234/v1</code>, key=lm-studio, model=auto<br>
+          <strong>vLLM:</strong> provider=openai, base=<code>http://localhost:8000/v1</code>, key=token-abc123, model=&lt;model-name&gt;<br>
+          <strong>Anthropic (via proxy):</strong> use <a href="https://github.com/anthropics/anthropic-proxy" target="_blank">anthropic-proxy</a> to add /v1/chat/completions compatibility
+        </div>
+      </details>
     </div>
 
     <!-- ── Video MLLM ── -->
     <div class="card">
       <h4>🤖 Video MLLM (Visual Q&A)</h4>
       <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
-        <a href="https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct" target="_blank">Qwen3-VL</a> (MoE 30B/3B active, Apache 2.0) |
-        <a href="https://huggingface.co/OpenGVLab/InternVideo3-8B" target="_blank">InternVideo3</a> (8B, SOTA 73.8 Video-MME) |
-        <a href="https://huggingface.co/HuggingFaceTB/SmolVLM2-2.2B-Instruct" target="_blank">SmolVLM2</a> (2.2B, Apache 2.0)
+        All four backends have working pipeline integration.
+        <a href="https://huggingface.co/OpenGVLab/InternVideo3-8B" target="_blank">InternVideo3-8B</a> (SOTA 73.8 Video-MME) |
+        <a href="https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct" target="_blank">Qwen3-VL-30B-A3B</a> (MoE, Apache 2.0) |
+        <a href="https://huggingface.co/HuggingFaceTB/SmolVLM2-2.2B-Instruct" target="_blank">SmolVLM2</a> (Apache 2.0) |
+        <a href="https://huggingface.co/OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448" target="_blank">VideoChat-Flash</a> (MIT)
       </p>
       <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_enabled"> Enable Video MLLM</label>
       <label class="text-xs text-muted">Backend
         <select x-model="cfg.video_mllm_backend" class="mt-xs">
-          <option value="qwen3_vl">Qwen3-VL-30B-A3B (MoE, 128K ctx, Apache 2.0) ★</option>
-          <option value="internvideo3">InternVideo3-8B (SOTA, MCR reasoning, M^2LA KV-cache)</option>
-          <option value="smolvlm2">SmolVLM2 2.2B (Apache 2.0, lightweight)</option>
-          <option value="videochat_flash">VideoChat-Flash 2B (MIT)</option>
+          <option value="auto">auto — try best available</option>
+          <option value="internvideo3">InternVideo3-8B — SOTA, MCR reasoning, vLLM/transformers</option>
+          <option value="qwen3_vl">Qwen3-VL-30B-A3B — MoE, Apache 2.0, 128K ctx</option>
+          <option value="smolvlm2">SmolVLM2 2.2B — Apache 2.0, lightweight</option>
+          <option value="videochat_flash">VideoChat-Flash 2B — MIT, fast</option>
         </select></label>
-      <label class="text-xs text-muted">Model Size
+      <label class="text-xs text-muted">Model Size (SmolVLM2 only)
         <select x-model="cfg.video_mllm_model_size" class="mt-xs">
-          <option value="30B">30B (MoE, 3B active, FP8) ★</option>
-          <option value="8B">8B</option>
-          <option value="2B">2B (lightweight)</option>
-          <option value="500M">500M (fastest)</option>
+          <option value="2.2B">2.2B — best quality</option>
+          <option value="500M">500M — fast</option>
+          <option value="256M">256M — fastest, low VRAM</option>
         </select></label>
       <div class="flex flex-wrap gap-sm mt-sm">
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_as_describer"> Scene Describer</label>
@@ -160,111 +182,57 @@
       </div>
     </div>
 
-    <!-- ── Processing ── -->
+    <!-- ── Features ── -->
     <div class="card">
-      <h4>🎬 Video Processing</h4>
-      <label class="text-xs text-muted">Processing Mode
-        <select x-model="cfg.processing_mode" class="mt-xs">
-          <option value="auto">auto — detect video type, skip unnecessary stages</option>
-          <option value="video_full">video_full — all stages (audio + visual)</option>
-          <option value="audio_only">audio_only — transcription only, no visual</option>
-        </select></label>
-      <label class="text-xs text-muted">Scene Detector
-        <select x-model="cfg.scene_detector" class="mt-xs">
-          <option value="adaptive">adaptive — PySceneDetect adaptive (best)</option>
-          <option value="content">content — PySceneDetect content-aware</option>
-          <option value="hash">hash — perceptual hashing (fast)</option>
-          <option value="ffmpeg">ffmpeg — FFmpeg motion vectors</option>
-        </select></label>
-      <div class="grid-2 gap-sm">
-        <label class="text-xs text-muted">Frame Rate <input type="number" x-model="cfg.frame_rate" step="0.1" min="0.1" max="10" class="mt-xs"></label>
-        <label class="text-xs text-muted">Scene Threshold <input type="number" x-model="cfg.scene_threshold" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
-      </div>
-    </div>
-
-    <!-- ── LLM / BYOK ── -->
-    <div class="card">
-      <h4>💬 Chat LLM (BYOK)</h4>
-      <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
-        Bring your own API key for cloud inference, or use a local model.<br>
-        <strong>Local:</strong> hermes CLI, Ollama, vLLM, LM Studio, llama.cpp &nbsp;|&nbsp;
-        <strong>Cloud:</strong> OpenAI, Anthropic, Groq, DeepSeek, Google
-      </p>
-      <label class="text-xs text-muted">Provider
-        <select x-model="cfg.llm_provider" class="mt-xs">
-          <option value="local">💻 Local — hermes / ollama / vllm / LM Studio</option>
-          <option value="openai">☁️ OpenAI — gpt-4o, gpt-4.1</option>
-          <option value="anthropic">☁️ Anthropic — Claude Opus 4.8, Sonnet 4.6</option>
-          <option value="deepseek">☁️ DeepSeek — DeepSeek-V4</option>
-          <option value="groq">☁️ Groq — Llama 4 (fastest, free tier)</option>
-          <option value="google">☁️ Google — Gemini 2.5 Pro</option>
-        </select></label>
-      <label class="text-xs text-muted">Model
-        <select x-model="cfg.llm_model" class="mt-xs">
-          <option value="deepseek-ai/DeepSeek-V4-Flash">DeepSeek-V4-Flash</option>
-          <option value="gpt-4.1">GPT-4.1 (OpenAI)</option>
-          <option value="gpt-4o">GPT-4o (OpenAI)</option>
-          <option value="claude-opus-4-8-20250514">Claude Opus 4.8 (Anthropic)</option>
-          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Anthropic)</option>
-          <option value="gemini-2.5-pro">Gemini 2.5 Pro (Google)</option>
-          <option value="llama-4-maverick">Llama 4 Maverick (Groq)</option>
-          <option value="meta-llama/Meta-Llama-3.3-70B-Instruct">Llama 3.3 70B (local)</option>
-          <option value="Qwen/Qwen3-235B-A22B-Instruct">Qwen3-235B MoE (local)</option>
-        </select></label>
-      <div class="grid-2 gap-sm">
-        <label class="text-xs text-muted">API Key <input :type="cfg.llm_api_key ? 'password' : 'text'" x-model="cfg.llm_api_key" placeholder="sk-... or leave empty for local" class="mt-xs"></label>
-        <label class="text-xs text-muted">API Base URL <input type="text" x-model="cfg.llm_api_base" placeholder="http://localhost:1234/v1" class="mt-xs"></label>
-      </div>
-      <div class="grid-2 gap-sm mt-sm">
-        <label class="text-xs text-muted">Temperature <input type="number" x-model="cfg.llm_temperature" step="0.1" min="0" max="2" class="mt-xs"></label>
-        <label class="text-xs text-muted">Max Tokens <input type="number" x-model="cfg.llm_max_tokens" min="256" max="32768" step="256" class="mt-xs"></label>
-      </div>
-      <p class="text-xs text-muted mt-sm">
-        API keys are stored in <code>data/config.json</code>. Set via <code>LLM_API_KEY</code> env var for Docker/CI. Cloud providers need internet access; local requires no key.</p>
-    </div>
-
-    <!-- ── Advanced Features ── -->
-    <div class="card">
-      <h4>🔧 Advanced Features</h4>
+      <h4>🔧 Features</h4>
       <div class="grid-2 gap-sm">
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.face_recognition_enabled"> Face Recognition (InsightFace)</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.action_recognition_enabled"> Action Recognition (X-CLIP)</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.quality_screening_enabled"> Quality Pre-Screening</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.adaptive_scaling_enabled"> Adaptive Pipeline Scaling</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.event_causal_rag_enabled"> Event-Causal RAG (SES graphs)</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.conversation_memory_enabled"> Conversation Memory (ChromaDB)</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.event_causal_rag_enabled"> Event-Causal RAG</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.conversation_memory_enabled"> Conversation Memory</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.agent_enabled"> Agentic Video Agent</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.orchestra_enabled"> Multi-Agent Orchestra</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.curator_enabled"> Autonomous Curator</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.prometheus_enabled"> Prometheus Metrics</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.telemetry_enabled"> OpenTelemetry Tracing</label>
       </div>
     </div>
 
-    <!-- ── Storage ── -->
+    <!-- ── Processing ── -->
     <div class="card">
-      <h4>📁 Storage & System</h4>
+      <h4>🎬 Processing & Storage</h4>
+      <label class="text-xs text-muted">Mode
+        <select x-model="cfg.processing_mode" class="mt-xs">
+          <option value="auto">auto — detect type, skip unnecessary stages ★</option>
+          <option value="video_full">video_full — audio + visual</option>
+          <option value="audio_only">audio_only — transcription only</option>
+        </select></label>
+      <label class="text-xs text-muted">Scene Detector
+        <select x-model="cfg.scene_detector" class="mt-xs">
+          <option value="adaptive">adaptive — PySceneDetect best</option>
+          <option value="content">content — PySceneDetect content-aware</option>
+          <option value="hash">hash — perceptual hashing (fast)</option>
+          <option value="ffmpeg">ffmpeg — motion vectors</option>
+        </select></label>
       <div class="grid-2 gap-sm">
-        <label class="text-xs text-muted">Data Directory <input type="text" x-model="cfg.data_dir" class="mt-xs"></label>
-        <label class="text-xs text-muted">Frame Storage
-          <select x-model="cfg.frame_storage_mode" class="mt-xs">
-            <option value="tiered">tiered (960px analysis + 320px thumbnail)</option>
-            <option value="full">full resolution</option>
-            <option value="compressed">compressed (DINOv2 dedup)</option>
-          </select></label>
+        <label class="text-xs text-muted">Frame Rate <input type="number" x-model="cfg.frame_rate" step="0.1" min="0.1" max="10" class="mt-xs"></label>
+        <label class="text-xs text-muted">Scene Thresh <input type="number" x-model="cfg.scene_threshold" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
       </div>
-      <div class="grid-2 gap-sm mt-sm">
-        <label class="text-xs text-muted">Chroma Collection <input type="text" x-model="cfg.chroma_collection" class="mt-xs"></label>
-        <label class="text-xs text-muted">OCR Model <input type="text" x-model="cfg.ocr_model_version" class="mt-xs"></label>
-      </div>
+      <label class="text-xs text-muted">Data Dir <input type="text" x-model="cfg.data_dir" class="mt-xs"></label>
+      <label class="text-xs text-muted">Frame Storage
+        <select x-model="cfg.frame_storage_mode" class="mt-xs">
+          <option value="tiered">tiered (960px + 320px thumbs) ★</option>
+          <option value="full">full resolution</option>
+          <option value="compressed">compressed (DINOv2 dedup)</option>
+        </select></label>
       <div class="flex flex-wrap gap-sm mt-sm">
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.rate_limit_enabled"> Rate Limiting</label>
-        <label class="text-xs text-muted" x-show="cfg.rate_limit_enabled">Cap <input type="number" x-model="cfg.rate_limit_capacity" style="width:70px;" class="mt-xs"></label>
+        <span x-show="cfg.rate_limit_enabled" class="text-xs text-muted">Cap <input type="number" x-model="cfg.rate_limit_capacity" style="width:70px;display:inline;" class="mt-xs"></span>
       </div>
-      <label class="flex items-center gap-sm text-xs text-muted mt-sm">
-        HF Token: <code x-text="cfg.hf_token ? '✅ ' + cfg.hf_token.slice(0,8) + '...' : '❌ Not set'" style="font-size:var(--text-xs);"></code>
-        <span class="text-muted">(set via HF_TOKEN env var)</span>
-      </label>
+      <div class="text-xs text-muted mt-sm">
+        HF Token: <code x-text="cfg.hf_token ? '✅ set' : '❌ not set (HF_TOKEN env)'"></code>
+      </div>
     </div>
+
   </div>
 </div>
