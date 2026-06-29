@@ -52,22 +52,34 @@ class ConfigStore:
         logger.info("Config saved to %s", self._path)
 
     def load(self) -> None:
-        """Load config from disk, falling back to env vars."""
+        """Load config from disk, merging saved values over code defaults.
+
+        New fields that exist in the code but not in the saved file get
+        the latest code defaults — this means upgrading the package
+        automatically picks up new model recommendations.
+        """
         if not self._path.exists():
-            logger.info("No saved config at %s — using env var defaults", self._path)
+            logger.info("No saved config at %s — using code defaults", self._path)
             self.save()
             return
         try:
             with open(self._path, encoding="utf-8") as f:
                 data = json.load(f)
-            # Apply saved values to the config object (only fields that exist)
+            # Apply saved values only for fields that exist in the config
+            saved_keys = set()
             for key, value in data.items():
                 if hasattr(self._config, key):
-                    # Convert string paths back
                     if key.endswith("_dir") or key.endswith("_path"):
                         value = Path(value)
                     setattr(self._config, key, value)
-            logger.info("Config loaded from %s", self._path)
+                    saved_keys.add(key)
+            # Re-save to capture any new fields that weren't in the old save
+            current_keys = {k for k in self._serializable() if not k.startswith('_')}
+            new_keys = current_keys - saved_keys
+            if new_keys:
+                logger.info("Config upgraded — %d new field(s): %s", len(new_keys), ', '.join(sorted(new_keys)))
+            self.save()
+            logger.info("Config loaded from %s (%d saved keys, %d total fields)", self._path, len(saved_keys), len(current_keys))
         except Exception as exc:
             logger.warning("Failed to load config from %s: %s", self._path, exc)
 

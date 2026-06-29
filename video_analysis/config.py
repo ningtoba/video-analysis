@@ -20,17 +20,28 @@ class Config:
     thumbnails_dir: Path = field(init=False)
     chroma_path: Path = field(init=False)
 
-    # Processing
-    whisper_model: str = "large-v3"
+    # ASR (Automatic Speech Recognition)
+    # Qwen3-ASR is the current SOTA open-source ASR model (Jan 2026):
+    #   1.7B: 5.76% avg WER across 52 languages, unified streaming+offline,
+    #   word-level timestamps, context biasing, Apache 2.0
+    #   0.6B: fast variant (0.064 RTF) for real-time / CPU deployment
+    # Alternatives: faster-whisper large-v3 (7.44% WER, MIT, proven),
+    #   Moonshine Voice (245M, 6.65% WER, MIT, CPU-only),
+    #   Parakeet TDT 0.6B (NVIDIA, 25 languages, 2000x RTF, CPU-fast)
+    asr_backend: str = "faster-whisper"  # "faster-whisper" | "qwen3-asr" | "moonshine" | "parakeet"
+    whisper_model: str = "large-v3"  # only used when asr_backend=faster-whisper
     whisper_device: str = "cuda"
     whisper_compute_type: str = "int8_float16"
+    qwen_asr_model: str = "Qwen/Qwen3-ASR-1.7B"  # 1.7B or 0.6B
 
-    # OpenCLIP
-    clip_model: str = "ViT-B-32"  # "ViT-B-32" or "ViT-L-14"
-    clip_pretrained_dataset: str = (
-        "laion2b_s34b_b79k"  # ViT-B-32 default; ViT-L-14 uses laion2b_s32b_b82k
-    )
-    clip_embed_dim: int = 512  # 512 for ViT-B-32, 768 for ViT-L-14
+    # OpenCLIP — scene classification & visual embeddings
+    # ViT-L-14-quickgelu (DFN5B): best overall CLIP, 79.1% ImageNet zero-shot
+    # ViT-H-14-quickgelu (DFN5B): top accuracy, needs 16GB+ VRAM
+    # ViT-B-32 (laion2b): fastest, lowest VRAM
+    # ViT-SO400M-14-SigLIP-384 (webli): strong multilingual + high-res
+    clip_model: str = "ViT-L-14-quickgelu"  # "ViT-L-14-quickgelu" | "ViT-H-14-quickgelu" | "ViT-B-32" | "ViT-SO400M-14-SigLIP-384"
+    clip_pretrained_dataset: str = "dfn5b"  # "dfn5b" | "laion2b_s34b_b79k" | "webli"
+    clip_embed_dim: int = 768  # 768 for ViT-L, 1024 for ViT-H, 512 for ViT-B
 
     # Frame extraction
     frame_rate: float = 0.5  # 1 frame per 2 seconds default
@@ -53,19 +64,22 @@ class Config:
         "bytetrack.yaml"  # overridden by ENTITY_TRACKER_TYPE env var  # "bytetrack.yaml" or "botsort.yaml"
     )
 
-    # RAG — Embedding
-    # BGE-VL-base as the primary embedding model (MIT, ~0.8 GB VRAM).
-    # Replaces the dual-model approach (SentenceTransformer + Qwen3-VL).
-    # Supports text-only, image-only, and composed (image+text) embeddings
-    # in a single unified model.
-    embedding_model: str = "BAAI/BGE-VL-base"  # 150M params, MIT license
-    # Legacy text-only embedding model (used only when BGE-VL is unavailable)
-    text_embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
-    # Multimodal embedding (Qwen3-VL-Embedding — optional, Apache 2.0)
-    multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-2B"
+    # RAG — Embedding (2026 state-of-the-art)
+    # BGE-M3 (BAAI, 568M, MIT): production workhorse, dense+sparse+multi-vector,
+    #   100+ languages, 8192 ctx. MTEB English ~64-67, strong cross-lingual.
+    # BGE-VL-base (BAAI, 150M, MIT): multimodal text+image+composed, ~0.8GB VRAM.
+    # Qwen3-Embedding-4B (Apache 2.0): #1 MTEB multilingual at 70.58.
+    # Qwen3-Embedding-8B: highest accuracy, needs A100-class GPU.
+    # NV-Embed-v2 (NVIDIA, 7.85B): #1 MTEB English at 72.31, research license.
+    # nomic-embed-text-v2 (Nomic, 137M): lightweight, fast, good for basic search.
+    embedding_model: str = "BAAI/BGE-M3"  # "BAAI/BGE-M3" | "BAAI/BGE-VL-base" | "Qwen/Qwen3-Embedding-4B" | "Qwen/Qwen3-Embedding-8B" | "nvidia/NV-Embed-v2" | "nomic-ai/nomic-embed-text-v2"
+    text_embedding_model: str = "nomic-ai/nomic-embed-text-v2"
+    multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-2B"  # cross-modal: text+image+video
     multimodal_embedding_enabled: bool = bool(
         os.environ.get("MULTIMODAL_EMBEDDING", "false").lower() == "true"
     )
+    # Reranker — bge-reranker-v2-m3 (BAAI, 568M, MIT) is the standard pairing with BGE-M3
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
     chroma_collection: str = "video_analysis"
     top_k_retrieval: int = 20
     top_k_rerank: int = 5

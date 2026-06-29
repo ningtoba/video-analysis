@@ -1,156 +1,229 @@
 <div x-data="{ cfg: {}, loaded: false, saved: false, saving: false }"
      x-init="fetch('/api/config').then(r=>r.json()).then(d=>{cfg=d;loaded=true})">
   <div class="card mb-md">
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between flex-wrap gap-sm">
       <div>
-        <h3 class="mb-0">⚙️ Settings</h3>
-        <p class="text-muted text-sm mt-sm mb-0">Configure models, features, and processing parameters. Changes are saved immediately and take effect on the next pipeline run.</p>
+        <h3 class="mb-0">⚙️ Pipeline Configuration</h3>
+        <p class="text-muted text-sm mb-0 mt-sm">All settings are editable and persisted to disk. Changes take effect on the next pipeline run. No .env required.</p>
       </div>
       <button class="btn btn-primary" @click="saving=true;fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)}).then(r=>r.json()).then(d=>{cfg=d;saving=false;saved=true;setTimeout(()=>saved=false,2000)})">
-        <span x-show="!saving && !saved">💾 Save</span>
+        <span x-show="!saving && !saved">💾 Save All</span>
         <span x-show="saving"><span class="spinner"></span> Saving...</span>
-        <span x-show="saved">✓ Saved!</span>
+        <span x-show="saved" style="color:var(--success);">✓ Saved!</span>
       </button>
     </div>
   </div>
 
   <div x-show="!loaded" class="card text-center" style="padding:var(--space-2xl);">
-    <span class="spinner"></span> <span class="text-muted text-sm">Loading settings...</span>
+    <span class="spinner"></span> <span class="text-muted text-sm">Loading configuration...</span>
   </div>
 
   <div x-show="loaded" class="grid-2">
-    <!-- Processing -->
+    <!-- ── Speech Recognition ── -->
     <div class="card">
-      <h4>🎬 Processing</h4>
-      <div class="flex flex-col gap-sm">
-        <label class="text-xs text-muted">Whisper Model
-          <select x-model="cfg.whisper_model" class="mt-xs">
-            <option value="large-v3">large-v3</option>
-            <option value="large-v2">large-v2</option>
-            <option value="medium">medium</option>
-            <option value="small">small</option>
-            <option value="tiny">tiny</option>
-          </select></label>
-        <label class="text-xs text-muted">Whisper Device
-          <select x-model="cfg.whisper_device" class="mt-xs">
-            <option value="cuda">cuda (GPU)</option>
-            <option value="cpu">cpu</option>
-          </select></label>
-        <label class="text-xs text-muted">Compute Type
-          <select x-model="cfg.whisper_compute_type" class="mt-xs">
-            <option value="int8_float16">int8_float16 (fast)</option>
-            <option value="int8">int8</option>
-            <option value="float16">float16</option>
-          </select></label>
-        <label class="text-xs text-muted">Frame Rate <input type="number" x-model="cfg.frame_rate" step="0.1" min="0.1" max="10" class="mt-xs"></label>
-        <label class="text-xs text-muted">Scene Detector
-          <select x-model="cfg.scene_detector" class="mt-xs">
-            <option value="adaptive">adaptive</option>
-            <option value="content">content</option>
-            <option value="ffmpeg">ffmpeg</option>
-            <option value="hash">hash</option>
-          </select></label>
-        <label class="text-xs text-muted">Scene Threshold <input type="number" x-model="cfg.scene_threshold" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
-        <label class="text-xs text-muted">Processing Mode
-          <select x-model="cfg.processing_mode" class="mt-xs">
-            <option value="auto">auto</option>
-            <option value="video_full">video_full</option>
-            <option value="audio_only">audio_only</option>
-          </select></label>
+      <h4>🎙️ Speech Recognition (ASR)</h4>
+      <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
+        <a href="https://huggingface.co/Qwen/Qwen3-ASR-1.7B" target="_blank">Qwen3-ASR</a> (5.76% WER, 52 langs, Apache 2.0) |
+        <a href="https://github.com/UsefulSensors/moonshine" target="_blank">Moonshine</a> (245M, 6.65% WER, MIT, CPU-only) |
+        <a href="https://github.com/SYSTRAN/faster-whisper" target="_blank">faster-whisper</a> (7.44% WER, MIT, proven)
+      </p>
+      <label class="text-xs text-muted">ASR Backend
+        <select x-model="cfg.asr_backend" class="mt-xs">
+          <option value="qwen3-asr">Qwen3-ASR 1.7B — SOTA accuracy, streaming+offline unified, 52 languages ★</option>
+          <option value="faster-whisper">faster-whisper large-v3 — proven, MIT, 99+ languages</option>
+          <option value="moonshine">Moonshine Voice 245M — 6.65% WER, MIT, CPU-only, fast</option>
+          <option value="parakeet">Parakeet TDT 0.6B — 2000x RTF, 25 languages, CPU-fast</option>
+        </select></label>
+      <label class="text-xs text-muted">Qwen3-ASR Model Size
+        <select x-model="cfg.qwen_asr_model" class="mt-xs">
+          <option value="Qwen/Qwen3-ASR-1.7B">1.7B — flagship, best accuracy</option>
+          <option value="Qwen/Qwen3-ASR-0.6B">0.6B — fast, 0.064 RTF, CPU-friendly</option>
+        </select></label>
+      <label class="text-xs text-muted">Whisper Model (fallback)
+        <select x-model="cfg.whisper_model" class="mt-xs">
+          <option value="large-v3">large-v3 — 1.55B, 7.44% WER</option>
+          <option value="large-v3-turbo">large-v3-turbo — 809M, 6x faster</option>
+          <option value="large-v2">large-v2 — 1.55B</option>
+          <option value="medium">medium — 769M</option>
+          <option value="small">small — 244M</option>
+        </select></label>
+      <div class="grid-2 gap-sm">
+        <label class="text-xs text-muted">Device <select x-model="cfg.whisper_device" class="mt-xs"><option value="cuda">GPU (CUDA)</option><option value="cpu">CPU</option></select></label>
+        <label class="text-xs text-muted">Precision <select x-model="cfg.whisper_compute_type" class="mt-xs"><option value="int8_float16">int8_float16</option><option value="float16">float16</option><option value="int8">int8</option></select></label>
       </div>
     </div>
 
-    <!-- CV -->
+    <!-- ── Vision: CLIP ── -->
     <div class="card">
-      <h4>👁️ Computer Vision</h4>
-      <div class="flex flex-col gap-sm">
-        <label class="text-xs text-muted">CLIP Model
-          <select x-model="cfg.clip_model" class="mt-xs">
-            <option value="ViT-B-32">ViT-B-32 (fast, 512d)</option>
-            <option value="ViT-L-14">ViT-L-14 (accurate, 768d)</option>
-          </select></label>
-        <label class="text-xs text-muted">YOLO Model
-          <select x-model="cfg.yolo_model" class="mt-xs">
-            <option value="yolo26x.pt">YOLO26x (best)</option>
-            <option value="yolo26m.pt">YOLO26m (balanced)</option>
-            <option value="yolo26n.pt">YOLO26n (fast)</option>
-          </select></label>
-        <label class="text-xs text-muted">YOLO Confidence <input type="number" x-model="cfg.yolo_confidence" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.entity_tracking_enabled"> Entity Tracking (ByteTrack)</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.face_recognition_enabled"> Face Recognition</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.action_recognition_enabled"> Action Recognition (X-CLIP)</label>
-      </div>
+      <h4>🖼️ Scene Classification (OpenCLIP)</h4>
+      <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
+        <a href="https://github.com/mlfoundations/open_clip" target="_blank">OpenCLIP</a> — zero-shot visual scene labeling & visual embeddings
+      </p>
+      <label class="text-xs text-muted">CLIP Model
+        <select x-model="cfg.clip_model" class="mt-xs">
+          <option value="ViT-L-14-quickgelu">ViT-L-14 DFN5B — best balance, 768d ★</option>
+          <option value="ViT-H-14-quickgelu">ViT-H-14 DFN5B — top accuracy, 1024d, 16GB+ VRAM</option>
+          <option value="ViT-SO400M-14-SigLIP-384">SigLIP SO400M — strong multilingual, high-res</option>
+          <option value="ViT-B-32">ViT-B-32 laion2b — fastest, 512d, lowest VRAM</option>
+        </select></label>
+      <label class="text-xs text-muted">Pretraining Dataset
+        <select x-model="cfg.clip_pretrained_dataset" class="mt-xs">
+          <option value="dfn5b">DFN5B — best quality (ViT-L/H) ★</option>
+          <option value="webli">WebLI — multilingual (SigLIP)</option>
+          <option value="laion2b_s34b_b79k">LAION-2B — classic (ViT-B)</option>
+        </select></label>
     </div>
 
-    <!-- RAG -->
+    <!-- ── Object Detection ── -->
     <div class="card">
-      <h4>🧠 RAG & Retrieval</h4>
-      <div class="flex flex-col gap-sm">
-        <label class="text-xs text-muted">Embedding Model
-          <select x-model="cfg.embedding_model" class="mt-xs">
-            <option value="BAAI/BGE-VL-base">BGE-VL-base (multimodal, 150M)</option>
-            <option value="nomic-ai/nomic-embed-text-v1.5">Nomic Embed Text v1.5</option>
-          </select></label>
-        <label class="text-xs text-muted">Top-K Retrieval <input type="number" x-model="cfg.top_k_retrieval" min="5" max="100" class="mt-xs"></label>
+      <h4>🎯 Object Detection (YOLO)</h4>
+      <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
+        <a href="https://docs.ultralytics.com/models/yolo26" target="_blank">YOLO26</a> (Jan 2026) — NMS-free, 43% faster CPU, end-to-end
+      </p>
+      <label class="text-xs text-muted">YOLO Model
+        <select x-model="cfg.yolo_model" class="mt-xs">
+          <option value="yolo26x.pt">YOLO26x — 57.5 mAP, 55.7M params ★</option>
+          <option value="yolo26l.pt">YOLO26l — 55.0 mAP, 24.8M</option>
+          <option value="yolo26m.pt">YOLO26m — 53.1 mAP, 20.4M</option>
+          <option value="yolo26s.pt">YOLO26s — 48.6 mAP, 9.5M</option>
+          <option value="yolo26n.pt">YOLO26n — 40.9 mAP, 2.4M, CPU-real-time</option>
+          <option value="yolo11x.pt">YOLO11x — previous gen, 54.7 mAP</option>
+        </select></label>
+      <div class="grid-2 gap-sm">
+        <label class="text-xs text-muted">Confidence <input type="number" x-model="cfg.yolo_confidence" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
+        <label class="text-xs text-muted">Tracker <select x-model="cfg.entity_tracker_type" class="mt-xs"><option value="bytetrack.yaml">ByteTrack</option><option value="botsort.yaml">BoT-SORT</option></select></label>
+      </div>
+      <label class="flex items-center gap-sm text-xs text-muted mt-sm"><input type="checkbox" x-model="cfg.entity_tracking_enabled"> Entity Tracking</label>
+    </div>
+
+    <!-- ── Embeddings & RAG ── -->
+    <div class="card">
+      <h4>🧠 Embeddings & Retrieval (RAG)</h4>
+      <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
+        <a href="https://huggingface.co/BAAI/bge-m3" target="_blank">BGE-M3</a> (568M, MIT, dense+sparse+multi-vector, 100+ langs) |
+        <a href="https://huggingface.co/Qwen/Qwen3-Embedding-4B" target="_blank">Qwen3-Embedding</a> (4B, Apache 2.0, MTEB #1 multilingual) |
+        <a href="https://huggingface.co/BAAI/bge-reranker-v2-m3" target="_blank">bge-reranker-v2-m3</a>
+      </p>
+      <label class="text-xs text-muted">Embedding Model
+        <select x-model="cfg.embedding_model" class="mt-xs">
+          <option value="BAAI/BGE-M3">BGE-M3 (568M, MIT, 100+ langs, hybrid dense+sparse) ★</option>
+          <option value="Qwen/Qwen3-Embedding-4B">Qwen3-Embedding-4B (Apache 2.0, MTEB #1 multilingual)</option>
+          <option value="Qwen/Qwen3-Embedding-8B">Qwen3-Embedding-8B (max accuracy, needs A100)</option>
+          <option value="nvidia/NV-Embed-v2">NV-Embed-v2 (7.85B, MTEB English #1)</option>
+          <option value="BAAI/BGE-VL-base">BGE-VL-base (150M, MIT, multimodal text+image)</option>
+          <option value="nomic-ai/nomic-embed-text-v2">Nomic Embed v2 (137M, lightweight, fast)</option>
+        </select></label>
+      <label class="text-xs text-muted">Reranker
+        <select x-model="cfg.reranker_model" class="mt-xs">
+          <option value="BAAI/bge-reranker-v2-m3">bge-reranker-v2-m3 (568M, MIT) ★</option>
+          <option value="BAAI/bge-reranker-v2-gemma">bge-reranker-v2-gemma (lightweight)</option>
+          <option value="cross-encoder/ms-marco-MiniLM-L-6-v2">ms-marco-MiniLM-L-6 (fast, basic)</option>
+          <option value="">None (skip reranking)</option>
+        </select></label>
+      <div class="grid-3 gap-sm">
+        <label class="text-xs text-muted">Top-K Retrieve <input type="number" x-model="cfg.top_k_retrieval" min="5" max="100" class="mt-xs"></label>
         <label class="text-xs text-muted">Top-K Rerank <input type="number" x-model="cfg.top_k_rerank" min="1" max="20" class="mt-xs"></label>
-        <label class="text-xs text-muted">Temporal Window <input type="number" x-model="cfg.temporal_window" min="0" max="10" class="mt-xs"></label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.mmr_diversity_enabled"> MMR Diversity Re-Ranking</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.multimodal_embedding_enabled"> Multimodal Embedding (Qwen3-VL)</label>
+        <label class="text-xs text-muted">Temp Window <input type="number" x-model="cfg.temporal_window" min="0" max="10" class="mt-xs"></label>
+      </div>
+      <div class="flex flex-wrap gap-sm mt-sm">
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.mmr_diversity_enabled"> MMR Diversity</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.multimodal_embedding_enabled"> Multimodal Embed (Qwen3-VL)</label>
       </div>
     </div>
 
-    <!-- MLLM -->
+    <!-- ── Video MLLM ── -->
     <div class="card">
-      <h4>🤖 Video MLLM</h4>
-      <div class="flex flex-col gap-sm">
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_enabled"> Enable Video MLLM</label>
-        <label class="text-xs text-muted">Backend
-          <select x-model="cfg.video_mllm_backend" class="mt-xs">
-            <option value="qwen3_vl">Qwen3-VL (Apache 2.0)</option>
-            <option value="internvideo3">InternVideo3 (SOTA)</option>
-            <option value="videochat_flash">VideoChat-Flash (MIT)</option>
-            <option value="smolvlm2">SmolVLM2 (Apache 2.0)</option>
-          </select></label>
-        <label class="text-xs text-muted">Model Size
-          <select x-model="cfg.video_mllm_model_size" class="mt-xs">
-            <option value="30B">30B (MoE, 3B active)</option>
-            <option value="8B">8B</option>
-            <option value="2B">2B</option>
-            <option value="500M">500M (lightweight)</option>
-          </select></label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_as_describer"> Use as scene describer</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_as_chat_backend"> Use as chat backend</label>
+      <h4>🤖 Video MLLM (Visual Q&A)</h4>
+      <p class="text-xs text-muted mb-md" style="margin-top:-0.5rem;">
+        <a href="https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct" target="_blank">Qwen3-VL</a> (MoE 30B/3B active, Apache 2.0) |
+        <a href="https://huggingface.co/OpenGVLab/InternVideo3-8B" target="_blank">InternVideo3</a> (8B, SOTA 73.8 Video-MME) |
+        <a href="https://huggingface.co/HuggingFaceTB/SmolVLM2-2.2B-Instruct" target="_blank">SmolVLM2</a> (2.2B, Apache 2.0)
+      </p>
+      <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_enabled"> Enable Video MLLM</label>
+      <label class="text-xs text-muted">Backend
+        <select x-model="cfg.video_mllm_backend" class="mt-xs">
+          <option value="qwen3_vl">Qwen3-VL-30B-A3B (MoE, 128K ctx, Apache 2.0) ★</option>
+          <option value="internvideo3">InternVideo3-8B (SOTA, MCR reasoning, M^2LA KV-cache)</option>
+          <option value="smolvlm2">SmolVLM2 2.2B (Apache 2.0, lightweight)</option>
+          <option value="videochat_flash">VideoChat-Flash 2B (MIT)</option>
+        </select></label>
+      <label class="text-xs text-muted">Model Size
+        <select x-model="cfg.video_mllm_model_size" class="mt-xs">
+          <option value="30B">30B (MoE, 3B active, FP8) ★</option>
+          <option value="8B">8B</option>
+          <option value="2B">2B (lightweight)</option>
+          <option value="500M">500M (fastest)</option>
+        </select></label>
+      <div class="flex flex-wrap gap-sm mt-sm">
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_as_describer"> Scene Describer</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_as_chat_backend"> Chat Backend</label>
       </div>
     </div>
 
-    <!-- Features -->
+    <!-- ── Processing ── -->
     <div class="card">
-      <h4>🔧 Features</h4>
-      <div class="flex flex-col gap-sm">
+      <h4>🎬 Video Processing</h4>
+      <label class="text-xs text-muted">Processing Mode
+        <select x-model="cfg.processing_mode" class="mt-xs">
+          <option value="auto">auto — detect video type, skip unnecessary stages</option>
+          <option value="video_full">video_full — all stages (audio + visual)</option>
+          <option value="audio_only">audio_only — transcription only, no visual</option>
+        </select></label>
+      <label class="text-xs text-muted">Scene Detector
+        <select x-model="cfg.scene_detector" class="mt-xs">
+          <option value="adaptive">adaptive — PySceneDetect adaptive (best)</option>
+          <option value="content">content — PySceneDetect content-aware</option>
+          <option value="hash">hash — perceptual hashing (fast)</option>
+          <option value="ffmpeg">ffmpeg — FFmpeg motion vectors</option>
+        </select></label>
+      <div class="grid-2 gap-sm">
+        <label class="text-xs text-muted">Frame Rate <input type="number" x-model="cfg.frame_rate" step="0.1" min="0.1" max="10" class="mt-xs"></label>
+        <label class="text-xs text-muted">Scene Threshold <input type="number" x-model="cfg.scene_threshold" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
+      </div>
+    </div>
+
+    <!-- ── Advanced Features ── -->
+    <div class="card">
+      <h4>🔧 Advanced Features</h4>
+      <div class="grid-2 gap-sm">
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.face_recognition_enabled"> Face Recognition (InsightFace)</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.action_recognition_enabled"> Action Recognition (X-CLIP)</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.quality_screening_enabled"> Quality Pre-Screening</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.adaptive_scaling_enabled"> Adaptive Pipeline Scaling</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.event_causal_rag_enabled"> Event-Causal RAG</label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.conversation_memory_enabled"> Conversation Memory</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.event_causal_rag_enabled"> Event-Causal RAG (SES graphs)</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.conversation_memory_enabled"> Conversation Memory (ChromaDB)</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.agent_enabled"> Agentic Video Agent</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.orchestra_enabled"> Multi-Agent Orchestra</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.curator_enabled"> Autonomous Curator</label>
         <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.prometheus_enabled"> Prometheus Metrics</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.telemetry_enabled"> OpenTelemetry Tracing</label>
       </div>
     </div>
 
-    <!-- Storage -->
+    <!-- ── Storage ── -->
     <div class="card">
-      <h4>📁 Storage & Paths</h4>
-      <div class="flex flex-col gap-sm">
+      <h4>📁 Storage & System</h4>
+      <div class="grid-2 gap-sm">
         <label class="text-xs text-muted">Data Directory <input type="text" x-model="cfg.data_dir" class="mt-xs"></label>
         <label class="text-xs text-muted">Frame Storage
           <select x-model="cfg.frame_storage_mode" class="mt-xs">
-            <option value="tiered">tiered (960px/320px)</option>
+            <option value="tiered">tiered (960px analysis + 320px thumbnail)</option>
             <option value="full">full resolution</option>
-            <option value="compressed">compressed (DINOv2)</option>
+            <option value="compressed">compressed (DINOv2 dedup)</option>
           </select></label>
-        <label class="text-xs text-muted">Rate Limit <input type="number" x-model="cfg.rate_limit_capacity" class="mt-xs"></label>
-        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.rate_limit_enabled"> Enable Rate Limiting</label>
       </div>
+      <div class="grid-2 gap-sm mt-sm">
+        <label class="text-xs text-muted">Chroma Collection <input type="text" x-model="cfg.chroma_collection" class="mt-xs"></label>
+        <label class="text-xs text-muted">OCR Model <input type="text" x-model="cfg.ocr_model_version" class="mt-xs"></label>
+      </div>
+      <div class="flex flex-wrap gap-sm mt-sm">
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.rate_limit_enabled"> Rate Limiting</label>
+        <label class="text-xs text-muted" x-show="cfg.rate_limit_enabled">Cap <input type="number" x-model="cfg.rate_limit_capacity" style="width:70px;" class="mt-xs"></label>
+      </div>
+      <label class="flex items-center gap-sm text-xs text-muted mt-sm">
+        HF Token: <code x-text="cfg.hf_token ? '✅ ' + cfg.hf_token.slice(0,8) + '...' : '❌ Not set'" style="font-size:var(--text-xs);"></code>
+        <span class="text-muted">(set via HF_TOKEN env var)</span>
+      </label>
     </div>
   </div>
 </div>
