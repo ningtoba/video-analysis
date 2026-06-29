@@ -31,7 +31,7 @@ document.addEventListener('alpine:init', () => {
 
     tabExists(name) {
       return ['analysis', 'import', 'batch', 'search', 'library',
-              'camera', 'monitor', 'comparison', 'kg', 'events'].includes(name);
+              'camera', 'monitor', 'comparison', 'kg', 'events', 'settings'].includes(name);
     },
 
     switchTab(name) {

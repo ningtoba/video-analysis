@@ -1,0 +1,109 @@
+<div class="card mb-md">
+  <h3>⚙️ Configuration</h3>
+  <p class="text-muted text-sm">All settings are controlled via environment variables. Restart the server after changes.</p>
+</div>
+
+<div class="grid-2">
+  <!-- Processing -->
+  <div class="card">
+    <h4>🎬 Processing</h4>
+    <table style="width:100%;font-size:var(--text-sm);">
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Whisper Model</td><td><code>{{ config.whisper_model }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Whisper Device</td><td><code>{{ config.whisper_device }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Compute Type</td><td><code>{{ config.whisper_compute_type }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Frame Rate</td><td><code>{{ config.frame_rate }} fps</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Scene Detector</td><td><code>{{ config.scene_detector }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Scene Threshold</td><td><code>{{ config.scene_threshold }}</code></td></tr>
+    </table>
+  </div>
+
+  <!-- Computer Vision -->
+  <div class="card">
+    <h4>👁️ Computer Vision</h4>
+    <table style="width:100%;font-size:var(--text-sm);">
+      <tr><td style="color:var(--text-muted);padding:4px 0;">CLIP Model</td><td><code>{{ config.clip_model }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">CLIP Dataset</td><td><code>{{ config.clip_pretrained_dataset }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">YOLO Model</td><td><code>{{ config.yolo_model }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">YOLO Confidence</td><td><code>{{ config.yolo_confidence }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Entity Tracking</td><td><span class="badge {{ 'success' if config.entity_tracking_enabled else 'error' }}">{{ 'ON' if config.entity_tracking_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Face Recognition</td><td><span class="badge {{ 'success' if config.face_recognition_enabled else 'error' }}">{{ 'ON' if config.face_recognition_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Action Recognition</td><td><span class="badge {{ 'success' if config.action_recognition_enabled else 'error' }}">{{ 'ON' if config.action_recognition_enabled else 'OFF' }}</span></td></tr>
+    </table>
+  </div>
+
+  <!-- RAG -->
+  <div class="card">
+    <h4>🧠 RAG & Embeddings</h4>
+    <table style="width:100%;font-size:var(--text-sm);">
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Embedding Model</td><td><code>{{ config.embedding_model }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Chroma Collection</td><td><code>{{ config.chroma_collection }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Top-K Retrieval</td><td><code>{{ config.top_k_retrieval }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Top-K Rerank</td><td><code>{{ config.top_k_rerank }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Temporal Window</td><td><code>±{{ config.temporal_window }} neighbors</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">MMR Diversity</td><td><span class="badge {{ 'success' if config.mmr_diversity_enabled else 'error' }}">{{ 'ON' if config.mmr_diversity_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Multimodal Embed</td><td><span class="badge {{ 'success' if config.multimodal_embedding_enabled else 'error' }}">{{ 'ON' if config.multimodal_embedding_enabled else 'OFF' }}</span></td></tr>
+    </table>
+  </div>
+
+  <!-- Video MLLM -->
+  <div class="card">
+    <h4>🤖 Video MLLM</h4>
+    <table style="width:100%;font-size:var(--text-sm);">
+      <tr><td style="color:var(--text-muted);padding:4px 0;">MLLM Enabled</td><td><span class="badge {{ 'success' if config.video_mllm_enabled else 'error' }}">{{ 'ON' if config.video_mllm_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Backend</td><td><code>{{ config.video_mllm_backend }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Model</td><td><code>{{ config.video_mllm_model }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">As Describer</td><td><span class="badge {{ 'success' if config.video_mllm_as_describer else 'error' }}">{{ 'ON' if config.video_mllm_as_describer else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">As Chat Backend</td><td><span class="badge {{ 'success' if config.video_mllm_as_chat_backend else 'error' }}">{{ 'ON' if config.video_mllm_as_chat_backend else 'OFF' }}</span></td></tr>
+    </table>
+  </div>
+
+  <!-- Agent / Orchestra -->
+  <div class="card">
+    <h4>🧑‍💻 Agents</h4>
+    <table style="width:100%;font-size:var(--text-sm);">
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Agent Enabled</td><td><span class="badge {{ 'success' if config.agent_enabled else 'error' }}">{{ 'ON' if config.agent_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Orchestra Enabled</td><td><span class="badge {{ 'success' if config.orchestra_enabled else 'error' }}">{{ 'ON' if config.orchestra_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Agent Confidence</td><td><span class="badge {{ 'success' if config.agent_confidence_enabled else 'error' }}">{{ 'ON' if config.agent_confidence_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Curator Enabled</td><td><span class="badge {{ 'success' if config.curator_enabled else 'error' }}">{{ 'ON' if config.curator_enabled else 'OFF' }}</span></td></tr>
+    </table>
+  </div>
+
+  <!-- Other Features -->
+  <div class="card">
+    <h4>🔧 Features</h4>
+    <table style="width:100%;font-size:var(--text-sm);">
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Adaptive Scaling</td><td><span class="badge {{ 'success' if config.adaptive_scaling_enabled else 'error' }}">{{ config.adaptive_scaling_policy }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Event-Causal RAG</td><td><span class="badge {{ 'success' if config.event_causal_rag_enabled else 'error' }}">{{ 'ON' if config.event_causal_rag_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Streaming Enabled</td><td><span class="badge {{ 'success' if config.streaming_enabled else 'error' }}">{{ 'ON' if config.streaming_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Federation Enabled</td><td><span class="badge {{ 'success' if config.federation_enabled else 'error' }}">{{ 'ON' if config.federation_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Conversation Memory</td><td><span class="badge {{ 'success' if config.conversation_memory_enabled else 'error' }}">{{ 'ON' if config.conversation_memory_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Prometheus Metrics</td><td><span class="badge {{ 'success' if config.prometheus_enabled else 'error' }}">{{ 'ON' if config.prometheus_enabled else 'OFF' }}</span></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Telemetry</td><td><span class="badge {{ 'success' if config.telemetry_enabled else 'error' }}">{{ 'ON' if config.telemetry_enabled else 'OFF' }}</span></td></tr>
+    </table>
+  </div>
+
+  <!-- Paths & Limits -->
+  <div class="card">
+    <h4>📁 Paths & Limits</h4>
+    <table style="width:100%;font-size:var(--text-sm);">
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Data Dir</td><td><code>{{ config.data_dir }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Video Dir</td><td><code>{{ config.video_dir }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Chroma Path</td><td><code>{{ config.chroma_path }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Rate Limit</td><td><span class="badge {{ 'success' if config.rate_limit_enabled else 'error' }}">{{ 'ON' if config.rate_limit_enabled else 'OFF' }}</span> — {{ config.rate_limit_rate }}/s burst {{ config.rate_limit_capacity }}</td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Webhook URLs</td><td><code>{{ config.webhook_urls|length }} configured</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">HF Token</td><td><span class="badge {{ 'success' if config.hf_token else 'error' }}">{{ 'SET' if config.hf_token else 'NOT SET' }}</span></td></tr>
+    </table>
+  </div>
+
+  <!-- Version & Env -->
+  <div class="card">
+    <h4>📦 System</h4>
+    <table style="width:100%;font-size:var(--text-sm);">
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Version</td><td><code>{{ version }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">UI Host</td><td><code>{{ config.ui_host }}:{{ config.ui_port }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Processing Mode</td><td><code>{{ config.processing_mode }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">OCR Model</td><td><code>{{ config.ocr_model_version }}</code></td></tr>
+      <tr><td style="color:var(--text-muted);padding:4px 0;">Frame Storage</td><td><code>{{ config.frame_storage_mode }}</code></td></tr>
+    </table>
+  </div>
+</div>

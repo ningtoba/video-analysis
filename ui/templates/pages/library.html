@@ -1,27 +1,23 @@
-<div>
-  <div class="card mb-md">
-    <div class="flex items-center justify-between flex-wrap gap-sm">
-      <h3 class="mb-0">📚 Your Video Library</h3>
-      <div class="flex gap-sm">
-        <input type="search" name="filter" placeholder="Filter by name..."
-               hx-get="/api/library"
-               hx-trigger="keyup changed delay:300ms"
-               hx-target="#library-list"
-               hx-swap="innerHTML"
-               style="width:200px;">
-        <button class="btn btn-secondary btn-sm"
-                hx-get="/api/library"
-                hx-target="#library-list"
-                hx-swap="innerHTML">
-          🔄 Refresh
-        </button>
-      </div>
+<!-- Library Tab — populated from /library/list on load -->
+<div class="card mb-sm">
+  <div class="flex items-center justify-between flex-wrap gap-sm">
+    <h3 class="mb-0">📚 Video Library</h3>
+    <div class="flex gap-sm">
+      <input type="search" name="q" placeholder="Filter by name..."
+             hx-get="/library/list"
+             hx-trigger="keyup changed delay:300ms"
+             hx-target="#lib-content"
+             hx-swap="innerHTML"
+             style="width:200px;">
+      <button class="btn btn-secondary btn-sm"
+              hx-get="/library/list"
+              hx-target="#lib-content" hx-swap="innerHTML">🔄 Refresh</button>
     </div>
   </div>
-  <div id="library-list" hx-get="/api/library" hx-trigger="load" hx-swap="innerHTML">
-    <div class="card text-center">
-      <span class="spinner"></span>
-      <p class="text-muted text-sm">Loading library...</p>
-    </div>
+</div>
+<div id="lib-content" hx-get="/library/list" hx-trigger="load" hx-swap="innerHTML">
+  <div class="card text-center" style="padding:var(--space-2xl);">
+    <span class="spinner"></span>
+    <p class="text-muted text-sm mt-sm">Loading video library...</p>
   </div>
 </div>

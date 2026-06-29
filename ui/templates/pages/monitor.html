@@ -1,27 +1,36 @@
-<div class="card mb-md">
-  <div class="flex items-center justify-between">
-    <h3 class="mb-0">📊 System Metrics</h3>
-    <button class="btn btn-secondary btn-sm"
-            hx-get="/api/health/runs" hx-target="#monitor-metrics" hx-swap="innerHTML">
-      🔄 Refresh
-    </button>
-  </div>
-</div>
-<div id="monitor-metrics" hx-get="/api/health/runs" hx-trigger="load" hx-swap="innerHTML">
-  <div class="text-center" style="padding:var(--space-2xl);">
-    <span class="spinner"></span> <span class="text-muted text-sm">Loading metrics...</span>
-  </div>
-</div>
-
-<div class="card mt-md">
-  <h3>🧪 Run Evaluation</h3>
-  <form hx-post="/api/evaluations/compare" hx-target="#eval-result" hx-swap="innerHTML"
-        class="flex gap-sm items-end">
-    <div style="flex:1;">
-      <label class="text-xs text-muted">Task names (comma-separated)</label>
-      <input type="text" name="task_names" placeholder="retrieval_precision, scene_boundary_accuracy">
+<!-- Monitor Tab — populated from API endpoints on load -->
+<div>
+  <div class="card mb-md">
+    <div class="flex items-center justify-between">
+      <h3 class="mb-0">📊 System Metrics</h3>
+      <button class="btn btn-secondary btn-sm"
+              hx-get="/api/health/summary" hx-target="#monitor-main" hx-swap="innerHTML">
+        🔄 Refresh
+      </button>
     </div>
-    <button type="submit" class="btn btn-primary">Run Evaluation</button>
-  </form>
-  <div id="eval-result" class="mt-sm"></div>
+  </div>
+
+  <div id="monitor-main">
+    <div class="grid-3 mb-md" hx-get="/api/health/summary" hx-trigger="load" hx-swap="innerHTML">
+      <div class="monitor-card"><div class="label">Loading</div><div class="value"><span class="spinner"></span></div></div>
+    </div>
+  </div>
+
+  <div class="card mt-md" id="monitor-alerts" hx-get="/api/health/alerts" hx-trigger="load" hx-swap="innerHTML">
+    <h4>🚨 Alerts</h4>
+    <p class="text-muted text-sm">Loading alerts...</p>
+  </div>
+
+  <div class="card mt-md">
+    <h4>🧪 Run Evaluation</h4>
+    <form hx-get="/api/evaluations/compare" hx-target="#eval-result" hx-swap="innerHTML"
+          class="flex gap-sm items-end" hx-trigger="submit">
+      <div style="flex:1;">
+        <label class="text-xs text-muted">Task names (comma-separated, or leave empty for all)</label>
+        <input type="text" name="task_names" placeholder="retrieval_precision, scene_boundary_accuracy">
+      </div>
+      <button type="submit" class="btn btn-primary">▶️ Run Evaluation</button>
+    </form>
+    <div id="eval-result" class="mt-sm text-sm"></div>
+  </div>
 </div>

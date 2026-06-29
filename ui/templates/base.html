@@ -59,6 +59,8 @@
             @click="switchTab('kg')" role="tab">🧠 Graph</button>
     <button class="tab-btn" :class="{ active: activeTab === 'events' }"
             @click="switchTab('events')" role="tab">⏱ Events</button>
+    <button class="tab-btn" :class="{ active: activeTab === 'settings' }"
+            @click="switchTab('settings')" role="tab">⚙️ Settings</button>
   </nav>
 
   <!-- Main Content -->
@@ -102,6 +104,10 @@
     <!-- Tab: Events -->
     <div x-show="activeTab === 'events'" x-cloak>
       {% block events_tab %}{% endblock %}
+    </div>
+    <!-- Tab: Settings -->
+    <div x-show="activeTab === 'settings'" x-cloak>
+      {% block settings_tab %}{% endblock %}
     </div>
   </main>
 

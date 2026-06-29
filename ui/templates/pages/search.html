@@ -1,32 +1,30 @@
+<!-- Cross-Video Search Tab -->
 <div class="grid-2">
-  <div>
-    <div class="card">
-      <h3>🔍 Search Across All Videos</h3>
-      <p class="text-muted text-sm">Natural language search over transcripts, frame descriptions, OCR text, and detected objects from all indexed videos.</p>
-      <form hx-get="/api/videos/search"
-            hx-target="#search-results"
-            hx-swap="innerHTML"
-            hx-indicator="#search-spinner"
-            class="flex flex-col gap-sm">
-        <input type="text" name="query" placeholder='e.g., "people talking about Python" or "scenes with cars"'
-               style="font-size:var(--text-base);padding:0.75rem;">
-        <div class="flex gap-sm">
-          <button type="submit" class="btn btn-primary btn-lg" style="flex:2;">🔎 Search All</button>
-          <button type="button" class="btn btn-secondary"
-                  onclick="document.getElementById('search-results').innerHTML='<p class=text-muted>No results yet.</p>'">Clear</button>
-        </div>
-      </form>
-      <div id="search-spinner" class="htmx-indicator mt-sm text-center">
-        <span class="spinner"></span> <span class="text-sm text-muted">Searching...</span>
+  <div class="card">
+    <h3>🔍 Search All Videos</h3>
+    <p class="text-muted text-sm">Natural language search over transcripts, frame descriptions, OCR text, and detected objects.</p>
+    <form hx-get="/api/videos/search"
+          hx-target="#search-results"
+          hx-swap="innerHTML"
+          hx-indicator="#search-spinner"
+          class="flex flex-col gap-sm">
+      <input type="text" name="query" placeholder='e.g. "people talking about Python" or "scenes with cars"'
+             style="font-size:var(--text-base);padding:0.75rem;" autocomplete="off">
+      <div class="flex gap-sm">
+        <button type="submit" class="btn btn-primary btn-lg" style="flex:2;">🔎 Search All</button>
+        <button type="button" class="btn btn-secondary"
+                onclick="document.getElementById('search-results').innerHTML='<p class=text-muted>Enter a query above.</p>'">
+          Clear</button>
       </div>
+    </form>
+    <div id="search-spinner" class="htmx-indicator mt-sm text-center">
+      <span class="spinner"></span> <span class="text-sm text-muted">Searching across all indexed videos...</span>
     </div>
   </div>
-  <div>
-    <div class="card">
-      <h3>Results</h3>
-      <div id="search-results">
-        <p class="text-muted text-sm">Enter a query and click Search to find relevant scenes.</p>
-      </div>
+  <div class="card">
+    <h3>Results</h3>
+    <div id="search-results">
+      <p class="text-muted text-sm">Enter a query and click Search to find relevant scenes across all videos.</p>
     </div>
   </div>
 </div>

@@ -89,3 +89,10 @@
   </div>
 </div>
 {% endblock %}
+
+{% block settings_tab %}
+<div data-tab="settings" data-loaded="false"
+     hx-get="/settings?partial=1" hx-trigger="loadTab" hx-swap="innerHTML">
+  {% include "pages/settings.html" %}
+</div>
+{% endblock %}

@@ -291,6 +291,7 @@ def _register_tab_routes(app: FastAPI, config: Config) -> None:
         ("ui.routes.comparison", "register_comparison_routes"),
         ("ui.routes.knowledge_graph", "register_kg_routes"),
         ("ui.routes.event_timeline", "register_event_routes"),
+        ("ui.routes.settings", "register_settings_routes"),
     ]
 
     for module_name, func_name in _TAB_ROUTES:

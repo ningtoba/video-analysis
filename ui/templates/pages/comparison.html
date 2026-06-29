@@ -1,19 +1,21 @@
-<div class="card">
-  <div class="flex items-center justify-between mb-md">
+<!-- Comparison Tab — eval report browser -->
+<div>
+  <div class="card mb-md">
     <h3 class="mb-0">📈 Evaluation Comparison</h3>
-    <button class="btn btn-secondary btn-sm"
-            hx-post="/api/evaluations/compare" hx-target="#comp-list" hx-swap="innerHTML">
-      🔄 Refresh Reports
-    </button>
   </div>
-  <div id="comp-list">
-    <p class="text-muted text-sm">Loading report list...</p>
+  <div id="comp-list" hx-get="/api/evaluations" hx-trigger="load" hx-swap="innerHTML">
+    <div class="card text-center" style="padding:var(--space-2xl);">
+      <span class="spinner"></span>
+      <p class="text-muted text-sm mt-sm">Loading evaluation reports...</p>
+    </div>
   </div>
-  <form hx-post="/comparison/compare" hx-target="#comp-results" hx-swap="innerHTML"
-        class="flex gap-sm mt-md">
-    <input type="text" name="report_ids" placeholder="Report IDs (space or comma separated)"
-           style="flex:1;">
-    <button type="submit" class="btn btn-primary">📊 Compare</button>
-  </form>
-  <div id="comp-results" class="mt-md"></div>
+  <div class="card mt-md">
+    <h4>Compare Reports</h4>
+    <form hx-get="/api/evaluations/compare" hx-target="#comp-result" hx-swap="innerHTML"
+          class="flex gap-sm">
+      <input type="text" name="run_ids" placeholder="Report IDs (comma-separated)" style="flex:1;">
+      <button type="submit" class="btn btn-primary">📊 Compare</button>
+    </form>
+    <div id="comp-result" class="mt-sm text-sm"></div>
+  </div>
 </div>
