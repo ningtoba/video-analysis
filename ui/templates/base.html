@@ -6,122 +6,42 @@
   <title>{% block title %}Video Analysis{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
   <link rel="stylesheet" href="/static/css/dark-theme.css">
-  <!-- HTMX: AJAX, partials, SSE -->
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
-  <script src="https://unpkg.com/htmx-ext-sse@2.2.3/sse.js" defer></script>
   <script src="https://unpkg.com/htmx-ext-ws@2.0.2/ws.js" defer></script>
-  <!-- App state MUST be registered before Alpine.js initialises -->
   <script src="/static/js/app.js" defer></script>
-  <!-- Alpine.js: client-side state, tab switching (loads after app.js registers data) -->
   <script defer src="https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js"></script>
   <script src="/static/js/timeline.js" defer></script>
   {% block head %}{% endblock %}
 </head>
-<body class="app-layout"
-      x-data="appState"
-      x-init="init()">
-  <!-- Header -->
-  <header class="container" style="padding-top: var(--space-md);">
-    <div class="header">
-      <div class="flex items-center justify-between flex-wrap gap-sm">
-        <div>
-          <h1>🎥 Video Analysis</h1>
-          <p>Upload, process, and ask questions about your videos — all local, all private</p>
-        </div>
-        <span id="global-status"
-              class="badge ready"
-              hx-get="/api/status"
-              hx-trigger="every 30s"
-              hx-swap="outerHTML">● Ready</span>
-      </div>
+<body class="app-layout" x-data="appState">
+  <header class="container">
+    <div class="flex items-center justify-between flex-wrap gap-sm" style="padding:var(--space-md) 0;">
+      <a href="/" style="text-decoration:none;display:flex;align-items:center;gap:var(--space-sm);">
+        <img src="/static/img/logo.svg" width="28" height="28" alt="">
+        <span style="font-size:var(--text-lg);font-weight:700;color:var(--text);">Video Analysis</span>
+      </a>
+      <nav class="flex gap-sm">
+        <button class="tab-btn" :class="{ active: activeTab === 'analyze' }" @click="switchTab('analyze')">📹 Analyze</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'library' }" @click="switchTab('library')">📚 Library</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'camera' }" @click="switchTab('camera')">📷 Camera</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'settings' }" @click="switchTab('settings')">⚙️ Settings</button>
+      </nav>
     </div>
   </header>
 
-  <!-- Tab Navigation -->
-  <nav class="container tabs-nav" role="tablist" aria-label="Main navigation">
-    <button class="tab-btn" :class="{ active: activeTab === 'analysis' }"
-            @click="switchTab('analysis')" role="tab" aria-selected="true">📹 Analysis</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'import' }"
-            @click="switchTab('import')" role="tab">🌐 Import</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'batch' }"
-            @click="switchTab('batch')" role="tab">📦 Batch</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'search' }"
-            @click="switchTab('search')" role="tab">🔍 Search</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'library' }"
-            @click="switchTab('library')" role="tab">📚 Library</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'camera' }"
-            @click="switchTab('camera')" role="tab">📷 Camera</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'monitor' }"
-            @click="switchTab('monitor')" role="tab">📊 Monitor</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'comparison' }"
-            @click="switchTab('comparison')" role="tab">📈 Evals</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'kg' }"
-            @click="switchTab('kg')" role="tab">🧠 Graph</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'events' }"
-            @click="switchTab('events')" role="tab">⏱ Events</button>
-    <button class="tab-btn" :class="{ active: activeTab === 'settings' }"
-            @click="switchTab('settings')" role="tab">⚙️ Settings</button>
-  </nav>
-
-  <!-- Main Content -->
-  <main class="container app-main">
-    <!-- Tab: Analysis -->
-    <div x-show="activeTab === 'analysis'" x-cloak>
-      {% block analysis_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Import -->
-    <div x-show="activeTab === 'import'" x-cloak>
-      {% block import_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Batch -->
-    <div x-show="activeTab === 'batch'" x-cloak>
-      {% block batch_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Search -->
-    <div x-show="activeTab === 'search'" x-cloak>
-      {% block search_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Library -->
-    <div x-show="activeTab === 'library'" x-cloak>
-      {% block library_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Camera -->
-    <div x-show="activeTab === 'camera'" x-cloak>
-      {% block camera_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Monitor -->
-    <div x-show="activeTab === 'monitor'" x-cloak>
-      {% block monitor_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Comparison -->
-    <div x-show="activeTab === 'comparison'" x-cloak>
-      {% block comparison_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Knowledge Graph -->
-    <div x-show="activeTab === 'kg'" x-cloak>
-      {% block kg_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Events -->
-    <div x-show="activeTab === 'events'" x-cloak>
-      {% block events_tab %}{% endblock %}
-    </div>
-    <!-- Tab: Settings -->
-    <div x-show="activeTab === 'settings'" x-cloak>
-      {% block settings_tab %}{% endblock %}
-    </div>
+  <main class="container app-main" style="padding-bottom:var(--space-2xl);">
+    <div x-show="activeTab === 'analyze'" x-cloak>{% block analyze_tab %}{% endblock %}</div>
+    <div x-show="activeTab === 'library'" x-cloak>{% block library_tab %}{% endblock %}</div>
+    <div x-show="activeTab === 'camera'" x-cloak>{% block camera_tab %}{% endblock %}</div>
+    <div x-show="activeTab === 'settings'" x-cloak>{% block settings_tab %}{% endblock %}</div>
   </main>
 
-  <!-- Toast Container -->
-  <div class="toast-container" id="toasts" x-data="{ toasts: [] }"
-       @new-toast.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 4000)">
-    <template x-for="t in toasts" :key="t.id">
-      <div class="toast" :class="t.type" x-text="t.message"></div>
-    </template>
-  </div>
-
-  <!-- Footer -->
-  <footer class="container text-center text-muted text-xs" style="padding: var(--space-md) 0;">
-    Video Analysis Platform &mdash; v{{ version }} &mdash; All processing runs locally
+  <footer class="container text-center text-muted" style="font-size:var(--text-xs);padding:var(--space-md) 0;">
+    Video Analysis Platform v{{ version }} — All processing runs locally
   </footer>
+
+  <div class="toast-container" id="toasts" x-data="{toasts:[]}" @new-toast.window="toasts.push($event.detail);setTimeout(()=>toasts.shift(),4000)">
+    <template x-for="t in toasts" :key="t.id"><div class="toast" :class="t.type" x-text="t.message"></div></template>
+  </div>
 </body>
 </html>

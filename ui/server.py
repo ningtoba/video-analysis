@@ -28,6 +28,7 @@ from fastapi.templating import Jinja2Templates
 from video_analysis import __version__
 from video_analysis.api import create_api_router
 from video_analysis.config import Config
+from video_analysis.config_store import get_config_store, ConfigStore
 from video_analysis.job_queue import get_default_manager
 from video_analysis.pipeline import VideoPipeline
 from video_analysis.rag import VideoRAG
@@ -68,6 +69,9 @@ def create_app(config: Optional[Config] = None) -> FastAPI:
     config = config or Config()
     _config = config
     _start_time = time.time()
+
+    # ── Config store (mutable, persisted to data/config.json) ─────────
+    config_store = get_config_store(config)
 
     # ── Hugging Face authentication ──────────────────────────────────
     if config.hf_token:
@@ -135,7 +139,7 @@ def create_app(config: Optional[Config] = None) -> FastAPI:
     app.include_router(create_api_router(config))
 
     # ── Register all routes ──────────────────────────────────────────
-    _setup_routes(app, config)
+    _setup_routes(app, config, config_store)
 
     # ── Store backend singletons in app.state for route access ───────
     app.state.pipeline = _pipeline
@@ -181,8 +185,27 @@ def create_app(config: Optional[Config] = None) -> FastAPI:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _setup_routes(app: FastAPI, config: Config) -> None:
+def _setup_routes(app: FastAPI, config: Config, config_store) -> None:
     """Register all application routes on the FastAPI app."""
+
+    # ── Config API ───────────────────────────────────────────────────
+    @app.get("/api/config")
+    async def get_config():
+        """Return the full runtime configuration as JSON."""
+        return config_store.as_dict()
+
+    @app.put("/api/config")
+    async def update_config(request: Request):
+        """Update configuration fields and persist to disk."""
+        try:
+            changes = await request.json()
+        except Exception:
+            return JSONResponse({"detail": "Invalid JSON"}, status_code=400)
+        try:
+            updated = config_store.update(changes)
+            return updated
+        except Exception as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
 
     # ── Health ───────────────────────────────────────────────────────
     @app.get("/health")

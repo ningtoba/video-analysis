@@ -1,109 +1,156 @@
-<div class="card mb-md">
-  <h3>⚙️ Configuration</h3>
-  <p class="text-muted text-sm">All settings are controlled via environment variables. Restart the server after changes.</p>
-</div>
-
-<div class="grid-2">
-  <!-- Processing -->
-  <div class="card">
-    <h4>🎬 Processing</h4>
-    <table style="width:100%;font-size:var(--text-sm);">
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Whisper Model</td><td><code>{{ config.whisper_model }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Whisper Device</td><td><code>{{ config.whisper_device }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Compute Type</td><td><code>{{ config.whisper_compute_type }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Frame Rate</td><td><code>{{ config.frame_rate }} fps</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Scene Detector</td><td><code>{{ config.scene_detector }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Scene Threshold</td><td><code>{{ config.scene_threshold }}</code></td></tr>
-    </table>
+<div x-data="{ cfg: {}, loaded: false, saved: false, saving: false }"
+     x-init="fetch('/api/config').then(r=>r.json()).then(d=>{cfg=d;loaded=true})">
+  <div class="card mb-md">
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="mb-0">⚙️ Settings</h3>
+        <p class="text-muted text-sm mt-sm mb-0">Configure models, features, and processing parameters. Changes are saved immediately and take effect on the next pipeline run.</p>
+      </div>
+      <button class="btn btn-primary" @click="saving=true;fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)}).then(r=>r.json()).then(d=>{cfg=d;saving=false;saved=true;setTimeout(()=>saved=false,2000)})">
+        <span x-show="!saving && !saved">💾 Save</span>
+        <span x-show="saving"><span class="spinner"></span> Saving...</span>
+        <span x-show="saved">✓ Saved!</span>
+      </button>
+    </div>
   </div>
 
-  <!-- Computer Vision -->
-  <div class="card">
-    <h4>👁️ Computer Vision</h4>
-    <table style="width:100%;font-size:var(--text-sm);">
-      <tr><td style="color:var(--text-muted);padding:4px 0;">CLIP Model</td><td><code>{{ config.clip_model }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">CLIP Dataset</td><td><code>{{ config.clip_pretrained_dataset }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">YOLO Model</td><td><code>{{ config.yolo_model }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">YOLO Confidence</td><td><code>{{ config.yolo_confidence }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Entity Tracking</td><td><span class="badge {{ 'success' if config.entity_tracking_enabled else 'error' }}">{{ 'ON' if config.entity_tracking_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Face Recognition</td><td><span class="badge {{ 'success' if config.face_recognition_enabled else 'error' }}">{{ 'ON' if config.face_recognition_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Action Recognition</td><td><span class="badge {{ 'success' if config.action_recognition_enabled else 'error' }}">{{ 'ON' if config.action_recognition_enabled else 'OFF' }}</span></td></tr>
-    </table>
+  <div x-show="!loaded" class="card text-center" style="padding:var(--space-2xl);">
+    <span class="spinner"></span> <span class="text-muted text-sm">Loading settings...</span>
   </div>
 
-  <!-- RAG -->
-  <div class="card">
-    <h4>🧠 RAG & Embeddings</h4>
-    <table style="width:100%;font-size:var(--text-sm);">
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Embedding Model</td><td><code>{{ config.embedding_model }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Chroma Collection</td><td><code>{{ config.chroma_collection }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Top-K Retrieval</td><td><code>{{ config.top_k_retrieval }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Top-K Rerank</td><td><code>{{ config.top_k_rerank }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Temporal Window</td><td><code>±{{ config.temporal_window }} neighbors</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">MMR Diversity</td><td><span class="badge {{ 'success' if config.mmr_diversity_enabled else 'error' }}">{{ 'ON' if config.mmr_diversity_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Multimodal Embed</td><td><span class="badge {{ 'success' if config.multimodal_embedding_enabled else 'error' }}">{{ 'ON' if config.multimodal_embedding_enabled else 'OFF' }}</span></td></tr>
-    </table>
-  </div>
+  <div x-show="loaded" class="grid-2">
+    <!-- Processing -->
+    <div class="card">
+      <h4>🎬 Processing</h4>
+      <div class="flex flex-col gap-sm">
+        <label class="text-xs text-muted">Whisper Model
+          <select x-model="cfg.whisper_model" class="mt-xs">
+            <option value="large-v3">large-v3</option>
+            <option value="large-v2">large-v2</option>
+            <option value="medium">medium</option>
+            <option value="small">small</option>
+            <option value="tiny">tiny</option>
+          </select></label>
+        <label class="text-xs text-muted">Whisper Device
+          <select x-model="cfg.whisper_device" class="mt-xs">
+            <option value="cuda">cuda (GPU)</option>
+            <option value="cpu">cpu</option>
+          </select></label>
+        <label class="text-xs text-muted">Compute Type
+          <select x-model="cfg.whisper_compute_type" class="mt-xs">
+            <option value="int8_float16">int8_float16 (fast)</option>
+            <option value="int8">int8</option>
+            <option value="float16">float16</option>
+          </select></label>
+        <label class="text-xs text-muted">Frame Rate <input type="number" x-model="cfg.frame_rate" step="0.1" min="0.1" max="10" class="mt-xs"></label>
+        <label class="text-xs text-muted">Scene Detector
+          <select x-model="cfg.scene_detector" class="mt-xs">
+            <option value="adaptive">adaptive</option>
+            <option value="content">content</option>
+            <option value="ffmpeg">ffmpeg</option>
+            <option value="hash">hash</option>
+          </select></label>
+        <label class="text-xs text-muted">Scene Threshold <input type="number" x-model="cfg.scene_threshold" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
+        <label class="text-xs text-muted">Processing Mode
+          <select x-model="cfg.processing_mode" class="mt-xs">
+            <option value="auto">auto</option>
+            <option value="video_full">video_full</option>
+            <option value="audio_only">audio_only</option>
+          </select></label>
+      </div>
+    </div>
 
-  <!-- Video MLLM -->
-  <div class="card">
-    <h4>🤖 Video MLLM</h4>
-    <table style="width:100%;font-size:var(--text-sm);">
-      <tr><td style="color:var(--text-muted);padding:4px 0;">MLLM Enabled</td><td><span class="badge {{ 'success' if config.video_mllm_enabled else 'error' }}">{{ 'ON' if config.video_mllm_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Backend</td><td><code>{{ config.video_mllm_backend }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Model</td><td><code>{{ config.video_mllm_model }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">As Describer</td><td><span class="badge {{ 'success' if config.video_mllm_as_describer else 'error' }}">{{ 'ON' if config.video_mllm_as_describer else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">As Chat Backend</td><td><span class="badge {{ 'success' if config.video_mllm_as_chat_backend else 'error' }}">{{ 'ON' if config.video_mllm_as_chat_backend else 'OFF' }}</span></td></tr>
-    </table>
-  </div>
+    <!-- CV -->
+    <div class="card">
+      <h4>👁️ Computer Vision</h4>
+      <div class="flex flex-col gap-sm">
+        <label class="text-xs text-muted">CLIP Model
+          <select x-model="cfg.clip_model" class="mt-xs">
+            <option value="ViT-B-32">ViT-B-32 (fast, 512d)</option>
+            <option value="ViT-L-14">ViT-L-14 (accurate, 768d)</option>
+          </select></label>
+        <label class="text-xs text-muted">YOLO Model
+          <select x-model="cfg.yolo_model" class="mt-xs">
+            <option value="yolo26x.pt">YOLO26x (best)</option>
+            <option value="yolo26m.pt">YOLO26m (balanced)</option>
+            <option value="yolo26n.pt">YOLO26n (fast)</option>
+          </select></label>
+        <label class="text-xs text-muted">YOLO Confidence <input type="number" x-model="cfg.yolo_confidence" step="0.05" min="0.1" max="1.0" class="mt-xs"></label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.entity_tracking_enabled"> Entity Tracking (ByteTrack)</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.face_recognition_enabled"> Face Recognition</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.action_recognition_enabled"> Action Recognition (X-CLIP)</label>
+      </div>
+    </div>
 
-  <!-- Agent / Orchestra -->
-  <div class="card">
-    <h4>🧑‍💻 Agents</h4>
-    <table style="width:100%;font-size:var(--text-sm);">
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Agent Enabled</td><td><span class="badge {{ 'success' if config.agent_enabled else 'error' }}">{{ 'ON' if config.agent_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Orchestra Enabled</td><td><span class="badge {{ 'success' if config.orchestra_enabled else 'error' }}">{{ 'ON' if config.orchestra_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Agent Confidence</td><td><span class="badge {{ 'success' if config.agent_confidence_enabled else 'error' }}">{{ 'ON' if config.agent_confidence_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Curator Enabled</td><td><span class="badge {{ 'success' if config.curator_enabled else 'error' }}">{{ 'ON' if config.curator_enabled else 'OFF' }}</span></td></tr>
-    </table>
-  </div>
+    <!-- RAG -->
+    <div class="card">
+      <h4>🧠 RAG & Retrieval</h4>
+      <div class="flex flex-col gap-sm">
+        <label class="text-xs text-muted">Embedding Model
+          <select x-model="cfg.embedding_model" class="mt-xs">
+            <option value="BAAI/BGE-VL-base">BGE-VL-base (multimodal, 150M)</option>
+            <option value="nomic-ai/nomic-embed-text-v1.5">Nomic Embed Text v1.5</option>
+          </select></label>
+        <label class="text-xs text-muted">Top-K Retrieval <input type="number" x-model="cfg.top_k_retrieval" min="5" max="100" class="mt-xs"></label>
+        <label class="text-xs text-muted">Top-K Rerank <input type="number" x-model="cfg.top_k_rerank" min="1" max="20" class="mt-xs"></label>
+        <label class="text-xs text-muted">Temporal Window <input type="number" x-model="cfg.temporal_window" min="0" max="10" class="mt-xs"></label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.mmr_diversity_enabled"> MMR Diversity Re-Ranking</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.multimodal_embedding_enabled"> Multimodal Embedding (Qwen3-VL)</label>
+      </div>
+    </div>
 
-  <!-- Other Features -->
-  <div class="card">
-    <h4>🔧 Features</h4>
-    <table style="width:100%;font-size:var(--text-sm);">
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Adaptive Scaling</td><td><span class="badge {{ 'success' if config.adaptive_scaling_enabled else 'error' }}">{{ config.adaptive_scaling_policy }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Event-Causal RAG</td><td><span class="badge {{ 'success' if config.event_causal_rag_enabled else 'error' }}">{{ 'ON' if config.event_causal_rag_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Streaming Enabled</td><td><span class="badge {{ 'success' if config.streaming_enabled else 'error' }}">{{ 'ON' if config.streaming_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Federation Enabled</td><td><span class="badge {{ 'success' if config.federation_enabled else 'error' }}">{{ 'ON' if config.federation_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Conversation Memory</td><td><span class="badge {{ 'success' if config.conversation_memory_enabled else 'error' }}">{{ 'ON' if config.conversation_memory_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Prometheus Metrics</td><td><span class="badge {{ 'success' if config.prometheus_enabled else 'error' }}">{{ 'ON' if config.prometheus_enabled else 'OFF' }}</span></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Telemetry</td><td><span class="badge {{ 'success' if config.telemetry_enabled else 'error' }}">{{ 'ON' if config.telemetry_enabled else 'OFF' }}</span></td></tr>
-    </table>
-  </div>
+    <!-- MLLM -->
+    <div class="card">
+      <h4>🤖 Video MLLM</h4>
+      <div class="flex flex-col gap-sm">
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_enabled"> Enable Video MLLM</label>
+        <label class="text-xs text-muted">Backend
+          <select x-model="cfg.video_mllm_backend" class="mt-xs">
+            <option value="qwen3_vl">Qwen3-VL (Apache 2.0)</option>
+            <option value="internvideo3">InternVideo3 (SOTA)</option>
+            <option value="videochat_flash">VideoChat-Flash (MIT)</option>
+            <option value="smolvlm2">SmolVLM2 (Apache 2.0)</option>
+          </select></label>
+        <label class="text-xs text-muted">Model Size
+          <select x-model="cfg.video_mllm_model_size" class="mt-xs">
+            <option value="30B">30B (MoE, 3B active)</option>
+            <option value="8B">8B</option>
+            <option value="2B">2B</option>
+            <option value="500M">500M (lightweight)</option>
+          </select></label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_as_describer"> Use as scene describer</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.video_mllm_as_chat_backend"> Use as chat backend</label>
+      </div>
+    </div>
 
-  <!-- Paths & Limits -->
-  <div class="card">
-    <h4>📁 Paths & Limits</h4>
-    <table style="width:100%;font-size:var(--text-sm);">
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Data Dir</td><td><code>{{ config.data_dir }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Video Dir</td><td><code>{{ config.video_dir }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Chroma Path</td><td><code>{{ config.chroma_path }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Rate Limit</td><td><span class="badge {{ 'success' if config.rate_limit_enabled else 'error' }}">{{ 'ON' if config.rate_limit_enabled else 'OFF' }}</span> — {{ config.rate_limit_rate }}/s burst {{ config.rate_limit_capacity }}</td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Webhook URLs</td><td><code>{{ config.webhook_urls|length }} configured</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">HF Token</td><td><span class="badge {{ 'success' if config.hf_token else 'error' }}">{{ 'SET' if config.hf_token else 'NOT SET' }}</span></td></tr>
-    </table>
-  </div>
+    <!-- Features -->
+    <div class="card">
+      <h4>🔧 Features</h4>
+      <div class="flex flex-col gap-sm">
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.quality_screening_enabled"> Quality Pre-Screening</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.adaptive_scaling_enabled"> Adaptive Pipeline Scaling</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.event_causal_rag_enabled"> Event-Causal RAG</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.conversation_memory_enabled"> Conversation Memory</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.agent_enabled"> Agentic Video Agent</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.orchestra_enabled"> Multi-Agent Orchestra</label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.prometheus_enabled"> Prometheus Metrics</label>
+      </div>
+    </div>
 
-  <!-- Version & Env -->
-  <div class="card">
-    <h4>📦 System</h4>
-    <table style="width:100%;font-size:var(--text-sm);">
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Version</td><td><code>{{ version }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">UI Host</td><td><code>{{ config.ui_host }}:{{ config.ui_port }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Processing Mode</td><td><code>{{ config.processing_mode }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">OCR Model</td><td><code>{{ config.ocr_model_version }}</code></td></tr>
-      <tr><td style="color:var(--text-muted);padding:4px 0;">Frame Storage</td><td><code>{{ config.frame_storage_mode }}</code></td></tr>
-    </table>
+    <!-- Storage -->
+    <div class="card">
+      <h4>📁 Storage & Paths</h4>
+      <div class="flex flex-col gap-sm">
+        <label class="text-xs text-muted">Data Directory <input type="text" x-model="cfg.data_dir" class="mt-xs"></label>
+        <label class="text-xs text-muted">Frame Storage
+          <select x-model="cfg.frame_storage_mode" class="mt-xs">
+            <option value="tiered">tiered (960px/320px)</option>
+            <option value="full">full resolution</option>
+            <option value="compressed">compressed (DINOv2)</option>
+          </select></label>
+        <label class="text-xs text-muted">Rate Limit <input type="number" x-model="cfg.rate_limit_capacity" class="mt-xs"></label>
+        <label class="flex items-center gap-sm text-xs text-muted"><input type="checkbox" x-model="cfg.rate_limit_enabled"> Enable Rate Limiting</label>
+      </div>
+    </div>
   </div>
 </div>

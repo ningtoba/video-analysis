@@ -29,7 +29,7 @@ def register_analysis_routes(app, config: Config, templates):
     @router.get("", response_class=HTMLResponse)
     @router.get("/", response_class=HTMLResponse)
     async def analysis_page(request: Request, partial: str = ""):
-        template = "pages/analysis.html"
+        template = "pages/analyze.html"
         if partial:
             return templates.TemplateResponse(request=request, name=template)
         return templates.TemplateResponse(request=request, name=template)

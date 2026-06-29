@@ -1,8 +1,7 @@
-"""Settings Tab — Runtime configuration viewer."""
+"""Settings Tab — editable configuration via /api/config."""
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
-from video_analysis import __version__
 
 
 def register_settings_routes(app, config, templates):
@@ -12,9 +11,7 @@ def register_settings_routes(app, config, templates):
     @router.get("/", response_class=HTMLResponse)
     async def settings_page(request: Request):
         return templates.TemplateResponse(
-            request=request,
-            name="pages/settings.html",
-            context={"config": config, "version": __version__},
+            request=request, name="pages/settings.html", context={"config": config}
         )
 
     app.include_router(router)
