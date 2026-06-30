@@ -32,6 +32,8 @@ thumbnails/
 chroma/
 !data/.gitkeep
 !videos/.gitkeep
+custom_data/
+mydata/
 
 # ML model files
 *.pt

@@ -1,692 +1,368 @@
 """
-Self-Contained LLM Provider — abstract over LLM backends to remove the hard
-dependency on Hermes CLI.
+LLM provider abstraction — supports OpenAI, Anthropic, Gemini, DeepSeek, and any OpenAI-compatible API.
 
-Supports three modes:
-  1. **hermes** (default) — existing `hermes chat -q` subprocess
-  2. **openai** — any OpenAI-compatible API (vLLM, Ollama, llama.cpp, TGI, etc.)
-  3. **auto** — try openai first, fall back to hermes
-
-Usage:
-    from video_analysis.llm_provider import get_llm_provider
-
-    llm = get_llm_provider(config)
-    answer = llm.chat("What happened in the video?")
-    answer = llm.chat(prompt, system="Be concise.", temperature=0.1)
+All vision tasks (scene understanding, object detection, OCR) are handled by the LLM Vision API.
+No local vision models needed.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
-import subprocess
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+import httpx
+
 logger = logging.getLogger(__name__)
-
-_STDERR_TRUNCATE_LENGTH: int = 200
-_AVAILABILITY_CHECK_TIMEOUT: int = 5
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _parse_json_response(raw: str) -> Optional[Dict[str, Any]]:
-    """Extract and parse JSON from an LLM response string.
-
-    Tries direct parse, then markdown code blocks, then brace-delimited extraction.
-    """
-    raw = raw.strip()
-    # Direct parse
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        pass
-
-    # Markdown code blocks
-    import re
-
-    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # { ... } extraction
-    brace_start = raw.find("{")
-    brace_end = raw.rfind("}")
-    if brace_start >= 0 and brace_end > brace_start:
-        try:
-            return json.loads(raw[brace_start : brace_end + 1])
-        except json.JSONDecodeError:
-            pass
-
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
 
 
 @dataclass
 class LLMProviderConfig:
-    """Configuration for the LLM provider abstraction.
+    """Configuration for the LLM provider."""
+    provider: str = "openai"  # openai, anthropic, gemini, deepseek, ollama
+    api_key: str = ""
+    api_base: str = ""
+    model: str = ""
+    temperature: float = 0.3
+    max_tokens: int = 4096
+    http_client: Optional[httpx.Client] = None
 
-    Read from Config (env vars) when ``from_config`` is used.
+
+class LLMProvider:
+    """Unified LLM provider supporting text and vision chat.
+
+    Handles OpenAI-compatible APIs (OpenAI, DeepSeek, Ollama, vLLM, etc.)
+    and native Anthropic/Gemini APIs.
     """
 
-    provider: str = "hermes"  # "hermes", "openai", or "auto"
-    api_base: str = "http://localhost:11434/v1"  # OpenAI-compatible base URL
-    api_key: str = ""  # API key (empty OK for local servers)
-    model: str = "qwen2.5"  # Model name for the API
-    max_tokens: int = 2048
-    temperature: float = 0.3
-    timeout: int = 120
-    # Hermes-specific
-    hermes_model: str = "deepseek-ai/DeepSeek-V4-Flash"
-    hermes_max_tokens: int = 2048
+    def __init__(self, config: LLMProviderConfig):
+        self.config = config
+        self._client: Optional[httpx.Client] = config.http_client
+        self._headers: Dict[str, str] = {}
 
-    @classmethod
-    def from_env(cls) -> "LLMProviderConfig":
-        """Read config from environment variables."""
-        return cls(
-            provider=os.environ.get("LLM_PROVIDER", "hermes").lower(),
-            api_base=os.environ.get("OPENAI_API_BASE", "http://localhost:11434/v1"),
-            api_key=os.environ.get("OPENAI_API_KEY", ""),
-            model=os.environ.get("OPENAI_MODEL", "qwen2.5"),
-            max_tokens=int(os.environ.get("OPENAI_MAX_TOKENS", "2048")),
-            temperature=float(os.environ.get("LLM_TEMPERATURE", "0.3")),
-            timeout=int(os.environ.get("LLM_TIMEOUT", "120")),
-            hermes_model=os.environ.get("LLM_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
-            hermes_max_tokens=int(os.environ.get("LLM_MAX_TOKENS", "2048")),
-        )
+        if config.provider in ("openai", "deepseek", "ollama"):
+            self._setup_openai_compatible()
+        elif config.provider == "anthropic":
+            self._setup_anthropic()
+        elif config.provider == "gemini":
+            self._setup_gemini()
+        else:
+            raise ValueError(f"Unknown LLM provider: {config.provider}")
 
+    def _setup_openai_compatible(self):
+        base = self.config.api_base or {
+            "openai": "https://api.openai.com/v1",
+            "deepseek": "https://api.deepseek.com",
+            "ollama": "http://localhost:11434/v1",
+        }.get(self.config.provider, "https://api.openai.com/v1")
 
-# ---------------------------------------------------------------------------
-# Abstract base
-# ---------------------------------------------------------------------------
+        self._api_base = base.rstrip("/")
+        self._headers = {
+            "Authorization": f"Bearer {self.config.api_key}",
+            "Content-Type": "application/json",
+        }
+        if not self._client:
+            self._client = httpx.Client(timeout=120)
 
+    def _setup_anthropic(self):
+        self._api_base = "https://api.anthropic.com/v1"
+        self._headers = {
+            "x-api-key": self.config.api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+        if not self._client:
+            self._client = httpx.Client(timeout=120)
 
-class LLMProvider(ABC):
-    """Abstract base for LLM backends."""
+    def _setup_gemini(self):
+        self._api_base = "https://generativelanguage.googleapis.com/v1beta"
+        self._headers = {"Content-Type": "application/json"}
+        if not self._client:
+            self._client = httpx.Client(timeout=120)
 
-    @abstractmethod
-    def chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> str:
-        """Send a chat prompt and return the response text.
+    @property
+    def name(self) -> str:
+        return f"{self.config.provider}/{self.config.model}"
+
+    # ── Text-only chat ──────────────────────────────────────────────
+
+    def chat(self, messages: List[Dict[str, str]], system: Optional[str] = None) -> Optional[str]:
+        """Send a text-only chat completion request.
 
         Args:
-            prompt: The user message / prompt text.
-            system: Optional system prompt.
-            temperature: Temperature override (None = config default).
-            max_tokens: Max tokens override (None = config default).
-            timeout: Timeout override in seconds (None = config default).
+            messages: List of {"role": "user"|"assistant", "content": str}
+            system: Optional system prompt
 
         Returns:
-            The response text, or empty string on failure.
+            Response text or None on failure.
         """
-        ...
+        if self.config.provider == "anthropic":
+            return self._chat_anthropic(messages, system)
+        elif self.config.provider == "gemini":
+            return self._chat_gemini(messages, system)
+        else:
+            return self._chat_openai(messages, system)
 
-    @abstractmethod
-    def structured_chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """Send a chat prompt and return a structured JSON response.
-
-        The prompt should instruct the model to respond in JSON. Returns
-        the parsed dict, or None on failure.
-        """
-
-    @abstractmethod
-    async def stream_chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> AsyncGenerator[str, None]:
-        """Send a chat prompt and yield response tokens as they arrive.
-
-        Args:
-            prompt: The user message / prompt text.
-            system: Optional system prompt.
-            temperature: Temperature override (None = config default).
-            max_tokens: Max tokens override (None = config default).
-            timeout: Timeout override in seconds (None = config default).
-
-        Yields:
-            Individual tokens from the response as they become available.
-        """
-        if False:
-            yield  # pragma: no cover (required to make this an async generator)
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Human-readable provider name (e.g. 'hermes', 'openai')."""
-        ...
-
-    @property
-    def available(self) -> bool:
-        """Whether this provider is available (can make calls)."""
-        return True
-
-
-# ---------------------------------------------------------------------------
-# Hermes CLI provider
-# ---------------------------------------------------------------------------
-
-
-class HermesProvider(LLMProvider):
-    """LLM backend using ``hermes chat -q`` subprocess.
-
-    This is the existing/default provider — works when Hermes Agent CLI
-    is installed and configured on the system PATH.
-    """
-
-    def __init__(self, config: Optional[LLMProviderConfig] = None):
-        self._config = config or LLMProviderConfig.from_env()
-
-    @property
-    def name(self) -> str:
-        return "hermes"
-
-    @property
-    def available(self) -> bool:
-        try:
-            result = subprocess.run(
-                ["hermes", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=_AVAILABILITY_CHECK_TIMEOUT,
-            )
-            return result.returncode == 0
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return False
-
-    def chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> str:
-        try:
-            cmd = [
-                "hermes",
-                "chat",
-                "-q",
-                "-m",
-                self._config.hermes_model,
-                "-t",
-                str(temperature if temperature is not None else self._config.temperature),
-                "--max-tokens",
-                str(max_tokens if max_tokens is not None else self._config.hermes_max_tokens),
-            ]
-            if system:
-                cmd += ["-s", system]
-
-            result = subprocess.run(
-                cmd,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout if timeout is not None else self._config.timeout,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-
-            logger.warning(
-                "Hermes CLI call failed (rc=%d): %s",
-                result.returncode,
-                result.stderr[:_STDERR_TRUNCATE_LENGTH],
-            )
-            return ""
-        except FileNotFoundError:
-            logger.warning("Hermes CLI not found on PATH")
-            return ""
-        except subprocess.TimeoutExpired:
-            logger.warning("Hermes CLI call timed out")
-            return ""
-        except Exception as e:
-            logger.error("Hermes CLI error: %s", e)
-            return ""
-
-    def structured_chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
-        raw = self.chat(
-            prompt=prompt,
-            system=system,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=timeout,
-        )
-        if not raw:
-            return None
-        return _parse_json_response(raw)
-
-    async def stream_chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> AsyncGenerator[str, None]:
-        """Stream response tokens from Hermes CLI via subprocess.
-
-        Reads stdout line by line and yields each non-empty line as a token.
-        Falls back to single-shot chat if streaming is not supported.
-        """
-        try:
-            cmd = [
-                "hermes",
-                "chat",
-                "-q",
-                "-m",
-                self._config.hermes_model,
-                "-t",
-                str(temperature if temperature is not None else self._config.temperature),
-                "--max-tokens",
-                str(max_tokens if max_tokens is not None else self._config.hermes_max_tokens),
-            ]
-            if system:
-                cmd += ["-s", system]
-
-            # Try with stream mode first
-            stream_cmd = cmd + ["--stream"]
-
-            proc = await asyncio.create_subprocess_exec(
-                *stream_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(input=prompt.encode("utf-8")),
-                timeout=timeout if timeout is not None else self._config.timeout,
-            )
-
-            if proc.returncode != 0:
-                logger.warning(
-                    "Hermes CLI stream call failed (rc=%d): %s",
-                    proc.returncode,
-                    stderr.decode("utf-8")[:200],
-                )
-                # Fall back to non-streaming
-                async for token in self._fallback_stream(
-                    prompt=prompt,
-                    system=system,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    timeout=timeout,
-                ):
-                    yield token
-                return
-
-            output = stdout.decode("utf-8")
-            # Yield whitespace-separated tokens for a natural streaming feel
-            for line in output.splitlines():
-                line = line.strip()
-                if line:
-                    yield line + "\n"
-                    await asyncio.sleep(0)
-
-        except (FileNotFoundError, asyncio.TimeoutError) as e:
-            logger.warning("Hermes CLI stream error: %s", e)
-            # Fall back to non-streaming
-            async for token in self._fallback_stream(
-                prompt=prompt,
-                system=system,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=timeout,
-            ):
-                yield token
-        except Exception as e:
-            logger.error("Hermes CLI stream error: %s", e)
-            async for token in self._fallback_stream(
-                prompt=prompt,
-                system=system,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=timeout,
-            ):
-                yield token
-
-    async def _fallback_stream(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> AsyncGenerator[str, None]:
-        """Fallback: run synchronous chat and yield tokens word-by-word."""
-        result = self.chat(
-            prompt=prompt,
-            system=system,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=timeout,
-        )
-        for token in result.split():
-            yield token + " "
-            await asyncio.sleep(0)
-        if result:
-            yield "\n"
-
-
-# ---------------------------------------------------------------------------
-# OpenAI-compatible provider
-# ---------------------------------------------------------------------------
-
-
-class OpenAIProvider(LLMProvider):
-    """LLM backend using any OpenAI-compatible API endpoint.
-
-    Works with:
-    - vLLM (``http://localhost:8000/v1``)
-    - Ollama (``http://localhost:11434/v1``)
-    - llama.cpp (``http://localhost:8080/v1``)
-    - Text Generation Inference
-    - OpenAI / Azure OpenAI (with API key)
-    - Any OpenAI-compatible chat completion API
-    """
-
-    def __init__(self, config: Optional[LLMProviderConfig] = None):
-        self._config = config or LLMProviderConfig.from_env()
-        self._session = None  # lazy-imported requests.Session
-
-    def _get_session(self):
-        """Lazy-imported requests session (avoids import-time dep)."""
-        if self._session is None:
-            import requests
-
-            self._session = requests.Session()
-            self._session.headers.update(
-                {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self._config.api_key}",
-                }
-            )
-        return self._session
-
-    @property
-    def name(self) -> str:
-        return "openai"
-
-    @property
-    def available(self) -> bool:
-        """Check availability by querying the model list endpoint."""
-        try:
-            import requests
-
-            base = self._config.api_base.rstrip("/")
-            url = f"{base}/models" if "chat/completions" not in base else base
-
-            resp = requests.get(
-                url,
-                headers={
-                    "Authorization": f"Bearer {self._config.api_key}",
-                },
-                timeout=_AVAILABILITY_CHECK_TIMEOUT,
-            )
-            return resp.status_code == 200
-        except Exception:
-            return False
-
-    def chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> str:
-        result = self._call_api(
-            messages=self._build_messages(prompt, system),
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=timeout,
-        )
-        if result is None:
-            return ""
-
-        # Extract content from response
-        try:
-            choices = result.get("choices", [])
-            if choices:
-                message = choices[0].get("message", {})
-                content = message.get("content", "")
-                return content.strip() if content else ""
-        except (IndexError, KeyError, AttributeError):
-            pass
-
-        return ""
-
-    def structured_chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
-        # Add JSON instruction to the system prompt
-        json_system = (system + "\n\n" if system else "") + (
-            "Respond in valid JSON only, no markdown formatting."
-        )
-        result = self._call_api(
-            messages=self._build_messages(prompt, json_system),
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=timeout,
-        )
-        if result is None:
-            return None
-
-        try:
-            choices = result.get("choices", [])
-            if choices:
-                message = choices[0].get("message", {})
-                content = message.get("content", "")
-                if content:
-                    return _parse_json_response(content)
-        except (IndexError, KeyError, AttributeError):
-            pass
-
-        return None
-
-    async def stream_chat(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> AsyncGenerator[str, None]:
-        """Stream response tokens from an OpenAI-compatible API via SSE.
-
-        Uses ``stream=True`` in the request and parses ``data: ...`` SSE
-        lines to extract ``delta.content`` tokens as they arrive.
-        """
-        import httpx
-
-        messages = self._build_messages(prompt, system)
-        base = self._config.api_base.rstrip("/")
-        if not base.endswith("/chat/completions"):
-            base = base + "/chat/completions"
-
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self._config.api_key}",
-        }
-        payload = {
-            "model": self._config.model,
-            "messages": messages,
-            "temperature": (temperature if temperature is not None else self._config.temperature),
-            "max_tokens": (max_tokens if max_tokens is not None else self._config.max_tokens),
-            "stream": True,
-        }
-
-        try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(timeout if timeout is not None else self._config.timeout)
-            ) as client:
-                async with client.stream("POST", base, json=payload, headers=headers) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        line = line.strip()
-                        if not line:
-                            continue
-                        if line.startswith("data: "):
-                            data_str = line[6:]
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(data_str)
-                                choices = chunk.get("choices", [])
-                                if choices:
-                                    delta = choices[0].get("delta", {})
-                                    content = delta.get("content", "")
-                                    if content:
-                                        yield content
-                            except json.JSONDecodeError:
-                                continue
-        except Exception as e:
-            logger.warning("OpenAI stream API call failed: %s", e)
-            # Fall back: yield the full response from the synchronous call
-            result = self.chat(
-                prompt=prompt,
-                system=system,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=timeout,
-            )
-            if result:
-                yield result
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _build_messages(self, prompt: str, system: str = "") -> List[Dict[str, str]]:
-        messages: List[Dict[str, str]] = []
+    def _chat_openai(self, messages: List[Dict[str, str]], system: Optional[str] = None) -> Optional[str]:
+        full_messages = list(messages)
         if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        return messages
-
-    def _call_api(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """Make the OpenAI-compatible chat completions API call."""
-        session = self._get_session()
-        base = self._config.api_base.rstrip("/")
-        # Ensure the URL ends with /chat/completions
-        if not base.endswith("/chat/completions"):
-            base = base.rstrip("/") + "/chat/completions"
-
-        payload: Dict[str, Any] = {
-            "model": self._config.model,
-            "messages": messages,
-            "temperature": (temperature if temperature is not None else self._config.temperature),
-            "max_tokens": (max_tokens if max_tokens is not None else self._config.max_tokens),
-        }
+            full_messages.insert(0, {"role": "system", "content": system})
 
         try:
-            resp = session.post(
-                base,
-                json=payload,
-                timeout=timeout if timeout is not None else self._config.timeout,
+            resp = self._client.post(
+                f"{self._api_base}/chat/completions",
+                headers=self._headers,
+                json={
+                    "model": self.config.model,
+                    "messages": full_messages,
+                    "temperature": self.config.temperature,
+                    "max_tokens": self.config.max_tokens,
+                },
             )
             resp.raise_for_status()
-            return resp.json()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
         except Exception as e:
-            logger.warning("OpenAI API call failed: %s", e)
+            logger.error("OpenAI chat failed: %s", e)
             return None
 
+    def _chat_anthropic(self, messages: List[Dict[str, str]], system: Optional[str] = None) -> Optional[str]:
+        try:
+            body: Dict[str, Any] = {
+                "model": self.config.model,
+                "max_tokens": self.config.max_tokens,
+                "messages": messages,
+            }
+            if system:
+                body["system"] = system
 
-# ---------------------------------------------------------------------------
-# Factory
-# ---------------------------------------------------------------------------
+            resp = self._client.post(
+                f"{self._api_base}/messages",
+                headers=self._headers,
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["content"][0]["text"]
+        except Exception as e:
+            logger.error("Anthropic chat failed: %s", e)
+            return None
+
+    def _chat_gemini(self, messages: List[Dict[str, str]], system: Optional[str] = None) -> Optional[str]:
+        try:
+            contents = []
+            for msg in messages:
+                contents.append({
+                    "role": "user" if msg["role"] == "user" else "model",
+                    "parts": [{"text": msg["content"]}],
+                })
+
+            body: Dict[str, Any] = {
+                "contents": contents,
+                "generationConfig": {
+                    "temperature": self.config.temperature,
+                    "maxOutputTokens": self.config.max_tokens,
+                },
+            }
+            if system:
+                body["systemInstruction"] = {"parts": [{"text": system}]}
+
+            resp = self._client.post(
+                f"{self._api_base}/models/{self.config.model}:generateContent",
+                headers=self._headers,
+                params={"key": self.config.api_key},
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as e:
+            logger.error("Gemini chat failed: %s", e)
+            return None
+
+    # ── Vision chat (send images) ───────────────────────────────────
+
+    def chat_with_images(
+        self,
+        messages: List[Dict[str, str]],
+        images: List[str],
+        system: Optional[str] = None,
+    ) -> Optional[str]:
+        """Send a chat with images (base64-encoded).
+
+        Args:
+            messages: Text messages
+            images: List of base64-encoded image strings
+            system: Optional system prompt
+
+        Returns:
+            Response text or None on failure.
+        """
+        if self.config.provider == "anthropic":
+            return self._vision_anthropic(messages, images, system)
+        elif self.config.provider == "gemini":
+            return self._vision_gemini(messages, images, system)
+        else:
+            return self._vision_openai(messages, images, system)
+
+    def _vision_openai(
+        self,
+        messages: List[Dict[str, str]],
+        images: List[str],
+        system: Optional[str] = None,
+    ) -> Optional[str]:
+        content: List[Dict[str, Any]] = []
+
+        # Add images
+        for img in images:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{img}"},
+            })
+
+        # Add text messages
+        for msg in messages:
+            content.append({"type": "text", "text": msg["content"]})
+
+        full_messages = [{"role": "user", "content": content}]
+        if system:
+            full_messages.insert(0, {"role": "system", "content": system})
+
+        try:
+            resp = self._client.post(
+                f"{self._api_base}/chat/completions",
+                headers=self._headers,
+                json={
+                    "model": self.config.model,
+                    "messages": full_messages,
+                    "temperature": self.config.temperature,
+                    "max_tokens": self.config.max_tokens,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error("Vision chat failed: %s", e)
+            return None
+
+    def _vision_anthropic(
+        self,
+        messages: List[Dict[str, str]],
+        images: List[str],
+        system: Optional[str] = None,
+    ) -> Optional[str]:
+        content: List[Dict[str, Any]] = []
+        for img in images:
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": img,
+                },
+            })
+        for msg in messages:
+            content.append({"type": "text", "text": msg["content"]})
+
+        body: Dict[str, Any] = {
+            "model": self.config.model,
+            "max_tokens": self.config.max_tokens,
+            "messages": [{"role": "user", "content": content}],
+        }
+        if system:
+            body["system"] = system
+
+        try:
+            resp = self._client.post(
+                f"{self._api_base}/messages",
+                headers=self._headers,
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["content"][0]["text"]
+        except Exception as e:
+            logger.error("Anthropic vision failed: %s", e)
+            return None
+
+    def _vision_gemini(
+        self,
+        messages: List[Dict[str, str]],
+        images: List[str],
+        system: Optional[str] = None,
+    ) -> Optional[str]:
+        parts: List[Dict[str, Any]] = []
+        for img in images:
+            parts.append({
+                "inlineData": {
+                    "mimeType": "image/jpeg",
+                    "data": img,
+                },
+            })
+        for msg in messages:
+            parts.append({"text": msg["content"]})
+
+        body: Dict[str, Any] = {
+            "contents": [{"role": "user", "parts": parts}],
+            "generationConfig": {
+                "temperature": self.config.temperature,
+                "maxOutputTokens": self.config.max_tokens,
+            },
+        }
+        if system:
+            body["systemInstruction"] = {"parts": [{"text": system}]}
+
+        try:
+            resp = self._client.post(
+                f"{self._api_base}/models/{self.config.model}:generateContent",
+                headers=self._headers,
+                params={"key": self.config.api_key},
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as e:
+            logger.error("Gemini vision failed: %s", e)
+            return None
+
+    # ── Streaming chat ──────────────────────────────────────────────
+
+    def chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        system: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream chat response tokens."""
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        result = self.chat(messages, system)
+        if result:
+            for chunk in result.split():
+                yield chunk + " "
+                loop.run_until_complete(asyncio.sleep(0))
+        else:
+            yield ""
+
+
+# ── Factory ──────────────────────────────────────────────────────────
 
 _PROVIDER_CACHE: Dict[str, LLMProvider] = {}
 
 
-def get_llm_provider(
-    config: Optional[LLMProviderConfig] = None,
-    force: Optional[str] = None,
-) -> LLMProvider:
-    """Get the best available LLM provider.
-
-    Args:
-        config: Provider configuration (reads from env if None).
-        force: Override provider type ("hermes", "openai", "auto").
-
-    Returns:
-        An initialized LLMProvider instance.
-
-    The provider is cached by type so repeated calls reuse the same instance.
-    """
-    cfg = config or LLMProviderConfig.from_env()
-    provider_type = (force or cfg.provider).lower()
-
-    cache_key = provider_type
+def get_llm_provider(config: LLMProviderConfig) -> LLMProvider:
+    """Get or create an LLM provider instance."""
+    cache_key = f"{config.provider}:{config.model}:{config.api_base}"
     if cache_key in _PROVIDER_CACHE:
         return _PROVIDER_CACHE[cache_key]
 
-    if provider_type == "hermes":
-        provider: LLMProvider = HermesProvider(cfg)
-    elif provider_type == "openai":
-        provider = OpenAIProvider(cfg)
-    elif provider_type == "auto":
-        # Try OpenAI first (more capable), fall back to Hermes
-        openai_provider = OpenAIProvider(cfg)
-        if openai_provider.available:
-            provider = openai_provider
-        else:
-            provider = HermesProvider(cfg)
-    else:
-        logger.warning("Unknown provider type %r, falling back to hermes", provider_type)
-        provider = HermesProvider(cfg)
-
+    provider = LLMProvider(config)
     _PROVIDER_CACHE[cache_key] = provider
     return provider
 
 
 def reset_provider_cache():
-    """Reset the provider cache (useful for testing)."""
     _PROVIDER_CACHE.clear()

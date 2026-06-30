@@ -1,106 +1,79 @@
-# ── docker-compose.yml for video-analysis platform ──
-# GPU-accelerated with RTX 4070 / NVIDIA Container Toolkit
-#
-# Prerequisites on host:
-#   1. NVIDIA driver ≥550               → nvidia-smi  (driver 610.43.02 installed)
-#   2. nvidia-container-toolkit         → nvidia-ctk runtime configure --runtime=docker
-#   3. Docker Compose v2.23+            → docker compose version
-#
-# Verify GPU access inside a container:
-#   docker run --rm --gpus all nvidia/cuda:12.4.1-runtime-ubuntu22.04 nvidia-smi
+# ── docker-compose.yml for video-analysis ──
+# Single container: faster-whisper ASR + LLM Vision API for all vision tasks
 #
 # Usage:
-#   docker compose build      # Build the image
-#   docker compose up -d      # Start in detached mode
-#   docker compose logs -f    # Tail logs
-#   docker compose down       # Stop and remove container
+#   docker compose up -d
 #
-# Volumes:
-#   ./data:/app/data  — persists videos, frames, audio, ChromaDB, thumbnails, clips
+# You MUST set LLM_API_KEY (or ANTHROPIC_API_KEY / GEMINI_API_KEY)
+# in your environment or in a .env file:
+#   echo "LLM_API_KEY=sk-..." >> .env
+#   docker compose up -d
 
 services:
   video-analysis:
     build:
       context: .
       dockerfile: Dockerfile
-      # Pass build-time args if needed (e.g., WHISPER_MODEL_SIZE)
-      # args:
-      #   WHISPER_MODEL: "large-v3"
     image: video-analysis:latest
     container_name: video-analysis
     restart: unless-stopped
 
-    # ── Ports ──
     ports:
-      - "7860:7860"   # Gradio UI + FastAPI health/API
+      - "7860:7860"
 
-    # ── Volumes — persistent data ──
     volumes:
       - ./data:/app/data
 
-    # ── Environment ──
     environment:
-      # GPU: explicitly select device 0
-      - CUDA_VISIBLE_DEVICES=0
-      # App data root (overrides container default)
-      - VIDEO_ANALYSIS_DATA=/app/data
-      # Model config
-      - WHISPER_MODEL=large-v3
-      - WHISPER_DEVICE=cuda
-      - WHISPER_COMPUTE_TYPE=int8_float16
-      # UI bind
-      - UI_HOST=0.0.0.0
-      - UI_PORT=7860
-      # Gradio server config
-      - GRADIO_SERVER_NAME=0.0.0.0
-      - GRADIO_SERVER_PORT=7860
-      # Python
+      # ── LLM Provider (required — at least one API key) ──
+      # Options: openai, anthropic, gemini, deepseek, ollama
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_API_BASE=${LLM_API_BASE:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.3}
+
+      # ── Anthropic (alternative) ──
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+
+      # ── Gemini (alternative) ──
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+
+      # ── ASR (auto-selects based on VRAM) ──
+      # Set WHISPER_MODEL to "tiny"/"base"/"small"/"medium"/"large-v3-turbo"/"large-v3" to override
+      - WHISPER_MODEL=${WHISPER_MODEL:-auto}
+
+      # ── Frame extraction ──
+      - FRAME_RATE=${FRAME_RATE:-0.2}
+      - MAX_FRAMES_FOR_LLM=${MAX_FRAMES_FOR_LLM:-30}
+
+      # ── Server ──
+      - HOST=0.0.0.0
+      - PORT=7860
+
+      # ── Python ──
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
 
-    # ── GPU passthrough (NVIDIA) ──
-    # Uses modern Compose v3 `deploy.resources.reservations.devices` syntax.
-    # Alternative legacy approach: runtime: nvidia
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # ── GPU support (optional) ──
+    # Uncomment for NVIDIA GPU acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
-    # ── Health check ──
-    # Hit the FastAPI /health endpoint — returns 200 when serving.
-    # Served on :7860 alongside the Gradio UI via gr.mount_gradio_app().
-    # start_period (120s) covers initial model loading:
-    #   faster-whisper large-v3 ~4 GB VRAM  → ~30s cold load
-    #   open-clip ViT-L-14    ~2 GB VRAM  → ~15s
-    #   ChromaDB init      ~0.5 GB    → ~5s
-    #   sentence-transformers ~1 GB  → ~10s
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python3 -c \"import urllib.request; r=urllib.request.urlopen('http://localhost:7860/health', timeout=5); exit(0) if r.status==200 else exit(1)\"",
-        ]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; r=urllib.request.urlopen('http://localhost:7860/health', timeout=5); exit(0) if r.status==200 else exit(1)\""]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 60s
 
-    # ── Resource limits (12 GB VRAM RTX 4070) ──
-    # Memory limit helps prevent OOM from leaking processes
-    mem_limit: 16g
-    memswap_limit: 4g  # allow some swap for cold-start spikes
-
-    # ── Logging ──
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
-    # ── Security ──
-    # Container runs as non-root user (video-analysis) defined in Dockerfile
-    security_opt:
-      - no-new-privileges:true

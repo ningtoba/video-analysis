@@ -1,1 +1,0 @@
-# Dependencies managed in pyproject.toml - use: pip install -e .[default]

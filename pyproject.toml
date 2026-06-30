@@ -5,18 +5,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "video-analysis"
 dynamic = ["version"]
-description = "Self-hosted video analysis platform with AI chatbot — scene understanding, RAG, clip export, YouTube import, batch processing, health API"
+description = "Self-hosted video analysis platform — ASR + LLM Vision for scene understanding, search, and Q&A"
 readme = "README.md"
 authors = [{ name = "Hermes Agent" }]
 license = { text = "MIT" }
 requires-python = ">=3.10"
-keywords = ["video-analysis", "computer-vision", "rag", "ai", "multimodal"]
+keywords = ["video-analysis", "asr", "llm", "vision", "multimodal"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "Intended Audience :: Science/Research",
   "License :: OSI Approved :: MIT License",
-  "Natural Language :: English",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -25,18 +23,11 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-# ────────────────────────────────────────────────────────────────────
-# Core dependencies — always installed
-# ────────────────────────────────────────────────────────────────────
 dependencies = [
-  # ML / Deep Learning framework
-  "torch>=2.0.0",
-  "torchvision>=0.15.0",
-
-  # ASR — faster-whisper (CTranslate2)
+  # ASR
   "faster-whisper>=1.0.0",
 
-  # Computer vision
+  # Video processing
   "opencv-python-headless>=4.8.0",
   "numpy>=1.24.0",
   "Pillow>=10.0.0",
@@ -44,181 +35,45 @@ dependencies = [
   # Scene detection
   "scenedetect>=0.6.0",
 
-  # Object detection & tracking
-  "ultralytics>=8.0.0",
-
-  # Visual embeddings & scene classification
-  "open-clip-torch>=2.20.0",
-
-  # Embedding models (BGE-VL, SentenceTransformer fallback, cross-encoder reranker)
-  "sentence-transformers>=2.2.0",
-  "transformers>=4.36.0",
-
-  # Vector database
-  "chromadb>=1.5.0",
-
-  # Text processing
-  "langchain-text-splitters>=0.0.1",
-
-  # Structured data & validation
-  "pydantic>=2.0.0",
-
-  # Logging
-  "structlog>=24.0.0",
-
-  # YouTube / URL video import
+  # YouTube import
   "yt-dlp>=2024.0.0",
 
-  # HTTP / networking
-  "requests>=2.31.0",
+  # API server
+  "fastapi>=0.110.0",
+  "uvicorn[standard]>=0.29.0",
+  "python-multipart>=0.0.6",
+
+  # Templates
+  "jinja2>=3.1.0",
+  "aiofiles>=23.0.0",
+
+  # Dotenv
+  "python-dotenv>=1.0.0",
+
+  # Structured data
+  "pydantic>=2.0.0",
+
+  # HTTP
   "httpx>=0.25.0",
 
-  # MCP server (Model Context Protocol)
-  "mcp>=1.0.0",
-
-  # Templating (FastAPI UI server)
-  "jinja2>=3.1.0",
-
-  # NLP (chaptering TextTiling algorithm)
-  "nltk>=3.8.0",
-
-  # Progress bars
+  # Progress
   "tqdm>=4.65.0",
 ]
 
-# ────────────────────────────────────────────────────────────────────
-# Optional dependency groups
-# ────────────────────────────────────────────────────────────────────
-[project.optional-dependencies]
-
-# API server (FastAPI + Uvicorn for production HTTPServer mode)
-api = ["fastapi>=0.110.0", "uvicorn[standard]>=0.29.0"]
-
-# Gradio web UI
-ui = ["gradio>=6.0.0"]
-
-# GPU-accelerated extras (beyond torch defaults)
-gpu = ["onnxruntime-gpu>=1.16.0"]
-
-# MLLM backends — video-native understanding (VideoChat-Flash, SmolVLM2, Qwen3-VL, InternVideo3)
-mllm = ["vllm>=0.6.0", "decord>=0.6.0", "qwen-vl-utils>=0.1.0"]
-
-# Face detection & recognition (InsightFace)
-face = ["insightface>=0.7.0", "onnxruntime>=1.16.0", "onnxruntime-gpu>=1.16.0"]
-
-# OCR (PaddleOCR)
-ocr = ["paddlepaddle>=3.0.0", "paddleocr>=3.7.0"]
-
-# Speaker diarization
-diarize = ["pyannote.audio>=4.0.0"]
-
-# Streaming pipeline support
-streaming = ["fastapi>=0.110.0", "uvicorn[standard]>=0.29.0"]
-
-# Telemetry & monitoring
-telemetry = [
-  "opentelemetry-api>=1.20.0",
-  "opentelemetry-sdk>=1.20.0",
-  "opentelemetry-exporter-otlp-proto-grpc>=1.20.0",
-]
-
-# Production metrics (Prometheus)
-metrics = ["prometheus-client>=0.25.0"]
-
-# Documentation
-docs = [
-  "mkdocs>=1.5.0",
-  "mkdocstrings[python]>=0.24.0",
-  "mkdocs-material>=9.5.0",
-]
-
-# Development & testing
-dev = [
-  # Testing
-  "pytest>=7.4.0",
-  "pytest-cov>=4.1.0",
-  "pytest-timeout>=2.2.0",
-  "pytest-benchmark>=4.0.0",
-
-  # Code quality
-  "black>=24.0.0",
-  "ruff>=0.3.0",
-  "mypy>=1.8.0",
-
-  # Pre-commit hooks
-  "pre-commit>=3.6.0",
-]
-
-# ── Convenience meta-groups ──
-
-# All optional dependencies (everything)
-all = [
-  # API
-  "video-analysis[api]",
-
-  # UI
-  "video-analysis[ui]",
-
-  # GPU extras
-  "video-analysis[gpu]",
-
-  # MLLM backends
-  "video-analysis[mllm]",
-
-  # Face recognition
-  "video-analysis[face]",
-
-  # OCR
-  "video-analysis[ocr]",
-
-  # Diarization
-  "video-analysis[diarize]",
-
-  # Streaming
-  "video-analysis[streaming]",
-
-  # Telemetry
-  "video-analysis[telemetry]",
-
-  # Metrics
-  "video-analysis[metrics]",
-
-  # Docs
-  "video-analysis[docs]",
-]
-
-# Default install (UI + API + streaming)
-default = [
-  "video-analysis[api]",
-  "video-analysis[ui]",
-  "video-analysis[streaming]",
-]
-
-# ────────────────────────────────────────────────────────────────────
-# Entry points (console scripts)
-# ────────────────────────────────────────────────────────────────────
 [project.scripts]
 video-analysis = "video_analysis.__main__:main"
-video-analysis-mcp = "video_analysis.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/ningtoba/video-analysis"
 Source = "https://github.com/ningtoba/video-analysis"
-Documentation = "https://github.com/ningtoba/video-analysis"
 Issues = "https://github.com/ningtoba/video-analysis/issues"
 
-# ────────────────────────────────────────────────────────────────────
-# Setuptools package discovery
-# ────────────────────────────────────────────────────────────────────
 [tool.setuptools.packages.find]
 include = ["video_analysis*", "ui*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "video_analysis.__version__" }
 
-# ────────────────────────────────────────────────────────────────────
-# Ruff — linter & formatter
-# ────────────────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -227,49 +82,6 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
 
-# ────────────────────────────────────────────────────────────────────
-# Black — formatter
-# ────────────────────────────────────────────────────────────────────
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
-
-# ────────────────────────────────────────────────────────────────────
-# MyPy — static type checking
-# ────────────────────────────────────────────────────────────────────
-[tool.mypy]
-python_version = "3.10"
-ignore_missing_imports = true
-strict_optional = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-disallow_untyped_defs = false
-check_untyped_defs = false
-
-[[tool.mypy.overrides]]
-module = [
-  "torch.*",
-  "faster_whisper.*",
-  "ultralytics.*",
-  "insightface.*",
-  "paddleocr.*",
-  "chromadb.*",
-  "scenedetect.*",
-  "gradio.*",
-  "sentence_transformers.*",
-  "transformers.*",
-  "open_clip.*",
-  "yt_dlp.*",
-  "pyannote.*",
-  "vllm.*",
-  "decord.*",
-  "mcp.*",
-]
-ignore_missing_imports = true
-
-# ────────────────────────────────────────────────────────────────────
-# Pytest — test configuration
-# ────────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 timeout = 120
@@ -277,15 +89,6 @@ timeout_method = "thread"
 markers = [
   "gpu: marks tests that require CUDA GPU (deselect with '-m \"not gpu\"')",
   "slow: marks slow tests (deselect with '-m \"not slow\"')",
-  "integration: marks integration tests (not unit tests)",
-  "benchmark: marks benchmark tests (uses pytest-benchmark)",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
 addopts = "-v --strict-markers"
-
-# ────────────────────────────────────────────────────────────────────
-# Coverage
-# ────────────────────────────────────────────────────────────────────
-[tool.coverage.run]
-source = ["video_analysis"]
-omit = ["*/tests/*", "*/__pycache__/*"]
