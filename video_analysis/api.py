@@ -21,8 +21,7 @@ from video_analysis.chat import VideoChat
 from video_analysis.config import Config, load_settings, save_settings
 from video_analysis.pipeline import VideoPipeline
 from video_analysis.model_manager import WHISPER_MODELS, download_whisper_model
-from video_analysis.stream.engine import StreamEngine
-from video_analysis.stream.chat import StreamChat
+from video_analysis.model_manager import WHISPER_MODELS, download_whisper_model
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +100,6 @@ _download_status: dict = {
 }
 
 # ── Stream state ─────────────────────────────────────────────────────
-
-
-_stream_engine: Optional[StreamEngine] = None
-_stream_chat: Optional[StreamChat] = None
-_stream_lock = threading.Lock()
 _download_lock = threading.Lock()
 
 # ── Router ──────────────────────────────────────────────────────────
@@ -275,94 +269,6 @@ def create_router(config: Config) -> APIRouter:
             return provider.chat(messages)
         return chat_fn
 
-    @router.post("/stream/start")
-    async def start_stream(req: StreamStartRequest):
-        """Start a live stream analysis engine."""
-        global _stream_engine, _stream_chat
-
-        with _stream_lock:
-            if _stream_engine and _stream_engine._running:
-                raise HTTPException(409, "A stream is already running")
-
-            source = req.source
-            target_fps = req.fps or 1.0
-            periodic_interval = req.interval or 30.0
-            buffer_seconds = req.buffer_seconds or 300.0
-            motion_threshold = req.motion_threshold or 0.02
-
-            llm_chat_fn = _make_llm_chat_fn(config)
-            stream_id = f"stream_{int(time.time())}"
-
-            engine = StreamEngine(
-                source=source,
-                llm_chat_fn=llm_chat_fn,
-                stream_id=stream_id,
-                target_fps=target_fps,
-                buffer_seconds=buffer_seconds,
-                motion_threshold=motion_threshold,
-                periodic_interval=periodic_interval,
-                db_path=str(config.data_dir / "stream_events.db"),
-                frame_dir=str(config.data_dir / "stream_frames"),
-            )
-
-            # Create companion chat interface
-            engine.start(block=False)
-            _stream_engine = engine
-            # _stream_chat can be initialised once the engine's store is ready
-            _stream_chat = None
-
-        return {"stream_id": stream_id, "status": "started"}
-    @router.post("/stream/stop")
-    async def stop_stream():
-        """Stop the running stream engine."""
-        global _stream_engine
-
-        with _stream_lock:
-            if not _stream_engine:
-                raise HTTPException(404, "No stream is running")
-            _stream_engine.stop()
-            _stream_engine = None
-
-        return {"status": "stopped"}
-
-    @router.get("/stream/status")
-    async def stream_status():
-        """Return current stream engine state."""
-        global _stream_engine
-
-        with _stream_lock:
-            if not _stream_engine:
-                return {
-                    "running": False,
-                    "stream_id": None,
-                    "uptime": 0,
-                    "frames_sampled": 0,
-                    "events_created": 0,
-                    "source": None,
-                }
-            return dict(_stream_engine.stats)
-
-    @router.get("/stream/events")
-    async def stream_events(limit: int = 50):
-        """Get recent stream events."""
-        global _stream_engine
-
-        if not _stream_engine:
-            return []
-
-        events = _stream_engine.get_recent_events(limit=limit)
-        return [_event_to_dict(e) for e in events]
-
-    @router.get("/stream/events/range")
-    async def stream_events_range(start: float, end: float):
-        """Get events within a time range (Unix timestamps)."""
-        global _stream_engine
-
-        if not _stream_engine:
-            return []
-
-        events = _stream_engine.get_events_in_range(start, end)
-        return [_event_to_dict(e) for e in events]
     # Register settings and model endpoints
     add_settings_endpoints(router, config)
     add_model_endpoints(router, config)
