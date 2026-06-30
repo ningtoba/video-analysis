@@ -10,8 +10,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Tuple
 
+import cv2
 import numpy as np
-
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +59,56 @@ class CircularFrameBuffer:
             return 0.0
         return self._buffer[-1].timestamp - self._buffer[0].timestamp
 
+
+    def get_clustered(self, n_clusters: int = 3, max_frames: int = 10) -> List[SampledFrame]:
+        """Return representative frames via HSV histogram clustering.
+
+        Groups buffered frames by visual similarity and returns only the
+        middle frame from each cluster. Avoids sending near-identical frames
+        to the LLM while preserving temporal diversity.
+
+        Args:
+            n_clusters: Number of similarity clusters.
+            max_frames: Max frames to return.
+
+        Returns:
+            List of representative frames (chronological order).
+        """
+        frames = list(self._buffer)
+        if len(frames) <= n_clusters:
+            return frames
+        try:
+            from sklearn.cluster import KMeans
+
+            histograms = []
+            for f in frames:
+                hsv = cv2.cvtColor(f.frame_bgr, cv2.COLOR_BGR2HSV)
+                hist = cv2.calcHist([hsv], [0, 1], None, [8, 8], [0, 180, 0, 256])
+                cv2.normalize(hist, hist)
+                histograms.append(hist.flatten())
+
+            X = np.array(histograms)
+            n = min(n_clusters, len(frames))
+            kmeans = KMeans(n_clusters=n, random_state=0, n_init="auto")
+            labels = kmeans.fit_predict(X)
+
+            representatives = []
+            for i in range(n):
+                idxs = [j for j, l in enumerate(labels) if l == i]
+                if not idxs:
+                    continue
+                best = min(idxs, key=lambda j: np.linalg.norm(X[j] - kmeans.cluster_centers_[i]))
+                representatives.append(frames[best])
+
+            representatives.sort(key=lambda f: f.timestamp)
+            return representatives[:max_frames]
+        except ImportError:
+            step = max(1, len(frames) // max_frames)
+            return frames[::step][:max_frames]
+        except Exception as e:
+            logger.warning("Clustering failed, using uniform sampling: %s", e)
+            step = max(1, len(frames) // max_frames)
+            return frames[::step][:max_frames]
 
 class FrameSampler:
     """Samples frames from a source at a target FPS into a circular buffer.

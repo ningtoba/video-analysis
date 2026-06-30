@@ -58,6 +58,7 @@ dependencies = [
 
   # Progress
   "tqdm>=4.65.0",
+  "scikit-learn>=1.0.0",
 ]
 
 [project.scripts]

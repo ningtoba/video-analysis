@@ -4,7 +4,12 @@ LLM analysis, and event logging into a single processing loop.
 
 Can run in two modes:
   - realtime: Process live RTSP/webcam streams (blocks, runs forever)
-  - file: Process uploaded video files (runs at full speed)
+  - file: Process uploaded video files (runs at full speed, no sleep)
+
+Key differentiators:
+  1. Frame clustering: sends only representative frames per similarity cluster
+  2. Context-aware analysis: feeds event chain so LLM describes *what changed*
+  3. Parallel Whisper: for file mode, transcribes audio as a second event feed
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ class StreamEngine:
     Usage:
         engine = StreamEngine(
             source="rtsp://camera:554/stream",
-            llm_provider=my_llm,
+            llm_chat_fn=my_llm,
             target_fps=1.0,
         )
         engine.start()
@@ -66,6 +71,7 @@ class StreamEngine:
         self._on_event = on_event
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._transcript_thread: Optional[threading.Thread] = None
 
         # Components (lazy-init)
         self._sampler: Optional[FrameSampler] = None
@@ -115,14 +121,74 @@ class StreamEngine:
             retention_days=self._retention_days,
         )
 
+        # For file sources, start parallel Whisper transcription
+        if self._source and not self._source.is_realtime:
+            self._start_parallel_transcription()
+
+    def _start_parallel_transcription(self):
+        """Transcribe audio in a background thread (file mode only).
+
+        Runs Whisper extraction + transcription in parallel with frame analysis.
+        Transcript segments are added to the event timeline as [TRANSCRIPT] events.
+        """
+        def _job():
+            try:
+                from video_analysis.model_manager import ensure_whisper_model
+                from video_analysis.pipeline import _extract_audio, _transcribe_audio
+
+
+                audio_path = Path(self._db_path).parent / "audio" / f"{self._stream_id}.wav"
+                audio_path.parent.mkdir(parents=True, exist_ok=True)
+
+                video_path = Path(self._source_str)
+                if not video_path.exists():
+                    logger.warning("Video file not found for transcription: %s", self._source_str)
+                    return
+
+                logger.info("Starting parallel transcription for %s", video_path.name)
+                if _extract_audio(video_path, audio_path):
+                    model_name, device, compute_type = ensure_whisper_model("auto")
+                    segments = _transcribe_audio(audio_path, model_name, device, compute_type)
+
+                    if self._store:
+                        for seg in segments:
+                            self._store.add_event(
+                                stream_id=self._stream_id,
+                                timestamp=seg.start,
+                                description=f"[TRANSCRIPT] {seg.text.strip()}",
+                                triggered_by="transcript",
+                                metadata={
+                                    "event_type": "transcript",
+                                    "text": seg.text.strip(),
+                                    "duration": seg.end - seg.start,
+                                },
+                            )
+                        logger.info(
+                            "Parallel transcription complete: %d segments", len(segments)
+                        )
+                else:
+                    logger.warning("Audio extraction failed for %s", video_path.name)
+
+            except ImportError as e:
+                logger.warning("Whisper transcription unavailable: %s", e)
+            except Exception as e:
+                logger.warning("Parallel transcription failed: %s", e)
+
+        self._transcript_thread = threading.Thread(target=_job, daemon=True)
+        self._transcript_thread.start()
+        logger.info("Parallel transcription thread started")
+
     def _save_frame(self, sf: SampledFrame) -> Optional[str]:
         """Save a frame to disk for later reference. Returns path."""
-        import cv2
-
-        filename = f"{self._stream_id}_{sf.frame_index:06d}_{sf.timestamp:.1f}.jpg"
-        path = str(self._frame_dir / filename)
-        cv2.imwrite(path, sf.frame_bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
-        return path
+        try:
+            import cv2
+            filename = f"{self._stream_id}_{sf.frame_index:06d}_{sf.timestamp:.1f}.jpg"
+            path = str(self._frame_dir / filename)
+            cv2.imwrite(path, sf.frame_bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            return path
+        except Exception as e:
+            logger.warning("Failed to save frame: %s", e)
+            return None
 
     def _process_loop(self):
         """Main processing loop — runs in a background thread."""
@@ -174,8 +240,10 @@ class StreamEngine:
                     logger.info("Motion triggered: score=%.3f", motion_score)
 
                 if should_analyze:
-                    # Collect frames for analysis (latest + context frames)
-                    context_frames = self._sampler.buffer.get_recent(5)
+                    # Use clustered frames: representative per similarity cluster
+                    context_frames = self._sampler.buffer.get_clustered(
+                        n_clusters=3, max_frames=5
+                    )
                     context_frames.reverse()  # Most recent first
 
                     desc = self._llm.analyze(
@@ -185,7 +253,7 @@ class StreamEngine:
                     )
 
                     if desc and self._store:
-                        event = self._store.add_event(
+                        self._store.add_event(
                             stream_id=self._stream_id,
                             timestamp=sf.timestamp,
                             description=desc,
@@ -207,21 +275,26 @@ class StreamEngine:
 
                         # Notify callback
                         if self._on_event:
-                            # Re-fetch the event for full details
                             ev = self._store.get_latest_event(self._stream_id)
                             if ev:
                                 self._on_event(ev)
 
-            # Sleep to match real-time (for live sources)
+            # Sleep logic: real-time mode sleeps to match target FPS;
+            # file mode processes at warp speed (no sleep at all).
             if self._source and self._source.is_realtime:
-                time.sleep(1.0 / self._target_fps * 0.5)
-            else:
-                # File source: process as fast as possible (small sleep to yield)
-                time.sleep(0.001)
+                elapsed = time.time() - now
+                sleep = max(0, 1.0 / self._target_fps - elapsed)
+                if sleep > 0:
+                    time.sleep(sleep)
 
         self._cleanup()
 
     def _cleanup(self):
+        # Wait for parallel transcription to finish (file mode)
+        if self._transcript_thread and self._transcript_thread.is_alive():
+            logger.info("Waiting for parallel transcription to finish...")
+            self._transcript_thread.join(timeout=60)
+
         if self._sampler:
             self._sampler.close()
         if self._source:
