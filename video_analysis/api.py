@@ -404,15 +404,9 @@ def add_model_endpoints(router: APIRouter, config: Config):
         """List all known Whisper models with download status and sizes."""
         from video_analysis.model_manager import WHISPER_MODELS
 
-        # Check which models are already downloaded
-        import os
-        import faster_whisper  # noqa: F401 — ensures faster_whisper is importable for cache path
+        import faster_whisper  # noqa: F401
 
-        cache_dir = os.environ.get(
-            "WHISPER_CACHE_DIR",
-            str(Path(os.path.expanduser("~")) / ".cache" / "faster_whisper"),
-        )
-        cache_path = Path(cache_dir)
+        cache_path = Path.home() / ".cache" / "faster_whisper"
 
         results = []
         for name, info in WHISPER_MODELS.items():
@@ -433,7 +427,6 @@ def add_model_endpoints(router: APIRouter, config: Config):
             "current_model": current,
             "cache_dir": str(cache_path),
         }
-
     @router.post("/models/download")
     async def download_model(body: dict):
         """Start downloading a Whisper model in the background."""

@@ -4,10 +4,8 @@
 # Usage:
 #   docker compose up -d
 #
-# You MUST set LLM_API_KEY (or ANTHROPIC_API_KEY / GEMINI_API_KEY)
-# in your environment or in a .env file:
-#   echo "LLM_API_KEY=sk-..." >> .env
-#   docker compose up -d
+# All configuration is now UI-driven via web UI at /settings.
+# No environment variables or .env file are needed for setup.
 
 services:
   video-analysis:
@@ -25,35 +23,8 @@ services:
       - ./data:/app/data
 
     environment:
-      # ── LLM Provider (required — at least one API key) ──
-      # Options: openai, anthropic, gemini, deepseek, ollama
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_API_BASE=${LLM_API_BASE:-}
-      - LLM_MODEL=${LLM_MODEL:-}
-      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.3}
-
-      # ── Anthropic (alternative) ──
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-
-      # ── Gemini (alternative) ──
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-
-      # ── ASR (auto-selects based on VRAM) ──
-      # Set WHISPER_MODEL to "tiny"/"base"/"small"/"medium"/"large-v3-turbo"/"large-v3" to override
-      - WHISPER_MODEL=${WHISPER_MODEL:-auto}
-
-      # ── Frame extraction ──
-      - FRAME_RATE=${FRAME_RATE:-0.2}
-      - MAX_FRAMES_FOR_LLM=${MAX_FRAMES_FOR_LLM:-30}
-
-      # ── Server ──
-      - HOST=0.0.0.0
-      - PORT=7860
-
-      # ── Python ──
+      # All configuration via web UI at /settings
       - PYTHONUNBUFFERED=1
-      - PYTHONDONTWRITEBYTECODE=1
 
     # ── GPU support (optional) ──
     # Uncomment for NVIDIA GPU acceleration:

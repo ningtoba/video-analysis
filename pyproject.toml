@@ -47,8 +47,6 @@ dependencies = [
   "jinja2>=3.1.0",
   "aiofiles>=23.0.0",
 
-  # Dotenv
-  "python-dotenv>=1.0.0",
 
   # Structured data
   "pydantic>=2.0.0",

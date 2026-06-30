@@ -1,136 +1,88 @@
 """
 Configuration for the video analysis platform.
 
-All settings can be provided via environment variables or a `.env` file.
-Only LLM_API_KEY is required (or an Anthropic/Gemini equivalent).
+All settings are configured through the web UI and persisted to
+``data/settings.json``. No environment variables or .env files needed.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-from dotenv import load_dotenv
 
-
-# Load .env file if present
-load_dotenv()
-
-
-
-
-def _env_bool(key: str, default: bool) -> bool:
-    val = os.environ.get(key, "").strip().lower()
-    if not val:
-        return default
-    return val in ("true", "1", "yes")
-
-
-def _env_str(key: str, default: str) -> str:
-    return os.environ.get(key, default).strip()
-
-
-def _env_int(key: str, default: int) -> int:
-    try:
-        return int(os.environ.get(key, str(default)))
-    except (ValueError, TypeError):
-        return default
-
-
-def _env_float(key: str, default: float) -> float:
-    try:
-        return float(os.environ.get(key, str(default)))
-    except (ValueError, TypeError):
-        return default
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class Config:
-    """Central configuration — simplified to essential settings only."""
+    """Central configuration — all defaults, no env var lookups."""
 
     # ── Paths ───────────────────────────────────────────────────────────
-    data_dir: Path = Path(_env_str("VIDEO_ANALYSIS_DATA", "data"))
-    videos_dir: Path = Path(os.environ.get("VIDEOS_DIR", ""))  # default: data_dir / "videos"
-    frames_dir: Path = Path(os.environ.get("FRAMES_DIR", ""))
-    audio_dir: Path = Path(os.environ.get("AUDIO_DIR", ""))
+    data_dir: Path = Path("data")
 
     # ── Server ──────────────────────────────────────────────────────────
-    host: str = _env_str("HOST", "0.0.0.0")
-    port: int = _env_int("PORT", 7860)
+    host: str = "0.0.0.0"
+    port: int = 7860
 
-    # ── LLM Provider (BYO key) ──────────────────────────────────────────
-    # Supported providers: openai, anthropic, gemini, deepseek, ollama
-    llm_provider: str = _env_str("LLM_PROVIDER", "openai")
-    llm_api_key: str = _env_str("LLM_API_KEY", "")
-    llm_api_base: str = _env_str("LLM_API_BASE", "")
-    llm_model: str = _env_str("LLM_MODEL", "")
-    llm_temperature: float = _env_float("LLM_TEMPERATURE", 0.3)
-    llm_max_tokens: int = _env_int("LLM_MAX_TOKENS", 4096)
-
-    # Anthropic specific
-    anthropic_api_key: str = _env_str("ANTHROPIC_API_KEY", "")
-
-    # Gemini specific
-    gemini_api_key: str = _env_str("GEMINI_API_KEY", "")
+    # ── LLM Provider (configured via UI) ────────────────────────────────
+    llm_provider: str = "openai"
+    llm_api_key: str = ""
+    llm_api_base: str = ""
+    llm_model: str = "gpt-4o"
+    llm_temperature: float = 0.3
+    llm_max_tokens: int = 4096
+    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
 
     # ── ASR (faster-whisper) ────────────────────────────────────────────
-    # Auto-selected based on VRAM if set to "auto"
-    whisper_model: str = _env_str("WHISPER_MODEL", "auto")
-    whisper_device: str = _env_str("WHISPER_DEVICE", "auto")  # "auto", "cuda", "cpu"
-    whisper_compute_type: str = _env_str("WHISPER_COMPUTE_TYPE", "auto")
+    whisper_model: str = "auto"
+    whisper_device: str = "auto"
+    whisper_compute_type: str = "auto"
 
     # ── Frame extraction ────────────────────────────────────────────────
-    # Frames per second to extract for LLM Vision analysis
-    frame_rate: float = _env_float("FRAME_RATE", 0.2)  # 1 frame every 5s by default
-    # Maximum number of frames to send to LLM Vision per video
-    max_frames_for_llm: int = _env_int("MAX_FRAMES_FOR_LLM", 30)
+    frame_rate: float = 0.2
+    max_frames_for_llm: int = 30
 
     # ── Scene detection ─────────────────────────────────────────────────
-    scene_threshold: float = _env_float("SCENE_THRESHOLD", 0.3)
-    scene_detector: str = _env_str("SCENE_DETECTOR", "adaptive")
+    scene_threshold: float = 0.3
+    scene_detector: str = "adaptive"
 
     # ── YouTube import ──────────────────────────────────────────────────
-    yt_dlp_enabled: bool = _env_bool("YT_DLP_ENABLED", True)
+    yt_dlp_enabled: bool = True
 
     # ── Processing ──────────────────────────────────────────────────────
-    # "video_full" or "audio_only"
-    processing_mode: str = _env_str("PROCESSING_MODE", "video_full")
+    processing_mode: str = "video_full"
 
-    # ── Video quality screening ─────────────────────────────────────────
-    quality_screening_enabled: bool = _env_bool("QUALITY_SCREENING_ENABLED", True)
+    # ── Quality screening ───────────────────────────────────────────────
+    quality_screening_enabled: bool = True
 
     # ── Webhook ─────────────────────────────────────────────────────────
-    webhook_urls: list[str] | None = None  # comma-separated in env var
-    webhook_timeout: float = _env_float("WEBHOOK_TIMEOUT", 5.0)
+    webhook_urls: list[str] | None = None
+    webhook_timeout: float = 5.0
 
-    # ── Hugging Face token (for gated whisper models) ──────────────────
-    hf_token: str = _env_str("HF_TOKEN", "")
+    # ── Hugging Face token ──────────────────────────────────────────────
+    hf_token: str = ""
+
+    # Derived paths (computed in __post_init__)
+    videos_dir: Path = field(init=False)
+    frames_dir: Path = field(init=False)
+    audio_dir: Path = field(init=False)
 
     def __post_init__(self) -> None:
-        """Resolve relative paths and set defaults."""
-        # Resolve data paths
-        if not self.videos_dir.name:
-            self.videos_dir = self.data_dir / "videos"
-        if not self.frames_dir.name:
-            self.frames_dir = self.data_dir / "frames"
-        if not self.audio_dir.name:
-            self.audio_dir = self.data_dir / "audio"
+        self.videos_dir = self.data_dir / "videos"
+        self.frames_dir = self.data_dir / "frames"
+        self.audio_dir = self.data_dir / "audio"
 
-        # Resolve webhook URLs
-        webhook_str = os.environ.get("WEBHOOK_URLS", "")
-        if webhook_str:
-            self.webhook_urls = [u.strip() for u in webhook_str.split(",") if u.strip()]
-
-        # Auto-detect API key based on provider
+        # Auto-fill API key from provider-specific field
         if not self.llm_api_key and self.llm_provider == "anthropic":
             self.llm_api_key = self.anthropic_api_key
         elif not self.llm_api_key and self.llm_provider == "gemini":
             self.llm_api_key = self.gemini_api_key
 
-        # Default model for each provider
+        # Default model per provider
         if not self.llm_model:
             defaults = {
                 "openai": "gpt-4o",
@@ -141,47 +93,42 @@ class Config:
             }
             self.llm_model = defaults.get(self.llm_provider, "gpt-4o")
 
-        # Default API base for DeepSeek
         if not self.llm_api_base and self.llm_provider == "deepseek":
             self.llm_api_base = "https://api.deepseek.com"
 
-        # Create data directories
         for d in [self.data_dir, self.videos_dir, self.frames_dir, self.audio_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
-logger = logging.getLogger(__name__)
 
 SETTINGS_KEYS = [
     "llm_provider", "llm_api_key", "llm_api_base", "llm_model",
-    "whisper_model", "frame_rate", "max_frames_for_llm", "scene_threshold",
+    "llm_temperature", "llm_max_tokens",
+    "whisper_model", "whisper_device", "whisper_compute_type",
+    "frame_rate", "max_frames_for_llm", "scene_threshold",
+    "scene_detector", "processing_mode",
     "host", "port",
 ]
 
 
-def _default_settings(config: Config | None = None) -> dict:
+def _default_settings(config: Optional[Config] = None) -> dict:
     """Return default settings dict from a Config instance or hardcoded defaults."""
     if config is not None:
-        return {
-            "llm_provider": config.llm_provider,
-            "llm_api_key": config.llm_api_key,
-            "llm_api_base": config.llm_api_base,
-            "llm_model": config.llm_model,
-            "whisper_model": config.whisper_model,
-            "frame_rate": config.frame_rate,
-            "max_frames_for_llm": config.max_frames_for_llm,
-            "scene_threshold": config.scene_threshold,
-            "host": config.host,
-            "port": config.port,
-        }
+        return {k: getattr(config, k) for k in SETTINGS_KEYS if hasattr(config, k)}
     return {
         "llm_provider": "openai",
         "llm_api_key": "",
         "llm_api_base": "",
         "llm_model": "gpt-4o",
+        "llm_temperature": 0.3,
+        "llm_max_tokens": 4096,
         "whisper_model": "auto",
+        "whisper_device": "auto",
+        "whisper_compute_type": "auto",
         "frame_rate": 0.2,
         "max_frames_for_llm": 30,
         "scene_threshold": 0.3,
+        "scene_detector": "adaptive",
+        "processing_mode": "video_full",
         "host": "0.0.0.0",
         "port": 7860,
     }
