@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 from typing import Dict, List, Optional
 import uuid
+import time
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -20,6 +21,8 @@ from video_analysis.chat import VideoChat
 from video_analysis.config import Config, load_settings, save_settings
 from video_analysis.pipeline import VideoPipeline
 from video_analysis.model_manager import WHISPER_MODELS, download_whisper_model
+from video_analysis.stream.engine import StreamEngine
+from video_analysis.stream.chat import StreamChat
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +82,14 @@ class ModelDownloadRequest(BaseModel):
     model_name: str
 
 
+class StreamStartRequest(BaseModel):
+    source: str
+    fps: Optional[float] = None
+    interval: Optional[float] = None
+    buffer_seconds: Optional[float] = None
+    motion_threshold: Optional[float] = None
+
+
 # ── Model download state ─────────────────────────────────────────
 
 
@@ -88,6 +99,13 @@ _download_status: dict = {
     "error": None,
     "available": list(WHISPER_MODELS.keys()),
 }
+
+# ── Stream state ─────────────────────────────────────────────────────
+
+
+_stream_engine: Optional[StreamEngine] = None
+_stream_chat: Optional[StreamChat] = None
+_stream_lock = threading.Lock()
 _download_lock = threading.Lock()
 
 # ── Router ──────────────────────────────────────────────────────────
@@ -237,6 +255,114 @@ def create_router(config: Config) -> APIRouter:
                 analysis_path.unlink()
             return {"status": "deleted"}
         raise HTTPException(404, f"Video {video_id} not found")
+    # ── Stream control endpoints ──────────────────────────────────────
+
+    def _make_llm_chat_fn(cfg):
+        """Create an LLM chat function from config."""
+        def chat_fn(messages, images=None):
+            from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
+            provider_cfg = LLMProviderConfig(
+                provider=cfg.llm_provider,
+                api_key=cfg.llm_api_key,
+                api_base=cfg.llm_api_base,
+                model=cfg.llm_model,
+                temperature=cfg.llm_temperature,
+                max_tokens=cfg.llm_max_tokens,
+            )
+            provider = get_llm_provider(provider_cfg)
+            if images:
+                return provider.chat_with_images(messages, images)
+            return provider.chat(messages)
+        return chat_fn
+
+    @router.post("/stream/start")
+    async def start_stream(req: StreamStartRequest):
+        """Start a live stream analysis engine."""
+        global _stream_engine, _stream_chat
+
+        with _stream_lock:
+            if _stream_engine and _stream_engine._running:
+                raise HTTPException(409, "A stream is already running")
+
+            source = req.source
+            target_fps = req.fps or 1.0
+            periodic_interval = req.interval or 30.0
+            buffer_seconds = req.buffer_seconds or 300.0
+            motion_threshold = req.motion_threshold or 0.02
+
+            llm_chat_fn = _make_llm_chat_fn(config)
+            stream_id = f"stream_{int(time.time())}"
+
+            engine = StreamEngine(
+                source=source,
+                llm_chat_fn=llm_chat_fn,
+                stream_id=stream_id,
+                target_fps=target_fps,
+                buffer_seconds=buffer_seconds,
+                motion_threshold=motion_threshold,
+                periodic_interval=periodic_interval,
+                db_path=str(config.data_dir / "stream_events.db"),
+                frame_dir=str(config.data_dir / "stream_frames"),
+            )
+
+            # Create companion chat interface
+            engine.start(block=False)
+            _stream_engine = engine
+            # _stream_chat can be initialised once the engine's store is ready
+            _stream_chat = None
+
+        return {"stream_id": stream_id, "status": "started"}
+    @router.post("/stream/stop")
+    async def stop_stream():
+        """Stop the running stream engine."""
+        global _stream_engine
+
+        with _stream_lock:
+            if not _stream_engine:
+                raise HTTPException(404, "No stream is running")
+            _stream_engine.stop()
+            _stream_engine = None
+
+        return {"status": "stopped"}
+
+    @router.get("/stream/status")
+    async def stream_status():
+        """Return current stream engine state."""
+        global _stream_engine
+
+        with _stream_lock:
+            if not _stream_engine:
+                return {
+                    "running": False,
+                    "stream_id": None,
+                    "uptime": 0,
+                    "frames_sampled": 0,
+                    "events_created": 0,
+                    "source": None,
+                }
+            return dict(_stream_engine.stats)
+
+    @router.get("/stream/events")
+    async def stream_events(limit: int = 50):
+        """Get recent stream events."""
+        global _stream_engine
+
+        if not _stream_engine:
+            return []
+
+        events = _stream_engine.get_recent_events(limit=limit)
+        return [_event_to_dict(e) for e in events]
+
+    @router.get("/stream/events/range")
+    async def stream_events_range(start: float, end: float):
+        """Get events within a time range (Unix timestamps)."""
+        global _stream_engine
+
+        if not _stream_engine:
+            return []
+
+        events = _stream_engine.get_events_in_range(start, end)
+        return [_event_to_dict(e) for e in events]
     # Register settings and model endpoints
     add_settings_endpoints(router, config)
     add_model_endpoints(router, config)
@@ -245,6 +371,21 @@ def create_router(config: Config) -> APIRouter:
 
 
 # ── Helper functions ────────────────────────────────────────────────
+
+
+def _event_to_dict(event) -> dict:
+    """Convert a TimelineEvent to a JSON-serializable dict."""
+    return {
+        "id": event.id,
+        "stream_id": event.stream_id,
+        "timestamp": event.timestamp,
+        "description": event.description,
+        "frame_path": event.frame_path,
+        "motion_score": event.motion_score,
+        "triggered_by": event.triggered_by,
+        "metadata": event.metadata,
+        "created_at": event.created_at,
+    }
 
 
 def _analysis_to_dict(analysis) -> dict:
