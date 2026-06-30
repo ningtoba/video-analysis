@@ -1,60 +1,202 @@
-# Python
+# Python bytecode
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyc
 *.egg-info/
+*.egg
 dist/
 build/
 *.so
 
-# Virtual env
+# Virtual environments
 .venv/
 venv/
+env/
+virtualenv/
+.venv.bak/
+venv.bak/
+
+# Environment files
 .env
 .env.*
+!.env.example
+!.env.sample
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Data directories (generated runtime files)
+data/
+videos/
+frames/
+audio/
+thumbnails/
+chroma/
+!data/.gitkeep
+!videos/.gitkeep
 
-# Linting cache
-.ruff_cache/
+# ML model files
+*.pt
+*.pth
+*.bin
+*.onnx
+*.ckpt
+*.safetensors
+*.msgpack
+*.h5
+*.hdf5
+*.pb
+*.pbtxt
+*.tflite
+*.mlmodel
+*.mar
 
-# OS
-.DS_Store
-Thumbs.db
+# HuggingFace cache
+.huggingface/
+.cache/huggingface/
+.hf_home/
 
-# Video artifacts
-data/videos/
-data/frames/
-data/audio/
-data/thumbnails/
-data/chroma/
+# Checkpoints & training artifacts
+checkpoints/
+checkpoint-*/
+checkpoints-*/
+lightning_logs/
+wandb/
+runs/
+mlruns/
+tensorboard/
+tb_logs/
+*.sagemaker-*
 
-# Large video files (uploaded)
+# Large binary / video files
 *.mp4
 *.webm
 *.avi
 *.mov
 *.mkv
 *.flv
+*.wmv
+*.m4v
+*.mpg
+*.mpeg
+*.ts
+*.m2ts
+*.3gp
+*.ogv
+*.vob
+*.rm
+*.rmvb
+
+# Audio files (large)
+*.wav
+*.flac
+*.aac
+*.ogg
+*.wma
+*.m4a
+*.opus
+*.aiff
+
+# Image files (generated frames/thumbnails)
+*.bmp
+*.tiff
+*.tif
+*.raw
+
+# Archives / serialized data
+*.tar.gz
+*.tgz
+*.zip
+*.rar
+*.7z
+*.npy
+*.npz
+*.pkl
+*.joblib
+*.pickle
+*.arrow
 
 # Logs
 *.log
+*.log.*
+logs/
+log/
 
-# Test artifacts
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.swn
+*.bak
+.cursor/
+.project
+.classpath
+.settings/
+.vscode-server/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Docker
+Dockerfile.*
+docker-compose.override.yml
+.docker/
+docker-compose.override.yaml
+*.dockerignore
+
+# Build artifacts
+*.o
+*.obj
+*.dylib
+*.dll
+*.lib
+*.exe
+*.class
+*.jar
+*.war
+node_modules/
+*.tsbuildinfo
+
+# Linting & type checking
+.ruff_cache/
+.mypy_cache/
 .pytest_cache/
-.coverage
+.hypothesis/
+.benchmarks/
+.coverage*
+coverage/
 htmlcov/
+.coverage.*
+cov_*
+*.coverage
+.coverage.*
 
-# Data directory (generated runtime files)
-data/*.db
-data/clips/
-data/tmp/
-data/eval_reports/
-data/eval_fixtures/
+# Testing
+.pytest_cache/
+pytest_cache/
+.cache/
+test-results/
+test_output/
+tmp/
+temp/
 
-# Worktrees (stale git worktrees)
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+.jupyter/
+
+# System / swap
+.Trash/
+.fseventsd
+.VolumeIcon.icns
+
+# Git worktrees (stale)
 .worktrees/

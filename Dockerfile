@@ -27,17 +27,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python deps into /install
-COPY requirements.txt .
-RUN pip install --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cu128 \
-    --target=/install \
-    -r requirements.txt
-
-# Copy application source
+# Copy application source first, then install via pyproject.toml
 COPY video_analysis/ video_analysis/
 COPY ui/ ui/
 COPY pyproject.toml .
+
+# Install Python deps from pyproject.toml into /install
+RUN pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cu128 \
+    --target=/install \
+    -e .[default]
 
 # ── Runtime stage ──
 # nvidia/cuda:12.8.0-runtime-ubuntu22.04 ships CUDA 12.8 runtime + cuBLAS + cuFFT + NCCL
