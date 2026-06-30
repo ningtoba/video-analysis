@@ -219,6 +219,14 @@ video_analysis/
   error_handlers.py — Error response formatting
   logging_setup.py — Logging configuration
   client.py       — Python API client
+  stream/           — Real-time stream analysis engine
+    source.py      — Frame source (RTSP, webcam, file)
+    sampler.py     — Frame sampling + circular buffer
+    motion.py      — Motion detection
+    analyzer.py    — LLM Vision scheduler
+    store.py       — SQLite event timeline
+    engine.py      — Stream processor orchestrator
+    chat.py        — Q&A over stream events
 ui/
   server.py       — FastAPI web app
   health.py       — Health check endpoints
