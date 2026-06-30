@@ -30,8 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     gcc \
     g++ \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
+    libgl1 \
+    libglib2.0-0t64 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
