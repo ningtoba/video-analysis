@@ -46,6 +46,10 @@ def create_app(config: Optional[Config] = None) -> FastAPI:
     api_router = create_router(config)
     app.include_router(api_router)
 
+    # Store config on app state for settings access
+    app.state.config = config
+    app.state.settings_path = config.data_dir / "settings.json"
+
     # Chat instance (lazy)
     chat = VideoChat(config=config)
 
@@ -55,6 +59,16 @@ def create_app(config: Optional[Config] = None) -> FastAPI:
     async def index(request: Request):
         """Main page."""
         return templates.TemplateResponse(request, "index.html", {"request": request})
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request):
+        """Settings page."""
+        return templates.TemplateResponse(request, "settings.html", {"request": request})
+
+    @app.get("/models", response_class=HTMLResponse)
+    async def models_page(request: Request):
+        """Model download management page."""
+        return templates.TemplateResponse(request, "models.html", {"request": request})
 
     @app.get("/health")
     async def health():

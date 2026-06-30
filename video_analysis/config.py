@@ -7,6 +7,8 @@ Only LLM_API_KEY is required (or an Anthropic/Gemini equivalent).
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -146,3 +148,58 @@ class Config:
         # Create data directories
         for d in [self.data_dir, self.videos_dir, self.frames_dir, self.audio_dir]:
             d.mkdir(parents=True, exist_ok=True)
+
+logger = logging.getLogger(__name__)
+
+SETTINGS_KEYS = [
+    "llm_provider", "llm_api_key", "llm_api_base", "llm_model",
+    "whisper_model", "frame_rate", "max_frames_for_llm", "scene_threshold",
+    "host", "port",
+]
+
+
+def _default_settings(config: Config | None = None) -> dict:
+    """Return default settings dict from a Config instance or hardcoded defaults."""
+    if config is not None:
+        return {
+            "llm_provider": config.llm_provider,
+            "llm_api_key": config.llm_api_key,
+            "llm_api_base": config.llm_api_base,
+            "llm_model": config.llm_model,
+            "whisper_model": config.whisper_model,
+            "frame_rate": config.frame_rate,
+            "max_frames_for_llm": config.max_frames_for_llm,
+            "scene_threshold": config.scene_threshold,
+            "host": config.host,
+            "port": config.port,
+        }
+    return {
+        "llm_provider": "openai",
+        "llm_api_key": "",
+        "llm_api_base": "",
+        "llm_model": "gpt-4o",
+        "whisper_model": "auto",
+        "frame_rate": 0.2,
+        "max_frames_for_llm": 30,
+        "scene_threshold": 0.3,
+        "host": "0.0.0.0",
+        "port": 7860,
+    }
+
+
+def load_settings(data_dir: Path) -> dict:
+    """Load settings from ``data_dir/settings.json``, returning defaults if missing."""
+    settings_path = data_dir / "settings.json"
+    if settings_path.exists():
+        try:
+            return json.loads(settings_path.read_text())
+        except Exception as e:
+            logger.warning("Failed to load settings from %s: %s", settings_path, e)
+    return _default_settings()
+
+
+def save_settings(data_dir: Path, settings: dict) -> None:
+    """Persist settings dict to ``data_dir/settings.json``."""
+    settings_path = data_dir / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(settings, indent=2, default=str))
