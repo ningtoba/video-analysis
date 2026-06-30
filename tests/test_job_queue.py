@@ -8,8 +8,8 @@ endpoints (integration tests with mocking).
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Optional
-from unittest.mock import MagicMock, patch
+from typing import Any, Dict
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -18,7 +18,6 @@ from fastapi.testclient import TestClient
 from video_analysis.api import create_api_router, set_rag_instance
 from video_analysis.config import Config
 from video_analysis.job_queue import (
-    Job,
     JobManager,
     JobStatus,
     get_default_manager,

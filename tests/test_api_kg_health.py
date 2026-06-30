@@ -15,10 +15,8 @@ Tests the new endpoints added to video_analysis/api.py:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -114,7 +112,6 @@ class TestKGAPI:
     def test_kg_entities_endpoint(self, client: TestClient):
         """GET /api/kg/entities returns list of entities."""
         import video_analysis.api as api_mod
-
         from video_analysis.knowledge_graph import EntityRecord
 
         mock_kg = MagicMock()
@@ -126,9 +123,7 @@ class TestKGAPI:
                 frequency=5,
                 video_ids={"vid1", "vid2"},
             ),
-            EntityRecord(
-                id=2, name="Car", entity_type="object", frequency=3, video_ids={"vid1"}
-            ),
+            EntityRecord(id=2, name="Car", entity_type="object", frequency=3, video_ids={"vid1"}),
         ]
         api_mod._kg_instance = mock_kg
 
@@ -144,7 +139,6 @@ class TestKGAPI:
     def test_kg_entities_with_query(self, client: TestClient):
         """GET /api/kg/entities?query=... calls cross_video_search."""
         import video_analysis.api as api_mod
-
         from video_analysis.knowledge_graph import EntityRecord
 
         mock_kg = MagicMock()
@@ -193,7 +187,6 @@ class TestKGAPI:
     def test_kg_entity_relationships(self, client: TestClient):
         """GET /api/kg/entities/{id}/relationships returns relations."""
         import video_analysis.api as api_mod
-
         from video_analysis.knowledge_graph import EntityRecord, RelationshipRecord
 
         mock_kg = MagicMock()
@@ -239,7 +232,6 @@ class TestKGAPI:
     def test_kg_video_entities(self, client: TestClient):
         """GET /api/kg/videos/{id}/entities returns entities for a video."""
         import video_analysis.api as api_mod
-
         from video_analysis.knowledge_graph import EntityRecord
 
         mock_kg = MagicMock()
@@ -266,9 +258,7 @@ class TestKGAPI:
 
         mock_kg = MagicMock()
         mock_kg.get_knowledge_context.return_value = (
-            "## Video Knowledge Graph Summary\n"
-            "- **Videos indexed**: 3\n"
-            "- **Unique entities**: 42\n"
+            "## Video Knowledge Graph Summary\n- **Videos indexed**: 3\n- **Unique entities**: 42\n"
         )
         api_mod._kg_instance = mock_kg
 

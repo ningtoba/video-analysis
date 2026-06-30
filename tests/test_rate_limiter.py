@@ -12,9 +12,9 @@ import asyncio
 import pytest
 
 from video_analysis.rate_limiter import (
-    TokenBucketLimiter,
     DEFAULT_CAPACITY,
     DEFAULT_RATE,
+    TokenBucketLimiter,
 )
 
 

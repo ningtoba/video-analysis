@@ -7,10 +7,8 @@ Matches the subagent-produced API of video_analysis/agent_confidence.py.
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List
 
 import numpy as np
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -46,9 +44,7 @@ class TestFrameQualityScorer:
         assert result["trustworthiness"] < 0.5
 
     def test_score_frames_batch(self):
-        frames = [
-            np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8) for _ in range(3)
-        ]
+        frames = [np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8) for _ in range(3)]
         results = FrameQualityScorer.score_frames_batch(frames)
         assert len(results) == 3
         assert all(isinstance(r, dict) for r in results)
@@ -106,9 +102,7 @@ class TestEvidenceTrustScorer:
         assert "mean_raw_confidence" in result
 
     def test_score_transcript(self):
-        result = EvidenceTrustScorer.score_transcript_segment(
-            {"text": "hello", "confidence": 0.95}
-        )
+        result = EvidenceTrustScorer.score_transcript_segment({"text": "hello", "confidence": 0.95})
         assert "text_confidence" in result
         assert result["text_confidence"] > 0.5
 
@@ -122,15 +116,11 @@ class TestEvidenceTrustScorer:
         assert result["mean_ocr_confidence"] > 0.5
 
     def test_score_mllm_short(self):
-        result = EvidenceTrustScorer.score_mllm_response(
-            "ok", frame_quality=0.2, num_frames=1
-        )
+        result = EvidenceTrustScorer.score_mllm_response("ok", frame_quality=0.2, num_frames=1)
         assert "mllm_confidence" in result
 
     def test_score_mllm_good(self):
-        result = EvidenceTrustScorer.score_mllm_response(
-            "A" * 500, frame_quality=0.9, num_frames=4
-        )
+        result = EvidenceTrustScorer.score_mllm_response("A" * 500, frame_quality=0.9, num_frames=4)
         assert result["mllm_confidence"] > 0.0
 
 

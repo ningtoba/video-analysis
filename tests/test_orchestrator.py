@@ -1,22 +1,20 @@
 """Tests for the PipelineOrchestrator module."""
 
-import os
-import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
-import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from video_analysis.orchestrator import (
+    AUDIO_EXTENSIONS,
+    VIDEO_EXTENSIONS,
+    PipelineProfile,
+    VideoType,
     classify_by_extension,
     classify_video_type,
     probe_file,
-    PipelineProfile,
-    VideoType,
-    AUDIO_EXTENSIONS,
-    VIDEO_EXTENSIONS,
 )
 
 
@@ -145,9 +143,7 @@ def test_probe_file_with_audio_only():
 
         info = probe_file(test_audio)
         assert info.get("has_video") is False
-        assert (
-            info.get("has_audio") is True or info.get("has_audio") is False
-        )  # WAV has audio
+        assert info.get("has_audio") is True or info.get("has_audio") is False  # WAV has audio
 
 
 def test_classify_video_type_video_file():

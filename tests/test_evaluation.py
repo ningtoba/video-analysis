@@ -11,23 +11,21 @@ Covers:
 import json
 import sys
 from pathlib import Path
-from dataclasses import asdict
-from typing import List, Optional
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from video_analysis.config import Config
 from video_analysis.evaluation import (
     EvalMetric,
-    EvalTaskResult,
     EvalReport,
-    EvaluationTask,
+    EvalTaskResult,
     EvaluationRunner,
+    EvaluationTask,
     run_evaluation,
 )
 
@@ -489,8 +487,8 @@ def test_run_evaluation_convenience(cfg):
 @pytest.fixture
 def cfg():
     """Return a Config pointing at a temp directory."""
-    import tempfile
     import shutil
+    import tempfile
 
     tmp = Path(tempfile.mkdtemp(prefix="va_eval_test_"))
     cfg = Config(data_dir=tmp)

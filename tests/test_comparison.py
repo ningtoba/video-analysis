@@ -9,29 +9,27 @@ Covers:
 import json
 import sys
 import tempfile
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
+from ui.comparison import (
+    _delete_old_reports,
+    _refresh_report_list,
+    _run_compare,
+)
 from video_analysis.config import Config
 from video_analysis.evaluation import (
     EvalMetric,
-    EvalTaskResult,
     EvalReport,
     EvalReportStore,
+    EvalTaskResult,
     _build_summary_from_data,
+    _dict_to_report,
     _report_passed_from_data,
     _report_summary_dict,
-    _dict_to_report,
-)
-from ui.comparison import (
-    _refresh_report_list,
-    _run_compare,
-    _delete_old_reports,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -243,17 +241,11 @@ class TestEvalReportStore:
 
         for i in range(len(loaded.results)):
             assert loaded.results[i].task_name == sample_report.results[i].task_name
-            assert len(loaded.results[i].metrics) == len(
-                sample_report.results[i].metrics
-            )
+            assert len(loaded.results[i].metrics) == len(sample_report.results[i].metrics)
             for j in range(len(loaded.results[i].metrics)):
+                assert loaded.results[i].metrics[j].name == sample_report.results[i].metrics[j].name
                 assert (
-                    loaded.results[i].metrics[j].name
-                    == sample_report.results[i].metrics[j].name
-                )
-                assert (
-                    loaded.results[i].metrics[j].value
-                    == sample_report.results[i].metrics[j].value
+                    loaded.results[i].metrics[j].value == sample_report.results[i].metrics[j].value
                 )
                 assert (
                     loaded.results[i].metrics[j].threshold_pass

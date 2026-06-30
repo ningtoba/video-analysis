@@ -2,19 +2,20 @@
 Tests for the video quality pre-screening module.
 """
 
-from pathlib import Path
 import tempfile
-from PIL import Image
-import numpy as np
+from pathlib import Path
 
+import numpy as np
+from PIL import Image
+
+from video_analysis.config import Config
 from video_analysis.quality import (
-    detect_blur,
     check_brightness,
-    detect_static_frame,
     check_video_corruption,
+    detect_blur,
+    detect_static_frame,
     screen_frame_quality,
 )
-from video_analysis.config import Config
 
 
 def _create_test_image(width=640, height=480, mean_brightness=128) -> str:

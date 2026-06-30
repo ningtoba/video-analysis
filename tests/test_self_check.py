@@ -12,9 +12,7 @@ Tests cover:
 """
 
 import logging
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -123,9 +121,9 @@ def test_build_evidence_text():
 
 def test_parse_json_response():
     """Test JSON parsing via LLMProvider's utility method."""
+    from video_analysis.config import Config
     from video_analysis.llm_provider import HermesProvider
     from video_analysis.self_check import SelfCheckRAG
-    from video_analysis.config import Config
 
     # Use the static method from HermesProvider
     config = Config(data_dir="/tmp/va_test_selfcheck_parse")

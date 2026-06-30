@@ -1,12 +1,10 @@
 """Tests for the streaming pipeline module (v0.32.0)."""
 
-import json
 import logging
 import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Generator
 from unittest.mock import MagicMock, patch
 
 # Add project root to path
@@ -14,13 +12,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from video_analysis.streaming import (
-    StreamingPipeline,
-    StreamingChunkResult,
-    _ffprobe_duration,
-)
 from video_analysis.config import Config
 from video_analysis.models import SceneInfo, TranscriptSegment
+from video_analysis.streaming import (
+    StreamingChunkResult,
+    StreamingPipeline,
+    _ffprobe_duration,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -184,9 +182,7 @@ def test_streaming_pipeline_live_invalid_source(streaming_pipeline):
 def test_segment_video_no_duration(mock_duration, streaming_pipeline):
     """Verify _segment_video handles None duration gracefully."""
     mock_duration.return_value = None
-    segments = streaming_pipeline._segment_video(
-        Path("test.mp4"), chunk_duration=30.0, overlap=2.0
-    )
+    segments = streaming_pipeline._segment_video(Path("test.mp4"), chunk_duration=30.0, overlap=2.0)
     assert segments == []
 
 
@@ -194,9 +190,7 @@ def test_segment_video_no_duration(mock_duration, streaming_pipeline):
 def test_segment_video_zero_duration(mock_duration, streaming_pipeline):
     """Verify _segment_video handles zero duration gracefully."""
     mock_duration.return_value = 0.0
-    segments = streaming_pipeline._segment_video(
-        Path("test.mp4"), chunk_duration=30.0, overlap=2.0
-    )
+    segments = streaming_pipeline._segment_video(Path("test.mp4"), chunk_duration=30.0, overlap=2.0)
     assert segments == []
 
 
@@ -204,9 +198,7 @@ def test_segment_video_zero_duration(mock_duration, streaming_pipeline):
 def test_segment_video_basic(mock_duration, streaming_pipeline):
     """Verify _segment_video produces correct segment boundaries."""
     mock_duration.return_value = 90.0
-    segments = streaming_pipeline._segment_video(
-        Path("test.mp4"), chunk_duration=30.0, overlap=2.0
-    )
+    segments = streaming_pipeline._segment_video(Path("test.mp4"), chunk_duration=30.0, overlap=2.0)
     # 90s at 30s grid with 2s overlap = 3 segments
     assert len(segments) == 3
     assert segments[0] == (0.0, 30.0)
@@ -218,9 +210,7 @@ def test_segment_video_basic(mock_duration, streaming_pipeline):
 def test_segment_video_exact_fit(mock_duration, streaming_pipeline):
     """Verify _segment_video handles exact-fit durations."""
     mock_duration.return_value = 30.0
-    segments = streaming_pipeline._segment_video(
-        Path("test.mp4"), chunk_duration=30.0, overlap=2.0
-    )
+    segments = streaming_pipeline._segment_video(Path("test.mp4"), chunk_duration=30.0, overlap=2.0)
     assert len(segments) == 1
     assert segments[0] == (0.0, 30.0)
 
@@ -229,9 +219,7 @@ def test_segment_video_exact_fit(mock_duration, streaming_pipeline):
 def test_segment_video_short(mock_duration, streaming_pipeline):
     """Verify _segment_video handles very short videos (single chunk)."""
     mock_duration.return_value = 5.0
-    segments = streaming_pipeline._segment_video(
-        Path("test.mp4"), chunk_duration=30.0, overlap=2.0
-    )
+    segments = streaming_pipeline._segment_video(Path("test.mp4"), chunk_duration=30.0, overlap=2.0)
     assert len(segments) == 1
     assert segments[0] == (0.0, 5.0)
 
@@ -240,9 +228,7 @@ def test_segment_video_short(mock_duration, streaming_pipeline):
 def test_segment_video_no_overlap(mock_duration, streaming_pipeline):
     """Verify _segment_video works with zero overlap."""
     mock_duration.return_value = 90.0
-    segments = streaming_pipeline._segment_video(
-        Path("test.mp4"), chunk_duration=30.0, overlap=0.0
-    )
+    segments = streaming_pipeline._segment_video(Path("test.mp4"), chunk_duration=30.0, overlap=0.0)
     assert len(segments) == 3
     assert segments[0] == (0.0, 30.0)
     assert segments[1] == (30.0, 60.0)
@@ -296,9 +282,7 @@ def test_stats_empty(streaming_pipeline):
 def test_stats_after_chunks(streaming_pipeline):
     """Verify stats reflect accumulated chunks."""
     # Simulate adding results
-    result1 = StreamingChunkResult(
-        chunk_index=0, start_time=0.0, end_time=30.0, duration=30.0
-    )
+    result1 = StreamingChunkResult(chunk_index=0, start_time=0.0, end_time=30.0, duration=30.0)
     result2 = StreamingChunkResult(
         chunk_index=1,
         start_time=30.0,
@@ -336,9 +320,7 @@ def test_final_index_with_data(streaming_pipeline):
     streaming_pipeline._all_transcript_segments = transcript
     streaming_pipeline._all_transcript_text = ["hello"]
     streaming_pipeline._chunk_results = [
-        StreamingChunkResult(
-            chunk_index=0, start_time=0.0, end_time=30.0, duration=30.0
-        )
+        StreamingChunkResult(chunk_index=0, start_time=0.0, end_time=30.0, duration=30.0)
     ]
 
     index = streaming_pipeline.final_index()
@@ -428,7 +410,6 @@ def test_index_final_called(mock_rag, streaming_pipeline):
 
 def test_streaming_config_env_vars():
     """Verify streaming config can be overridden by env vars."""
-    import os
 
     os.environ["STREAMING_ENABLED"] = "true"
     os.environ["STREAMING_CHUNK_DURATION"] = "15.0"
@@ -486,8 +467,10 @@ def test_streaming_module_importable():
 
 def test_streaming_pipeline_exported():
     """Verify StreamingPipeline is exported from video_analysis."""
-    from video_analysis import StreamingPipeline  # noqa: F401
-    from video_analysis import streaming  # noqa: F811
+    from video_analysis import (
+        StreamingPipeline,  # noqa: F401
+        streaming,  # noqa: F811
+    )
 
     assert StreamingPipeline is streaming.StreamingPipeline
 
@@ -529,17 +512,15 @@ def test_stream_source_is_str_enum():
 
 def test_detect_stream_type_rtmp():
     """Verify RTMP URLs are detected correctly."""
-    from video_analysis.streaming import _detect_stream_type, StreamSource
+    from video_analysis.streaming import StreamSource, _detect_stream_type
 
-    assert (
-        _detect_stream_type("rtmp://live.twitch.tv/app/streamkey") == StreamSource.RTMP
-    )
+    assert _detect_stream_type("rtmp://live.twitch.tv/app/streamkey") == StreamSource.RTMP
     assert _detect_stream_type("RTMP://example.com/live") == StreamSource.RTMP
 
 
 def test_detect_stream_type_rtsp():
     """Verify RTSP URLs are detected correctly."""
-    from video_analysis.streaming import _detect_stream_type, StreamSource
+    from video_analysis.streaming import StreamSource, _detect_stream_type
 
     assert _detect_stream_type("rtsp://192.168.1.100:554/stream1") == StreamSource.RTSP
     assert _detect_stream_type("RTSP://camera.example.com/live") == StreamSource.RTSP
@@ -547,30 +528,22 @@ def test_detect_stream_type_rtsp():
 
 def test_detect_stream_type_hls():
     """Verify HLS m3u8 URLs are detected correctly."""
-    from video_analysis.streaming import _detect_stream_type, StreamSource
+    from video_analysis.streaming import StreamSource, _detect_stream_type
 
-    assert (
-        _detect_stream_type("https://example.com/live/stream.m3u8") == StreamSource.HLS
-    )
-    assert (
-        _detect_stream_type("http://cdn.example.com/path/to/playlist.m3u8")
-        == StreamSource.HLS
-    )
+    assert _detect_stream_type("https://example.com/live/stream.m3u8") == StreamSource.HLS
+    assert _detect_stream_type("http://cdn.example.com/path/to/playlist.m3u8") == StreamSource.HLS
 
 
 def test_detect_stream_type_hls_inline():
     """Verify HLS detection works with m3u8 in the URL string."""
-    from video_analysis.streaming import _detect_stream_type, StreamSource
+    from video_analysis.streaming import StreamSource, _detect_stream_type
 
-    assert (
-        _detect_stream_type("https://cdn.example.com/m3u8/stream/123")
-        == StreamSource.HLS
-    )
+    assert _detect_stream_type("https://cdn.example.com/m3u8/stream/123") == StreamSource.HLS
 
 
 def test_detect_stream_type_file():
     """Verify local files are detected as FILE_WATCH."""
-    from video_analysis.streaming import _detect_stream_type, StreamSource
+    from video_analysis.streaming import StreamSource, _detect_stream_type
 
     assert _detect_stream_type("/path/to/local/video.mp4") == StreamSource.FILE_WATCH
     assert _detect_stream_type("recording.mkv") == StreamSource.FILE_WATCH
@@ -584,7 +557,7 @@ def test_detect_stream_type_file():
 @patch("video_analysis.streaming.subprocess.run")
 def test_ffmpeg_capture_segment_success(mock_run):
     """Verify _ffmpeg_capture_segment calls FFmpeg with correct args."""
-    from video_analysis.streaming import _ffmpeg_capture_segment, StreamSource
+    from video_analysis.streaming import StreamSource, _ffmpeg_capture_segment
 
     mock_run.return_value = MagicMock(returncode=0, stderr="")
     output = Path("/tmp/test_capture.mp4")
@@ -616,7 +589,7 @@ def test_ffmpeg_capture_segment_success(mock_run):
 @patch("video_analysis.streaming.subprocess.run")
 def test_ffmpeg_capture_segment_rtsp_flags(mock_run):
     """Verify RTSP capture adds -rtsp_transport tcp flag."""
-    from video_analysis.streaming import _ffmpeg_capture_segment, StreamSource
+    from video_analysis.streaming import StreamSource, _ffmpeg_capture_segment
 
     mock_run.return_value = MagicMock(returncode=0, stderr="")
     output = Path("/tmp/test_rtsp_capture.mp4")
@@ -640,7 +613,7 @@ def test_ffmpeg_capture_segment_rtsp_flags(mock_run):
 @patch("video_analysis.streaming.subprocess.run")
 def test_ffmpeg_capture_segment_hls_flags(mock_run):
     """Verify HLS capture adds -max_reload flag."""
-    from video_analysis.streaming import _ffmpeg_capture_segment, StreamSource
+    from video_analysis.streaming import StreamSource, _ffmpeg_capture_segment
 
     mock_run.return_value = MagicMock(returncode=0, stderr="")
     output = Path("/tmp/test_hls_capture.mp4")
@@ -664,7 +637,7 @@ def test_ffmpeg_capture_segment_hls_flags(mock_run):
 @patch("video_analysis.streaming.subprocess.run")
 def test_ffmpeg_capture_segment_failure(mock_run):
     """Verify _ffmpeg_capture_segment returns False on FFmpeg failure."""
-    from video_analysis.streaming import _ffmpeg_capture_segment, StreamSource
+    from video_analysis.streaming import StreamSource, _ffmpeg_capture_segment
 
     mock_run.return_value = MagicMock(returncode=1, stderr="error")
     output = Path("/tmp/test_fail_capture.mp4")
@@ -683,7 +656,7 @@ def test_ffmpeg_capture_segment_failure(mock_run):
 @patch("video_analysis.streaming.subprocess.run")
 def test_ffmpeg_capture_segment_empty_file(mock_run):
     """Verify _ffmpeg_capture_segment returns False for empty output."""
-    from video_analysis.streaming import _ffmpeg_capture_segment, StreamSource
+    from video_analysis.streaming import StreamSource, _ffmpeg_capture_segment
 
     mock_run.return_value = MagicMock(returncode=0, stderr="")
     output = Path("/tmp/test_empty_capture.mp4")
@@ -707,7 +680,6 @@ def test_ffmpeg_capture_segment_empty_file(mock_run):
 @patch("video_analysis.streaming.StreamingPipeline._get_pipeline")
 def test_process_live_stream_basic(mock_pipeline, mock_capture, streaming_pipeline):
     """Verify live stream captures and processes one chunk."""
-    from video_analysis.streaming import StreamingChunkResult
 
     # Mock successful capture
     mock_capture.return_value = True
@@ -803,9 +775,7 @@ def test_process_live_stream_reconnect(mock_pipeline, mock_capture, streaming_pi
 
 @patch("video_analysis.streaming._ffmpeg_capture_segment")
 @patch("video_analysis.streaming.StreamingPipeline._get_pipeline")
-def test_process_live_stream_max_retries_exceeded(
-    mock_pipeline, mock_capture, streaming_pipeline
-):
+def test_process_live_stream_max_retries_exceeded(mock_pipeline, mock_capture, streaming_pipeline):
     """Verify live stream stops after exhausting retries."""
     # Always fail
     mock_capture.return_value = False
@@ -854,7 +824,7 @@ def test_process_live_stream_fallback_to_file_watch(
         tmp_file.unlink(missing_ok=True)
 
     # Verify the stream source detection works for local files
-    from video_analysis.streaming import _detect_stream_type, StreamSource
+    from video_analysis.streaming import StreamSource, _detect_stream_type
 
     assert _detect_stream_type("/path/to/local/file.mp4") == StreamSource.FILE_WATCH
 
@@ -867,9 +837,7 @@ def test_process_live_stream_fallback_to_file_watch(
 def test_prune_sliding_window_no_prune_needed(streaming_pipeline):
     """Verify sliding window doesn't prune when under limit."""
     # Add a single chunk result
-    result = StreamingChunkResult(
-        chunk_index=0, start_time=0.0, end_time=30.0, duration=30.0
-    )
+    result = StreamingChunkResult(chunk_index=0, start_time=0.0, end_time=30.0, duration=30.0)
     streaming_pipeline._chunk_results = [result]
     streaming_pipeline._all_scenes = result.scenes
     streaming_pipeline._all_transcript_segments = result.transcript_segments
@@ -944,7 +912,6 @@ def test_live_stream_config_defaults():
 
 def test_live_stream_config_env_vars():
     """Verify live stream config can be overridden by env vars."""
-    import os
 
     os.environ["LIVE_STREAM_ENABLED"] = "true"
     os.environ["LIVE_STREAM_URL"] = "rtmp://example.com/live/stream"

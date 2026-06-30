@@ -6,7 +6,6 @@ that the lightweight analysis path works with mock frames, and that the
 injection function produces correct Gradio components.
 """
 
-import json
 import logging
 import os
 import sys
@@ -41,7 +40,7 @@ def test_camera_module_importable():
         if "camera" in modname and "ui" in modname:
             del sys.modules[modname]
 
-    from ui.camera import inject_camera_tab, _analyze_frame
+    from ui.camera import _analyze_frame, inject_camera_tab
 
     assert callable(inject_camera_tab)
     assert callable(_analyze_frame)
@@ -239,7 +238,6 @@ def test_analyze_result_structure():
 
 def test_camera_uses_pipeline_config():
     """The camera module should use the same Config object as the main pipeline."""
-    from ui.camera import _analyze_frame
     from video_analysis.pipeline import VideoPipeline
 
     cfg = Config(data_dir=tempfile.mkdtemp())

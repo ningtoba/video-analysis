@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
@@ -69,9 +68,7 @@ class TestStandardHTTPError:
         assert err.error_code == "HTTP_400"
 
     def test_standard_http_error_custom_error_code(self):
-        err = StandardHTTPError(
-            status_code=500, detail="Internal", error_code="DB_ERROR"
-        )
+        err = StandardHTTPError(status_code=500, detail="Internal", error_code="DB_ERROR")
         assert err.error_code == "DB_ERROR"
 
 
@@ -226,9 +223,7 @@ class TestRegisterErrorHandlers:
 
         @app.get("/not-found")
         def not_found():
-            raise StandardHTTPError(
-                status_code=404, detail="Missing", error_code="MISSING"
-            )
+            raise StandardHTTPError(status_code=404, detail="Missing", error_code="MISSING")
 
         @app.get("/forbidden")
         def forbidden():

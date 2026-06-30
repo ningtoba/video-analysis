@@ -1,9 +1,6 @@
 """Tests for the Sparse-frame Optical Flow module (video_analysis/flow.py)."""
 
-import json
 import subprocess
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -118,9 +115,7 @@ class TestFFmpegMotionExtractor:
                     "side_data_list": [
                         {
                             "side_data_type": "Motion Vectors",
-                            "mvs": [
-                                {"motion_x": 1, "motion_y": 1, "src_x": 0, "src_y": 0}
-                            ],
+                            "mvs": [{"motion_x": 1, "motion_y": 1, "src_x": 0, "src_y": 0}],
                         }
                     ],
                 },

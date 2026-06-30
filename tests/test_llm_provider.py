@@ -18,9 +18,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from video_analysis.llm_provider import (
+    HermesProvider,
     LLMProvider,
     LLMProviderConfig,
-    HermesProvider,
     OpenAIProvider,
     get_llm_provider,
     reset_provider_cache,
@@ -251,9 +251,7 @@ class TestHermesProvider:
         # a mock process whose communicate returns our test output.
         mock_process = AsyncMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(
-            return_value=(b"Hello world\nHow are you?\n", b"")
-        )
+        mock_process.communicate = AsyncMock(return_value=(b"Hello world\nHow are you?\n", b""))
 
         with patch.object(asyncio, "create_subprocess_exec", return_value=mock_process):
             tokens = []
@@ -376,9 +374,7 @@ class TestOpenAIProvider:
         mock_session = MagicMock()
         mock_session.post.return_value = mock_response
 
-        with patch.object(
-            provider, "_get_session", return_value=mock_session
-        ) as mock_get:
+        with patch.object(provider, "_get_session", return_value=mock_session) as mock_get:
             provider.chat("Hello", system="Be concise")
             call_kwargs = mock_session.post.call_args[1]
             payload = call_kwargs["json"]
@@ -404,13 +400,7 @@ class TestOpenAIProvider:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "content": json.dumps({"route": "text", "confidence": 0.95})
-                    }
-                }
-            ]
+            "choices": [{"message": {"content": json.dumps({"route": "text", "confidence": 0.95})}}]
         }
         mock_session = MagicMock()
         mock_session.post.return_value = mock_response
@@ -426,13 +416,7 @@ class TestOpenAIProvider:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "content": 'The answer is {"result": "found", "count": 3}'
-                    }
-                }
-            ]
+            "choices": [{"message": {"content": 'The answer is {"result": "found", "count": 3}'}}]
         }
         mock_session = MagicMock()
         mock_session.post.return_value = mock_response
@@ -673,9 +657,7 @@ class TestGetLLMProvider:
         provider = get_llm_provider(openai_config, force="hermes")
         assert isinstance(provider, HermesProvider)
 
-    @patch.dict(
-        os.environ, {"LLM_PROVIDER": "openai", "OPENAI_API_BASE": "http://test:8000/v1"}
-    )
+    @patch.dict(os.environ, {"LLM_PROVIDER": "openai", "OPENAI_API_BASE": "http://test:8000/v1"})
     def test_from_env_via_factory(self):
         provider = get_llm_provider()
         assert isinstance(provider, OpenAIProvider)

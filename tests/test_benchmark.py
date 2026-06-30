@@ -1,6 +1,7 @@
 """Tests for the Pipeline Benchmark module (video_analysis/benchmark.py)."""
 
 import time
+
 from video_analysis.benchmark import GPUProfiler, PipelineBenchmark, StageRecord
 
 

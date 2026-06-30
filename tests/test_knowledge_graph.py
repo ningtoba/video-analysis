@@ -13,8 +13,6 @@ Covers:
 - Clear and vacuum
 """
 
-import json
-import time
 import threading
 from pathlib import Path
 
@@ -22,9 +20,6 @@ import pytest
 
 from video_analysis.knowledge_graph import (
     KnowledgeGraph,
-    EntityRecord,
-    RelationshipRecord,
-    VideoRecord,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -443,9 +438,7 @@ class TestThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=worker, args=(tid,)) for tid in range(n_threads)
-        ]
+        threads = [threading.Thread(target=worker, args=(tid,)) for tid in range(n_threads)]
         for t in threads:
             t.start()
         for t in threads:
@@ -461,10 +454,7 @@ class TestThreadSafety:
             related_id = kg.add_entity(entity_name, entity_type="spoke")
             kg.add_relationship(eid, related_id)
 
-        threads = [
-            threading.Thread(target=add_related, args=(f"related_{i}",))
-            for i in range(5)
-        ]
+        threads = [threading.Thread(target=add_related, args=(f"related_{i}",)) for i in range(5)]
         for t in threads:
             t.start()
         for t in threads:

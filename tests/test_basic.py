@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from video_analysis.config import Config
-from video_analysis.models import SceneInfo, FrameInfo, TranscriptSegment, VideoIndex
+from video_analysis.models import FrameInfo, SceneInfo, TranscriptSegment, VideoIndex
 
 logger = logging.getLogger(__name__)
 
@@ -149,8 +149,8 @@ def test_pipeline_imports():
 
 def test_ocr_fallback_no_paddleocr():
     """Test that _extract_ocr handles missing paddleocr gracefully."""
+    from video_analysis.models import FrameInfo, SceneInfo
     from video_analysis.pipeline import VideoPipeline
-    from video_analysis.models import SceneInfo, FrameInfo
 
     config = Config(data_dir="/tmp/va_test_ocr_fallback")
     pipeline = VideoPipeline(config)
@@ -159,9 +159,7 @@ def test_ocr_fallback_no_paddleocr():
             scene_id=0,
             start_time=0,
             end_time=10,
-            key_frames=[
-                FrameInfo(timestamp=5, filepath="/nonexistent.jpg", scene_id=0)
-            ],
+            key_frames=[FrameInfo(timestamp=5, filepath="/nonexistent.jpg", scene_id=0)],
         )
     ]
     # Should not raise — just log a warning and return
@@ -175,8 +173,8 @@ def test_ocr_fallback_no_paddleocr():
 
 def test_diarize_fallback_no_pyannote():
     """Test that _diarize handles missing pyannote gracefully."""
-    from video_analysis.pipeline import VideoPipeline
     from video_analysis.models import TranscriptSegment
+    from video_analysis.pipeline import VideoPipeline
 
     config = Config(data_dir="/tmp/va_test_diarize_fallback")
     pipeline = VideoPipeline(config)
@@ -195,8 +193,10 @@ def test_generate_sprite_sheet():
     """Test sprite sheet generation with a real FFmpeg-generated video."""
     import shutil
     import subprocess
-    from video_analysis.pipeline import VideoPipeline
+
     from PIL import Image
+
+    from video_analysis.pipeline import VideoPipeline
 
     test_dir = Path("/tmp/va_test_sprite")
     if test_dir.exists():
@@ -475,10 +475,10 @@ def test_config_embedding_model():
 def test_health_check_module():
     """Test health module can be imported and has expected structure."""
     from ui.health import (
-        create_health_app,
         HealthResponse,
         LibraryResponse,
         VideoInfoResponse,
+        create_health_app,
     )
 
     assert callable(create_health_app)
@@ -500,7 +500,6 @@ def test_is_video_file():
 
 def test_config_ui_auth():
     """Test UI auth config fields."""
-    import os
 
     # Test without env vars
     cfg = Config(data_dir="/tmp/va_test_auth")
@@ -550,8 +549,8 @@ def test_config_clip_frame_dedup():
 
 def test_adaptive_frame_samples_basic():
     """Test that _adaptive_frame_samples returns reasonable timestamps."""
-    from video_analysis.pipeline import VideoPipeline
     from video_analysis.models import SceneInfo
+    from video_analysis.pipeline import VideoPipeline
 
     cfg = Config(data_dir="/tmp/va_test_adaptive_samples", adaptive_frame_sampling=True)
     pipeline = VideoPipeline(cfg)
@@ -575,8 +574,8 @@ def test_adaptive_frame_samples_basic():
 
 def test_adaptive_frame_samples_short_scene():
     """Test that very short scenes (<5s) use default sampling (no adaptive)."""
-    from video_analysis.pipeline import VideoPipeline
     from video_analysis.models import SceneInfo
+    from video_analysis.pipeline import VideoPipeline
 
     cfg = Config(data_dir="/tmp/va_test_adaptive_short", adaptive_frame_sampling=True)
     pipeline = VideoPipeline(cfg)
@@ -593,8 +592,8 @@ def test_adaptive_frame_samples_short_scene():
 
 def test_dedup_frames_clip_no_openclip():
     """Test _dedup_frames_clip falls back gracefully without open_clip."""
-    from video_analysis.pipeline import VideoPipeline
     from video_analysis.models import FrameInfo
+    from video_analysis.pipeline import VideoPipeline
 
     cfg = Config(data_dir="/tmp/va_test_dedup_fallback")
     pipeline = VideoPipeline(cfg)
@@ -654,7 +653,7 @@ def test_colbert_reranker_import():
 def test_colbert_reranker_fallback_on_missing():
     """Test that _rerank_colbert in VideoRAG falls back gracefully without ragatouille."""
     from video_analysis.config import Config
-    from video_analysis.rag import VideoRAG, RetrievedChunk
+    from video_analysis.rag import RetrievedChunk, VideoRAG
 
     cfg = Config(data_dir="/tmp/va_test_colbert_fallback")
     cfg.colbert_reranker_enabled = True
@@ -761,8 +760,8 @@ def test_config_dino_frame_compression_fields():
 
 def test_dino_compression_pipeline_integration():
     """Test pipeline._apply_dino_compression graceful fallback without DINOv2 model."""
-    from video_analysis.pipeline import VideoPipeline
     from video_analysis.models import FrameInfo
+    from video_analysis.pipeline import VideoPipeline
 
     cfg = Config(
         data_dir="/tmp/va_test_dino_pipe",
@@ -788,8 +787,9 @@ def test_dino_compression_pipeline_integration():
 
 def test_dino_normalise():
     """Test L2 normalisation utility."""
-    from video_analysis.frame_compression import DINOv2FrameCompressor
     import numpy as np
+
+    from video_analysis.frame_compression import DINOv2FrameCompressor
 
     vec = np.array([3.0, 4.0])
     normalised = DINOv2FrameCompressor._normalise(vec)
@@ -820,7 +820,7 @@ def test_config_action_recognition():
 
 def test_action_recognizer_import():
     """Test ActionRecognizer can be imported and reports defaults."""
-    from video_analysis.action import ActionRecognizer, DEFAULT_ACTION_CATEGORIES
+    from video_analysis.action import DEFAULT_ACTION_CATEGORIES, ActionRecognizer
 
     assert len(DEFAULT_ACTION_CATEGORIES) == 26
     assert "a person walking" in DEFAULT_ACTION_CATEGORIES
@@ -858,7 +858,7 @@ def test_action_recognizer_fallback_no_model():
 
 def test_frame_info_action_fields():
     """Test FrameInfo has action and action_confidence fields."""
-    from video_analysis.models import FrameInfo, format_timestamp
+    from video_analysis.models import FrameInfo
 
     frame = FrameInfo(
         timestamp=10.0,
@@ -917,9 +917,7 @@ def test_embedding_prefix_nomic():
     """Test embedding prefix normalization for Nomic models."""
     from video_analysis.rag import _apply_embedding_prefix
 
-    prefixed = _apply_embedding_prefix(
-        "test query", "nomic-ai/nomic-embed-text-v1.5", "query"
-    )
+    prefixed = _apply_embedding_prefix("test query", "nomic-ai/nomic-embed-text-v1.5", "query")
     assert prefixed == "search_query: test query"
 
     prefixed_doc = _apply_embedding_prefix(
@@ -1100,8 +1098,8 @@ def test_pipeline_video_mllm_attr():
 
 def test_chat_video_mllm_backend_disabled():
     """Test that chat falls back to RAG when MLLM chat backend is disabled."""
-    from video_analysis.rag import VideoRAG
     from video_analysis.chat import VideoChat
+    from video_analysis.rag import VideoRAG
 
     cfg = Config(
         data_dir="/tmp/va_test_chat_mllm",
@@ -1148,7 +1146,6 @@ def test_pipeline_get_active_stages_audio_only():
     from video_analysis.pipeline import VideoPipeline
 
     # In-memory config (no disk writes)
-    import tempfile
 
     with tempfile.TemporaryDirectory() as tmpdir:
         cfg = Config(data_dir=tmpdir, processing_mode="audio_only")
@@ -1174,8 +1171,6 @@ def test_pipeline_get_active_stages_video_full():
     """Test _get_active_stages returns empty set in video_full mode."""
     from video_analysis.pipeline import VideoPipeline
 
-    import tempfile
-
     with tempfile.TemporaryDirectory() as tmpdir:
         cfg = Config(data_dir=tmpdir, processing_mode="video_full")
         pipeline = VideoPipeline(cfg)
@@ -1190,7 +1185,7 @@ def test_pipeline_get_active_stages_video_full():
 
 def test_smolvlm2_import():
     """Test that SmolVLM2 model paths and backend enum are accessible."""
-    from video_analysis.video_mllm import SMOLVLM2_MODEL_PATHS, VideoMLLM
+    from video_analysis.video_mllm import SMOLVLM2_MODEL_PATHS
 
     assert "2.2B" in SMOLVLM2_MODEL_PATHS
     assert "500M" in SMOLVLM2_MODEL_PATHS
@@ -1247,7 +1242,6 @@ def test_video_mllm_backend_unknown():
     # Directly set an unknown backend to test fallback logic
     mllm.backend = "unknown_backend"
     # Trigger the resolve through the private method
-    from video_analysis.video_mllm import BackendType
     import logging as _logging
 
     _logging.getLogger("video_analysis.video_mllm").disabled = True
@@ -1373,7 +1367,7 @@ def test_scene_graph_k_hop_empty():
 
 def test_scene_graph_expand_chunks_empty():
     """Test expand_chunks returns original chunks on empty graph."""
-    from video_analysis.rag import VideoRAG, RetrievedChunk
+    from video_analysis.rag import RetrievedChunk, VideoRAG
     from video_analysis.scene_graph import SceneGraph
 
     cfg = Config(data_dir="/tmp/va_test_sg_expand", scene_graph_enabled=True)
@@ -1416,7 +1410,7 @@ def test_scene_graph_disabled():
 
 def test_query_router_import():
     """Test that QueryRouter can be imported cleanly."""
-    from video_analysis.query_router import QueryRouter, QueryRoute, RoutingDecision
+    from video_analysis.query_router import QueryRoute, QueryRouter
 
     assert QueryRoute.TEXT.value == "text"
     assert QueryRoute.VISUAL.value == "visual"
@@ -1429,7 +1423,7 @@ def test_query_router_import():
 
 def test_query_router_keyword_text():
     """Test keyword routing classifies factual questions as text."""
-    from video_analysis.query_router import QueryRouter, QueryRoute
+    from video_analysis.query_router import QueryRoute, QueryRouter
 
     router = QueryRouter(prefer_llm=False)
     decision = router.classify("What did the speaker say about the budget?")
@@ -1438,7 +1432,7 @@ def test_query_router_keyword_text():
 
 def test_query_router_keyword_visual():
     """Test keyword routing classifies visual questions."""
-    from video_analysis.query_router import QueryRouter, QueryRoute
+    from video_analysis.query_router import QueryRoute, QueryRouter
 
     router = QueryRouter(prefer_llm=False)
     decision = router.classify("What color was the car in the chase scene?")
@@ -1447,7 +1441,7 @@ def test_query_router_keyword_visual():
 
 def test_query_router_keyword_temporal():
     """Test keyword routing classifies temporal questions."""
-    from video_analysis.query_router import QueryRouter, QueryRoute
+    from video_analysis.query_router import QueryRoute, QueryRouter
 
     router = QueryRouter(prefer_llm=False)
     decision = router.classify("What happened before the explosion?")
@@ -1456,7 +1450,7 @@ def test_query_router_keyword_temporal():
 
 def test_query_router_keyword_multimodal():
     """Test keyword routing classifies multimodal questions."""
-    from video_analysis.query_router import QueryRouter, QueryRoute
+    from video_analysis.query_router import QueryRoute, QueryRouter
 
     router = QueryRouter(prefer_llm=False)
     decision = router.classify("Why did the protagonist leave the room?")
@@ -1631,7 +1625,7 @@ def test_rag_agentic_retrieve_disabled_features():
     the agentic loop logic without hitting ChromaDB (which has a
     pre-existing embedding dimension mismatch on empty DB).
     """
-    from video_analysis.rag import VideoRAG, RetrievedChunk
+    from video_analysis.rag import VideoRAG
 
     cfg = Config(
         data_dir="/tmp/va_test_ar_no_features",
@@ -1669,7 +1663,7 @@ def test_agentic_retrieve_confidence_check():
     High threshold (0.99) runs all 3 rounds; low threshold (0.0) stops
     after round 1.
     """
-    from video_analysis.rag import VideoRAG, RetrievedChunk
+    from video_analysis.rag import RetrievedChunk, VideoRAG
 
     def make_dummy_chunks(score: float, n: int = 3):
         return [
@@ -1724,8 +1718,8 @@ def test_agentic_retrieve_confidence_check():
 
 def test_chat_agentic_retrieval_disabled():
     """Test that chat falls back to routed retrieve when agentic is disabled."""
-    from video_analysis.rag import VideoRAG
     from video_analysis.chat import VideoChat
+    from video_analysis.rag import VideoRAG
 
     cfg = Config(
         data_dir="/tmp/va_test_chat_ar_disabled",
@@ -1753,7 +1747,7 @@ def test_agentic_retrieve_max_rounds_1():
 
     Monkey-patches ``retrieve()`` to avoid ChromaDB query on empty DB.
     """
-    from video_analysis.rag import VideoRAG, RetrievedChunk
+    from video_analysis.rag import RetrievedChunk, VideoRAG
 
     cfg = Config(
         data_dir="/tmp/va_test_ar_1round",
@@ -1798,7 +1792,6 @@ def test_config_entity_tracking_defaults():
 
 def test_config_entity_tracking_env_override():
     """Test entity_tracking config env var overrides."""
-    import os
 
     os.environ["ENTITY_TRACKING_ENABLED"] = "false"
     os.environ["ENTITY_TRACKER_TYPE"] = "botsort.yaml"
@@ -1855,7 +1848,7 @@ def test_detect_objects_fallback_no_ultralytics():
 
 def test_rag_index_track_ids_in_metadata():
     """Test that track_ids from objects are stored in ChromaDB metadata."""
-    from video_analysis.rag import VideoRAG, RetrievedChunk
+    from video_analysis.rag import VideoRAG
 
     cfg = Config(
         data_dir="/tmp/va_test_rag_track_ids",
@@ -1865,7 +1858,7 @@ def test_rag_index_track_ids_in_metadata():
     )
     rag = VideoRAG(cfg)
     # Build a VideoIndex with track IDs
-    from video_analysis.models import VideoIndex, SceneInfo, FrameInfo
+    from video_analysis.models import FrameInfo, SceneInfo, VideoIndex
 
     frame = FrameInfo(
         timestamp=10.0,
@@ -1912,9 +1905,7 @@ def test_rag_index_track_ids_in_metadata():
         if result["ids"]:
             meta = result["metadatas"][0]
             assert "track_ids" in meta, f"track_ids not found in metadata: {meta}"
-            assert (
-                "1" in meta["track_ids"]
-            ), f"track_id=1 not found in {meta['track_ids']}"
+            assert "1" in meta["track_ids"], f"track_id=1 not found in {meta['track_ids']}"
             assert "objects" in meta, f"objects not found in metadata: {meta}"
             assert "person" in meta["objects"], f"person not found in {meta['objects']}"
     except Exception as e:
@@ -1932,8 +1923,8 @@ def test_rag_index_track_ids_in_metadata():
 
 def test_scene_graph_track_id_entity_matching():
     """Test that track_ids create entity edges in the scene graph."""
+    from video_analysis.rag import VideoRAG
     from video_analysis.scene_graph import SceneGraph
-    from video_analysis.rag import VideoRAG, RetrievedChunk
 
     cfg = Config(
         data_dir="/tmp/va_test_sg_tracks",
@@ -2022,7 +2013,7 @@ def test_colbert_att_reranker_fallback():
     """Test that _rerank_colbert_att in VideoRAG falls back gracefully
     without transformers being loaded (the method catches ImportError)."""
     from video_analysis.config import Config
-    from video_analysis.rag import VideoRAG, RetrievedChunk
+    from video_analysis.rag import RetrievedChunk, VideoRAG
 
     cfg = Config(data_dir="/tmp/va_test_colbert_att")
     cfg.colbert_att_reranker_enabled = True
@@ -2061,9 +2052,7 @@ def test_config_colbert_att_reranker():
     assert hasattr(cfg, "colbert_att_reranker_enabled")
     assert cfg.colbert_att_reranker_enabled is False
 
-    cfg2 = Config(
-        data_dir="/tmp/va_test_colbert_att_cfg", colbert_att_reranker_enabled=True
-    )
+    cfg2 = Config(data_dir="/tmp/va_test_colbert_att_cfg", colbert_att_reranker_enabled=True)
     assert cfg2.colbert_att_reranker_enabled is True
 
     import shutil
@@ -2074,6 +2063,7 @@ def test_config_colbert_att_reranker():
 def test_colbert_att_attention_weighted_maxsim():
     """Test the attention-weighted MaxSim scoring function directly."""
     import numpy as np
+
     from video_analysis.colbert_att_reranker import ColBERTAttReranker
 
     reranker = ColBERTAttReranker()
@@ -2081,9 +2071,7 @@ def test_colbert_att_attention_weighted_maxsim():
     # Create simple test vectors
     q_embs = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)  # 2 query tokens
     q_weights = np.array([0.8, 0.2], dtype=np.float32)  # first token more important
-    d_embs = np.array(
-        [[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]], dtype=np.float32
-    )  # 3 doc tokens
+    d_embs = np.array([[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]], dtype=np.float32)  # 3 doc tokens
     d_weights = np.array([0.6, 0.3, 0.1], dtype=np.float32)
 
     # Compute score
@@ -2174,8 +2162,6 @@ def test_config_ocr_model_version():
     cfg = Config(data_dir="/tmp/va_test_ocr_ver")
     assert cfg.ocr_model_version == "PP-OCRv6"
 
-    import os
-
     os.environ["OCR_MODEL_VERSION"] = "pp-ocrv5"
     try:
         cfg2 = Config(data_dir="/tmp/va_test_ocr_ver_v5")
@@ -2192,8 +2178,6 @@ def test_config_ocr_model_tier():
     """Test OCR model tier config and env override."""
     cfg = Config(data_dir="/tmp/va_test_ocr_tier")
     assert cfg.ocr_model_tier == "medium"
-
-    import os
 
     os.environ["OCR_MODEL_TIER"] = "tiny"
     try:
@@ -2218,9 +2202,9 @@ def test_config_ocr_model_tier():
 
 def test_scene_graph_face_entity_extraction():
     """Test that SceneGraph extracts face entities from metadata."""
-    from video_analysis.scene_graph import SceneGraph
-    from video_analysis.rag import VideoRAG
     from video_analysis.config import Config
+    from video_analysis.rag import VideoRAG
+    from video_analysis.scene_graph import SceneGraph
 
     cfg = Config(data_dir="/tmp/va_test_sg_face")
     rag = VideoRAG(cfg)
@@ -2233,7 +2217,6 @@ def test_scene_graph_face_entity_extraction():
     # face_ids or faces metadata fields.
 
     # Verify the module-level json import worked
-    import json
 
     assert hasattr(sg, "_adjacency")
 
@@ -2294,8 +2277,8 @@ def test_scene_graph_face_entity_extraction():
 
 def test_rag_mmr_method_exists():
     """Test that the MMR method exists on VideoRAG."""
-    from video_analysis.rag import VideoRAG
     from video_analysis.config import Config
+    from video_analysis.rag import VideoRAG
 
     cfg = Config(data_dir="/tmp/va_test_mmr_method")
     rag = VideoRAG(cfg)
@@ -2309,8 +2292,8 @@ def test_rag_mmr_method_exists():
 
 def test_rag_mmr_fallback_no_sentence_transformers():
     """Test that MMR falls back gracefully without sentence-transformers."""
-    from video_analysis.rag import VideoRAG, RetrievedChunk
     from video_analysis.config import Config
+    from video_analysis.rag import RetrievedChunk, VideoRAG
 
     cfg = Config(data_dir="/tmp/va_test_mmr_fallback")
     cfg.mmr_diversity_enabled = True
@@ -2365,17 +2348,14 @@ def test_rag_mmr_fallback_no_sentence_transformers():
 
 def test_evaluation_module():
     """Test that the evaluation module and its components import correctly."""
-    from video_analysis.evaluation import (
-        EvaluationTask,
-        EvaluationRunner,
-        EvalReport,
-        EvalTaskResult,
-        EvalMetric,
-        run_evaluation,
-    )
-
     # Verify base class is abstract
     import inspect
+
+    from video_analysis.evaluation import (
+        EvalReport,
+        EvaluationRunner,
+        EvaluationTask,
+    )
 
     assert inspect.isabstract(EvaluationTask)
 
@@ -2392,8 +2372,8 @@ def test_evaluation_module():
 
 def test_eval_task_discovery():
     """Test that evaluation tasks can be discovered."""
-    from video_analysis.evaluation import EvaluationRunner
     from video_analysis.config import Config
+    from video_analysis.evaluation import EvaluationRunner
 
     cfg = Config(data_dir="/tmp/va_test_eval_disc")
     runner = EvaluationRunner(cfg)
@@ -2420,8 +2400,8 @@ def test_eval_metric_threshold():
 
 def test_eval_runner_basic():
     """Test EvaluationRunner basic execution."""
-    from video_analysis.evaluation import EvaluationRunner
     from video_analysis.config import Config
+    from video_analysis.evaluation import EvaluationRunner
 
     cfg = Config(data_dir="/tmp/va_test_runner")
     runner = EvaluationRunner(cfg)
@@ -2434,8 +2414,8 @@ def test_eval_runner_basic():
 
 def test_eval_runner_filter():
     """Test running specific evaluation tasks by name."""
-    from video_analysis.evaluation import EvaluationRunner
     from video_analysis.config import Config
+    from video_analysis.evaluation import EvaluationRunner
 
     cfg = Config(data_dir="/tmp/va_test_filter")
     runner = EvaluationRunner(cfg)

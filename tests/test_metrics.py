@@ -13,10 +13,7 @@ Coverage targets:
 
 import os
 import sys
-import time
 from unittest.mock import patch
-
-import pytest
 
 from video_analysis.config import Config
 
@@ -61,20 +58,14 @@ class TestMetricsInit:
         m = _reimport_metrics()
         m.increment_pipeline_run(mode="video_full", success=True)
         assert m.pipeline_runs_total.labels(mode="video_full")._value.get() == 1.0
-        assert (
-            m.pipeline_runs_success_total.labels(mode="video_full")._value.get() == 1.0
-        )
-        assert (
-            m.pipeline_runs_failure_total.labels(mode="video_full")._value.get() == 0.0
-        )
+        assert m.pipeline_runs_success_total.labels(mode="video_full")._value.get() == 1.0
+        assert m.pipeline_runs_failure_total.labels(mode="video_full")._value.get() == 0.0
 
     def test_increment_pipeline_run_failure(self):
         """Failed runs increment failure counter."""
         m = _reimport_metrics()
         m.increment_pipeline_run(mode="audio_only", success=False)
-        assert (
-            m.pipeline_runs_failure_total.labels(mode="audio_only")._value.get() == 1.0
-        )
+        assert m.pipeline_runs_failure_total.labels(mode="audio_only")._value.get() == 1.0
 
     def test_observe_pipeline_duration(self):
         """Duration histograms record observations."""
@@ -167,10 +158,10 @@ class TestHealthEndpoint:
 
     def test_metrics_returns_valid_text(self):
         """GET /metrics returns valid prometheus text (via direct endpoint call)."""
-        from video_analysis.metrics import metrics_endpoint, _ensure_metrics
 
         # Force re-init in a clean subprocess to avoid global registry pollution
-        import subprocess, sys
+        import subprocess
+        import sys
 
         code = """
 from video_analysis.metrics import metrics_endpoint, _ensure_metrics
@@ -193,7 +184,8 @@ print("HAS_HELP" if "# HELP" in text else "NO_HELP")
 
     def test_metrics_route_returns_text(self):
         """Actual FastAPI /metrics endpoint returns valid prometheus text (subprocess)."""
-        import subprocess, sys
+        import subprocess
+        import sys
 
         code = """
 from ui.health import create_health_app

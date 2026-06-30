@@ -9,16 +9,15 @@ Tests cover:
 - Config env var overrides for event_causal_rag_in_chat
 """
 
-import json
 import os
-import time
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from video_analysis.config import Config
-from video_analysis.rag import VideoRAG, RetrievedChunk
-from video_analysis.models import VideoIndex, SceneInfo, FrameInfo, TranscriptSegment
+from video_analysis.models import SceneInfo, VideoIndex
+from video_analysis.rag import RetrievedChunk, VideoRAG
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -28,7 +27,7 @@ from video_analysis.models import VideoIndex, SceneInfo, FrameInfo, TranscriptSe
 @pytest.fixture
 def mock_event():
     """Create a mock Event object."""
-    from video_analysis.event_rag import Event, CausalPath
+    from video_analysis.event_rag import Event
 
     evt = Event(
         event_id="test_vid/evt_000",
@@ -51,7 +50,7 @@ def mock_event():
 @pytest.fixture
 def mock_retrieval_result():
     """Create a mock RetrievalResult."""
-    from video_analysis.event_rag import RetrievalResult, Event, CausalPath
+    from video_analysis.event_rag import CausalPath, Event, RetrievalResult
 
     evt = Event(
         event_id="test_vid/evt_000",
@@ -167,9 +166,7 @@ class TestEventCausalRagIntegration:
         os.environ.pop("EVENT_CAUSAL_RAG_INDEX_ON_PROCESS", None)
 
     @patch("video_analysis.rag.VideoRAG._get_event_rag")
-    def test_event_retrieve_returns_empty_when_disabled(
-        self, mock_get_event_rag, config
-    ):
+    def test_event_retrieve_returns_empty_when_disabled(self, mock_get_event_rag, config):
         """Test event_retrieve returns [] when event_causal_rag_enabled is False."""
         config.event_causal_rag_enabled = False
         rag = VideoRAG(config)
@@ -178,9 +175,7 @@ class TestEventCausalRagIntegration:
         mock_get_event_rag.assert_not_called()
 
     @patch("video_analysis.rag.VideoRAG._get_event_rag")
-    def test_event_retrieve_returns_chunks(
-        self, mock_get_event_rag, config, mock_retrieval_result
-    ):
+    def test_event_retrieve_returns_chunks(self, mock_get_event_rag, config, mock_retrieval_result):
         """Test event_retrieve returns RetrievedChunk objects from EventCausalRAG."""
         mock_rag = MagicMock()
         mock_rag.retrieve.return_value = [mock_retrieval_result]
@@ -195,9 +190,7 @@ class TestEventCausalRagIntegration:
         assert result[0].video_id == "test_vid"
 
     @patch("video_analysis.rag.VideoRAG._get_event_rag")
-    def test_event_retrieve_metadata(
-        self, mock_get_event_rag, config, mock_retrieval_result
-    ):
+    def test_event_retrieve_metadata(self, mock_get_event_rag, config, mock_retrieval_result):
         """Test event_retrieve populates metadata correctly."""
         mock_rag = MagicMock()
         mock_rag.retrieve.return_value = [mock_retrieval_result]
@@ -246,9 +239,7 @@ class TestEventCausalRagIntegration:
         mock_rag.index_events.assert_called_once()
 
     @patch("video_analysis.rag.VideoRAG.event_index_video")
-    def test_index_video_auto_triggers_event_indexing(
-        self, mock_event_index, config, video_index
-    ):
+    def test_index_video_auto_triggers_event_indexing(self, mock_event_index, config, video_index):
         """Test index_video() calls event_index_video() automatically."""
         config.event_causal_rag_enabled = True
         config.event_causal_rag_index_on_process = True

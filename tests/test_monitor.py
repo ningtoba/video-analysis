@@ -1,6 +1,5 @@
 """Tests for the Monitoring Dashboard tab."""
 
-import json
 import sys
 from pathlib import Path
 
@@ -12,8 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from video_analysis.config import Config
-from video_analysis.job_queue import JobManager, Job, JobStatus
-from video_analysis import metrics as va_metrics
+from video_analysis.job_queue import Job, JobStatus
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -196,9 +194,7 @@ class TestBuildJobQueueHtml:
     def test_manager_exception(self, cfg):
         from ui.monitor import _build_job_queue_html
 
-        with patch(
-            "ui.monitor.get_default_manager", side_effect=RuntimeError("no manager")
-        ):
+        with patch("ui.monitor.get_default_manager", side_effect=RuntimeError("no manager")):
             html = _build_job_queue_html(cfg)
             assert "not available" in html.lower()
 
@@ -267,7 +263,7 @@ class TestBuildMetricsSnapshotHtml:
             assert "System Metrics" in html
 
     def test_monitor_dark_css_included(self, cfg, mock_metrics):
-        from ui.monitor import _build_metrics_snapshot_html, MONITOR_DARK_CSS
+        from ui.monitor import MONITOR_DARK_CSS, _build_metrics_snapshot_html
 
         with patch("ui.monitor.get_default_manager") as mock_mgr:
             mock_mgr.return_value.list_jobs.return_value = []

@@ -14,17 +14,16 @@ Covers:
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
+from typing import Any, Dict, List
+from unittest.mock import MagicMock
 
 import pytest
 
 from video_analysis.chapters import (
     Chapter,
     ChapterGenerator,
-    ChapterSegment,
     ChapteringResult,
+    ChapterSegment,
     extract_transcript_from_rag,
 )
 
@@ -182,9 +181,7 @@ class TestChapter:
 
 class TestChapteringResult:
     def test_empty(self):
-        r = ChapteringResult(
-            video_id="test", chapters=[], num_segments=0, method="none"
-        )
+        r = ChapteringResult(video_id="test", chapters=[], num_segments=0, method="none")
         assert r.error is None
         assert r.to_dict()["chapters"] == []
 
@@ -275,20 +272,16 @@ class TestUniformSegmentation:
 class TestSceneBoundarySegmentation:
     def test_with_no_boundaries_falls_back(self, generator: ChapterGenerator):
         segs = [
-            ChapterSegment(start=i * 10.0, end=i * 10.0 + 8.0, text=f"Seg {i}")
-            for i in range(5)
+            ChapterSegment(start=i * 10.0, end=i * 10.0 + 8.0, text=f"Seg {i}") for i in range(5)
         ]
         groups = generator._segment_by_scene_boundaries(segs, scene_times=None)
         assert len(groups) >= 1
 
     def test_with_scene_boundaries(self, generator: ChapterGenerator):
         segs = [
-            ChapterSegment(start=i * 10.0, end=i * 10.0 + 8.0, text=f"Seg {i}")
-            for i in range(10)
+            ChapterSegment(start=i * 10.0, end=i * 10.0 + 8.0, text=f"Seg {i}") for i in range(10)
         ]
-        groups = generator._segment_by_scene_boundaries(
-            segs, scene_times=[0.0, 30.0, 60.0, 90.0]
-        )
+        groups = generator._segment_by_scene_boundaries(segs, scene_times=[0.0, 30.0, 60.0, 90.0])
         assert len(groups) >= 2
         # First group should cover segments 0-2 (0-30s)
         assert len(groups[0]) <= 4
@@ -302,8 +295,7 @@ class TestSceneBoundarySegmentation:
 class TestMergeGroups:
     def test_merges_to_target(self, generator: ChapterGenerator):
         groups = [
-            [ChapterSegment(start=i * 10.0, end=i * 10.0 + 5.0, text=f"Seg {i}")]
-            for i in range(8)
+            [ChapterSegment(start=i * 10.0, end=i * 10.0 + 5.0, text=f"Seg {i}")] for i in range(8)
         ]
         merged = generator._merge_groups(groups, target_count=3)
         assert len(merged) == 3
@@ -351,10 +343,7 @@ class TestBuildParagraph:
         para = generator._build_transcript_paragraph(segs)
         assert "actual content" in para
         # Empty text should be skipped
-        assert (
-            para.strip() == "[SPEAKER_00] actual content"
-            or para.strip() == "actual content"
-        )
+        assert para.strip() == "[SPEAKER_00] actual content" or para.strip() == "actual content"
 
 
 # ---------------------------------------------------------------------------
@@ -390,9 +379,7 @@ class TestSegmentTranscript:
     def test_with_sample_segments(
         self, generator: ChapterGenerator, sample_segments: List[Dict[str, Any]]
     ):
-        result = generator.segment_transcript(
-            sample_segments, video_id="ml_talk", max_chapters=5
-        )
+        result = generator.segment_transcript(sample_segments, video_id="ml_talk", max_chapters=5)
         assert result.num_segments == 15
         assert len(result.chapters) >= 2
         assert len(result.chapters) <= 5
@@ -421,9 +408,7 @@ class TestSegmentTranscript:
 
 class TestChapterReport:
     def test_empty_result(self, generator: ChapterGenerator):
-        result = ChapteringResult(
-            video_id="test", chapters=[], num_segments=0, method="none"
-        )
+        result = ChapteringResult(video_id="test", chapters=[], num_segments=0, method="none")
         report = generator.generate_chapter_report(result, video_filename="test.mp4")
         assert "No chapters generated" in report
 
@@ -465,9 +450,7 @@ class TestChapterReport:
 
 class TestAgentChapterContext:
     def test_empty(self, generator: ChapterGenerator):
-        result = ChapteringResult(
-            video_id="test", chapters=[], num_segments=0, method="none"
-        )
+        result = ChapteringResult(video_id="test", chapters=[], num_segments=0, method="none")
         context = generator.generate_agent_chapter_context(result)
         assert context == "No chapters available."
 
@@ -601,9 +584,7 @@ class TestEndToEnd:
         assert len(result.chapters) >= 2
 
         # Generate report
-        report = generator.generate_chapter_report(
-            result, video_filename="ml_intro.mp4"
-        )
+        report = generator.generate_chapter_report(result, video_filename="ml_intro.mp4")
         assert "ml_intro.mp4" in report
         assert "Chapter 1" in report
 
@@ -624,9 +605,9 @@ class TestEndToEnd:
         for i in range(1, len(result.chapters)):
             prev = result.chapters[i - 1]
             curr = result.chapters[i]
-            assert (
-                curr.start_time >= prev.end_time
-            ), f"Chapter {i} starts before chapter {i-1} ends"
+            assert curr.start_time >= prev.end_time, (
+                f"Chapter {i} starts before chapter {i - 1} ends"
+            )
 
     def test_max_chapters_limit(
         self, generator: ChapterGenerator, sample_segments: List[Dict[str, Any]]

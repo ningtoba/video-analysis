@@ -9,23 +9,14 @@ Covers:
 - Key dataclasses (VideoMetadata, TimelineSummary, etc.)
 """
 
-import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from video_analysis.models import SceneInfo, FrameInfo, VideoIndex, TranscriptSegment
+from video_analysis.config import Config
+from video_analysis.models import FrameInfo, SceneInfo, TranscriptSegment, VideoIndex
 from video_analysis.report import (
-    ActionSummary,
-    ChapterSummary,
-    CurationSummary,
-    FaceSummary,
     KeyMoment,
-    OCRSummary,
     ObjectCatalog,
-    QualityMetrics,
-    RAGStats,
     ReportGenerator,
     SceneReport,
     TimelineSummary,
@@ -35,7 +26,6 @@ from video_analysis.report import (
     _fmt_duration,
     _fmt_size,
 )
-from video_analysis.config import Config
 
 # ===========================================================================
 # Helper Tests
@@ -244,12 +234,8 @@ class TestReportGenerator:
             ),
         ]
         transcript = [
-            TranscriptSegment(
-                start=0.0, end=5.0, text="Hello world", speaker="SPEAKER_00"
-            ),
-            TranscriptSegment(
-                start=6.0, end=10.0, text="How are you", speaker="SPEAKER_01"
-            ),
+            TranscriptSegment(start=0.0, end=5.0, text="Hello world", speaker="SPEAKER_00"),
+            TranscriptSegment(start=6.0, end=10.0, text="How are you", speaker="SPEAKER_01"),
         ]
         index = VideoIndex(
             video_id="test",
@@ -387,9 +373,7 @@ class TestReportGenerator:
     def test_to_chunk_context(self):
         """Chunk context should be concise and LLM-friendly."""
         report = VideoReport(
-            video=VideoMetadata(
-                video_id="ctx_test", title="Context Test", duration=60.0
-            ),
+            video=VideoMetadata(video_id="ctx_test", title="Context Test", duration=60.0),
             timeline=TimelineSummary(num_scenes=5),
             objects=ObjectCatalog(
                 unique_objects=["person", "dog"],

@@ -2,17 +2,18 @@
 Tests for the tiered frame storage module.
 """
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
 from PIL import Image
 
-from video_analysis.storage import (
-    save_frame_tiered,
-    save_frame_single,
-    compress_existing_frame,
-    _resize_image,
-)
 from video_analysis.config import Config
+from video_analysis.storage import (
+    _resize_image,
+    compress_existing_frame,
+    save_frame_single,
+    save_frame_tiered,
+)
 
 
 def test_resize_image_downscale():
@@ -53,9 +54,7 @@ def test_save_frame_tiered_creates_three_files():
         )
 
         # All three paths exist
-        assert Path(
-            analysis_path
-        ).exists(), f"Analysis frame not found: {analysis_path}"
+        assert Path(analysis_path).exists(), f"Analysis frame not found: {analysis_path}"
         assert Path(full_path).exists(), f"Full-res frame not found: {full_path}"
         assert Path(thumb_path).exists(), f"Thumbnail not found: {thumb_path}"
 
@@ -124,9 +123,7 @@ def test_compress_existing_frame_resize():
         img.save(str(src), "JPEG", quality=95)
 
         dst = Path(tmpdir) / "resized.webp"
-        result = compress_existing_frame(
-            src, dst, format_name="webp", quality=80, longest_edge=320
-        )
+        result = compress_existing_frame(src, dst, format_name="webp", quality=80, longest_edge=320)
         assert result is not None
         # Verify the output was resized
         from PIL import Image as PILImage
@@ -142,7 +139,5 @@ def test_save_frame_tiered_missing_file_graceful():
     img = Image.new("RGB", (1, 1), color="black")
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
-        analysis_path, full_path, thumb_path = save_frame_tiered(
-            img, output_dir, "tiny", config
-        )
+        analysis_path, full_path, thumb_path = save_frame_tiered(img, output_dir, "tiny", config)
         assert Path(analysis_path).exists()

@@ -7,11 +7,8 @@ VideoPipeline, and VideoChat instances.
 
 from __future__ import annotations
 
-import asyncio
-import json
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest

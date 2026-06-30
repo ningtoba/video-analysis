@@ -66,8 +66,7 @@ class GPUProfiler:
 
         if self.label:
             logger.info(
-                "[GPUProfiler] %s — elapsed=%.2fs start=%.0fMiB "
-                "peak=%.0fMiB end=%.0fMiB",
+                "[GPUProfiler] %s — elapsed=%.2fs start=%.0fMiB peak=%.0fMiB end=%.0fMiB",
                 self.label,
                 self.elapsed,
                 self.start_mib,
@@ -79,4 +78,3 @@ class GPUProfiler:
     def gpu_used(self) -> bool:
         """Whether GPU was available during profiling."""
         return self._gpu_available
-

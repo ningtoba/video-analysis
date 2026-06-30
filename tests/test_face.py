@@ -1,18 +1,16 @@
 """Tests for face detection and recognition module (InsightFace)."""
 
 import sys
-import json
 from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
 from video_analysis.face import (
-    FaceRecognizer,
+    DEFAULT_MATCH_THRESHOLD,
     DetectedFace,
     FaceRecognitionResult,
-    DEFAULT_MATCH_THRESHOLD,
+    FaceRecognizer,
 )
 
 # ---------------------------------------------------------------------------
@@ -202,9 +200,7 @@ class TestFaceRecognizer:
 
     def test_detect_faces_batch_with_errors(self):
         recognizer = FaceRecognizer()
-        results = recognizer.detect_faces_batch(
-            ["/tmp/missing1.jpg", "/tmp/missing2.jpg"]
-        )
+        results = recognizer.detect_faces_batch(["/tmp/missing1.jpg", "/tmp/missing2.jpg"])
         assert len(results) == 2
         for r in results:
             assert r.error is not None or r.faces == []

@@ -10,32 +10,28 @@ Covers:
 - MultiAgentOrchestrator end-to-end flow
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
-
 import pytest
 
+from video_analysis.config import Config
 from video_analysis.orchestra import (
-    HybridTree,
+    ConfidenceAuditor,
+    EvidenceSynthesizer,
     HybridNode,
-    RoutePlan,
-    TaskItem,
-    RouterAgent,
-    SpecialistAgent,
-    VisualAnalyst,
-    RAGSearcher,
-    TranscriptAnalyst,
+    HybridTree,
+    MultiAgentOrchestrator,
     ObjectDetectorAgent,
     OCRAgent,
-    ConfidenceAuditor,
-    SummarizerAgent,
-    EvidenceSynthesizer,
-    SynthesisResult,
-    MultiAgentOrchestrator,
     OrchestratorResult,
+    RAGSearcher,
+    RoutePlan,
+    RouterAgent,
+    SpecialistAgent,
+    SummarizerAgent,
+    SynthesisResult,
+    TaskItem,
+    TranscriptAnalyst,
+    VisualAnalyst,
 )
-from video_analysis.config import Config
 
 # ---------------------------------------------------------------------------
 # Helper: create a minimal config with orchestra enabled
@@ -46,9 +42,7 @@ def _make_config(**overrides) -> Config:
     cfg = Config()
     cfg.orchestra_enabled = overrides.get("orchestra_enabled", True)
     cfg.orchestra_max_agents = overrides.get("orchestra_max_agents", 5)
-    cfg.orchestra_confidence_threshold = overrides.get(
-        "orchestra_confidence_threshold", 0.5
-    )
+    cfg.orchestra_confidence_threshold = overrides.get("orchestra_confidence_threshold", 0.5)
     # Set LLM provider to hermes for testing
     cfg.llm_provider = "hermes"
     return cfg
@@ -218,9 +212,7 @@ class TestRoutePlan:
             description="Analyze",
             dependencies=["rag_searcher"],
         )
-        p = RoutePlan(
-            query="describe the video", tasks=[t1, t2], complexity="multi-hop"
-        )
+        p = RoutePlan(query="describe the video", tasks=[t1, t2], complexity="multi-hop")
         assert len(p.tasks) == 2
         assert p.complexity == "multi-hop"
         assert p.is_complete is False
@@ -232,9 +224,7 @@ class TestRoutePlan:
 
     def test_ready_tasks_no_deps(self):
         t1 = TaskItem(agent_type="rag_searcher", description="Search")
-        t2 = TaskItem(
-            agent_type="analyst", description="Analyze", dependencies=["rag_searcher"]
-        )
+        t2 = TaskItem(agent_type="analyst", description="Analyze", dependencies=["rag_searcher"])
         p = RoutePlan(query="test", tasks=[t1, t2])
         ready = p.ready_tasks()
         assert len(ready) == 1
@@ -242,9 +232,7 @@ class TestRoutePlan:
 
     def test_ready_tasks_after_completion(self):
         t1 = TaskItem(agent_type="rag_searcher", description="Search", completed=True)
-        t2 = TaskItem(
-            agent_type="analyst", description="Analyze", dependencies=["rag_searcher"]
-        )
+        t2 = TaskItem(agent_type="analyst", description="Analyze", dependencies=["rag_searcher"])
         p = RoutePlan(query="test", tasks=[t1, t2])
         ready = p.ready_tasks()
         assert len(ready) == 1
@@ -319,8 +307,7 @@ class TestRAGSearcher:
         result = searcher.execute(query="test query", context={})
         # Should gracefully handle missing RAG
         assert (
-            "no rag" in result.get("data", "").lower()
-            or "rag" in result.get("error", "").lower()
+            "no rag" in result.get("data", "").lower() or "rag" in result.get("error", "").lower()
         )
 
     def test_refines_query(self, mock_config):
@@ -565,23 +552,15 @@ class TestModuleImports:
     def test_all_exports_exist(self):
         """All expected symbols should be importable."""
         from video_analysis.orchestra import (
+            EvidenceSynthesizer,
             HybridTree,
-            HybridNode,
+            MultiAgentOrchestrator,
+            OCRAgent,
+            RAGSearcher,
             RoutePlan,
-            TaskItem,
             RouterAgent,
             SpecialistAgent,
-            VisualAnalyst,
-            RAGSearcher,
             TranscriptAnalyst,
-            ObjectDetectorAgent,
-            OCRAgent,
-            ConfidenceAuditor,
-            SummarizerAgent,
-            EvidenceSynthesizer,
-            SynthesisResult,
-            MultiAgentOrchestrator,
-            OrchestratorResult,
         )
 
         assert HybridTree is not None

@@ -9,22 +9,22 @@ from __future__ import annotations
 
 import json
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any, Dict, List, Optional, Tuple
-from unittest.mock import patch, MagicMock
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any, Dict, List
+from unittest.mock import MagicMock
 
 import pytest
 
 from video_analysis.webhook import (
-    WebhookDispatcher,
-    WebhookConfig,
-    get_webhook_dispatcher,
-    set_webhook_dispatcher,
-    reset_webhook_dispatcher,
-    EVENT_PIPELINE_COMPLETE,
     EVENT_EVAL_COMPLETE,
     EVENT_HEALTH_ALERT,
     EVENT_HEALTH_CRITICAL,
+    EVENT_PIPELINE_COMPLETE,
+    WebhookConfig,
+    WebhookDispatcher,
+    get_webhook_dispatcher,
+    reset_webhook_dispatcher,
+    set_webhook_dispatcher,
 )
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -140,9 +140,7 @@ class TestWebhookDispatcherFire:
         t.start()
 
         d = WebhookDispatcher(urls=[url])
-        errors = d.fire_blocking(
-            "pipeline.complete", {"video_id": "v001", "filename": "test.mp4"}
-        )
+        errors = d.fire_blocking("pipeline.complete", {"video_id": "v001", "filename": "test.mp4"})
 
         t.join(timeout=3)
         server.server_close()

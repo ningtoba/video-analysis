@@ -1,23 +1,19 @@
 """Tests for adaptive pipeline scaler."""
 
-import json
-import os
 import subprocess
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from video_analysis.adaptive_scaler import (
-    STAGE_VRAM_ESTIMATES,
-    AdaptivePipelineScaler,
     FRAME_RATE_TIERS,
     FRAME_SIZE_TIERS,
     OCR_TIER_TIERS,
-    QUALITY_BLUR_THRESHOLD_TIERS,
-    ScalingResult,
+    STAGE_VRAM_ESTIMATES,
     YOLO_CONFIDENCE_TIERS,
+    AdaptivePipelineScaler,
+    ScalingResult,
     estimate_vram_usage,
     get_free_vram_gb,
     get_video_properties,

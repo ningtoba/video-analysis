@@ -10,28 +10,24 @@ Tests cover:
   - Mock integration with VideoPipeline
 """
 
-import json
-import tempfile
 from pathlib import Path
 
-import pytest
-
 from video_analysis.classifier import (
+    ALL_STAGE_NAMES,
     AUDIO_EXTENSIONS,
+    DEFAULT_STAGE_MAP,
     IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
-    ALL_STAGE_NAMES,
-    DEFAULT_STAGE_MAP,
     MediaType,
-    VideoSubType,
     VideoClassification,
+    VideoSubType,
     classify_by_extension,
-    classify_video_subtype,
-    parse_ffprobe_output,
-    sniff_with_ffprobe,
     classify_file,
+    classify_video_subtype,
     get_active_stages,
+    parse_ffprobe_output,
     pipeline_skipped_stages,
+    sniff_with_ffprobe,
 )
 
 # ============================================================================
@@ -42,21 +38,15 @@ from video_analysis.classifier import (
 class TestClassifyByExtension:
     def test_video_extensions(self):
         for ext in VIDEO_EXTENSIONS:
-            assert (
-                classify_by_extension(Path(f"file{ext}")) == MediaType.VIDEO
-            ), f"Failed: {ext}"
+            assert classify_by_extension(Path(f"file{ext}")) == MediaType.VIDEO, f"Failed: {ext}"
 
     def test_audio_extensions(self):
         for ext in AUDIO_EXTENSIONS:
-            assert (
-                classify_by_extension(Path(f"file{ext}")) == MediaType.AUDIO
-            ), f"Failed: {ext}"
+            assert classify_by_extension(Path(f"file{ext}")) == MediaType.AUDIO, f"Failed: {ext}"
 
     def test_image_extensions(self):
         for ext in IMAGE_EXTENSIONS:
-            assert (
-                classify_by_extension(Path(f"file{ext}")) == MediaType.IMAGE
-            ), f"Failed: {ext}"
+            assert classify_by_extension(Path(f"file{ext}")) == MediaType.IMAGE, f"Failed: {ext}"
 
     def test_unknown_extension(self):
         assert classify_by_extension(Path("file.xyz")) == MediaType.UNKNOWN
@@ -343,9 +333,7 @@ class TestGetActiveStages:
         for media_key, media_map in DEFAULT_STAGE_MAP.items():
             defaults = media_map.get("_default", {})
             for stage in ALL_STAGE_NAMES:
-                assert (
-                    stage in defaults
-                ), f"Stage '{stage}' missing from {media_key} default map"
+                assert stage in defaults, f"Stage '{stage}' missing from {media_key} default map"
 
 
 # ============================================================================
@@ -356,16 +344,12 @@ class TestGetActiveStages:
 class TestPipelineSkippedStages:
     def test_video_full_mode(self):
         """video_full mode should return empty set."""
-        skipped = pipeline_skipped_stages(
-            Path("test.mp4"), processing_mode="video_full"
-        )
+        skipped = pipeline_skipped_stages(Path("test.mp4"), processing_mode="video_full")
         assert skipped == set()
 
     def test_audio_only_mode(self):
         """audio_only mode should return all visual stages."""
-        skipped = pipeline_skipped_stages(
-            Path("test.mp4"), processing_mode="audio_only"
-        )
+        skipped = pipeline_skipped_stages(Path("test.mp4"), processing_mode="audio_only")
         assert "scene_detection" in skipped
         assert "frame_extraction" in skipped
         assert "object_detection" in skipped
@@ -477,7 +461,7 @@ class TestEdgeCases:
 
     def test_ml_classifier_lazy_loading(self):
         """ML classifier should load mobilenet_v3 by default (torchvision available)."""
-        from video_analysis.classifier import get_ml_classifier, classify_frame_with_ml
+        from video_analysis.classifier import get_ml_classifier
 
         classifier = get_ml_classifier()
         # torchvision is available in this env, so classifier should load
@@ -488,7 +472,7 @@ class TestEdgeCases:
 
     def test_ml_classify_frame_no_file(self):
         """classify_frame_with_ml should handle missing file gracefully."""
-        from video_analysis.classifier import get_ml_classifier, classify_frame_with_ml
+        from video_analysis.classifier import classify_frame_with_ml, get_ml_classifier
 
         classifier = get_ml_classifier()
         if classifier is not None:

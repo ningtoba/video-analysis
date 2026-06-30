@@ -9,16 +9,11 @@ Covers:
 - Integration with chat.py
 """
 
-from pathlib import Path
-from typing import List, Optional
-
-import pytest
-
 from video_analysis.agent import (
-    VideoUnderstandingAgent,
-    AgentTools,
     AgentQueryResult,
     AgentToolResult,
+    AgentTools,
+    VideoUnderstandingAgent,
 )
 
 # ---------------------------------------------------------------------------
@@ -90,9 +85,7 @@ class TestTimestampExtraction:
         assert ts == [45.0]
 
     def test_extract_multiple(self):
-        ts = VideoUnderstandingAgent._extract_timestamps(
-            "at 1:00 and 2:30 and 45 seconds"
-        )
+        ts = VideoUnderstandingAgent._extract_timestamps("at 1:00 and 2:30 and 45 seconds")
         assert 60.0 in ts
         assert 150.0 in ts
         assert 45.0 in ts
@@ -138,9 +131,7 @@ class TestAgentTools:
 
         result = tools.extract_text(30.0)
         assert result.success is False
-        assert (
-            "not available" in result.data.lower() or "available" in result.data.lower()
-        )
+        assert "not available" in result.data.lower() or "available" in result.data.lower()
         assert result.tool_name == "extract_text"
 
     def test_analyze_frames_no_video(self, tmp_path):
@@ -265,9 +256,7 @@ class TestVideoUnderstandingAgent:
         result = agent.query("summarize what happens in this video")
         # The summarize_video tool should be invoked (even if it fails due to no video)
         tool_names = [e.tool_name for e in result.evidence]
-        assert "summarize_video" in tool_names or any(
-            "summarize" in t for t in tool_names
-        )
+        assert "summarize_video" in tool_names or any("summarize" in t for t in tool_names)
 
     def test_question_classification_temporal(self, tmp_path):
         """'find/when' questions dispatch to temporal_grounding."""
@@ -349,8 +338,8 @@ class TestAgentConfig:
 class TestChatAgentIntegration:
     def test_get_agent_video_path_none(self):
         """_get_agent_video_path returns None when video_id is None."""
-        from video_analysis.config import Config
         from video_analysis.chat import VideoChat
+        from video_analysis.config import Config
 
         config = Config()
 
@@ -367,8 +356,8 @@ class TestChatAgentIntegration:
 
     def test_get_agent_video_path_not_found(self, tmp_path):
         """_get_agent_video_path returns None when the video file doesn't exist."""
-        from video_analysis.config import Config
         from video_analysis.chat import VideoChat
+        from video_analysis.config import Config
 
         config = Config()
         config.video_dir = tmp_path

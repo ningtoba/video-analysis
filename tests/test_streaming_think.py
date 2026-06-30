@@ -13,15 +13,16 @@ Covers:
 - Delegated methods to StreamingPipeline
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
+import pytest
+
+from video_analysis.config import Config
 from video_analysis.streaming_think import (
     StreamingThinkingPipeline,
     StreamingThought,
     ThoughtState,
 )
-from video_analysis.config import Config
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -31,8 +32,8 @@ from video_analysis.config import Config
 @pytest.fixture
 def sample_chunk():
     """Create a realistic StreamingChunkResult."""
-    from video_analysis.streaming import StreamingChunkResult
     from video_analysis.models import SceneInfo
+    from video_analysis.streaming import StreamingChunkResult
 
     scene1 = SceneInfo(scene_id=0, start_time=0.0, end_time=10.0)
     scene2 = SceneInfo(scene_id=1, start_time=10.0, end_time=20.0)
@@ -54,8 +55,8 @@ def sample_chunk():
 @pytest.fixture
 def sample_chunks():
     """Create three sequential chunks simulating a stream."""
-    from video_analysis.streaming import StreamingChunkResult
     from video_analysis.models import SceneInfo
+    from video_analysis.streaming import StreamingChunkResult
 
     chunks = []
     for i, (transcript, objects) in enumerate(
@@ -187,9 +188,7 @@ def test_streaming_thinking_pipeline_reset():
     """Reset should clear all state."""
     pipeline = StreamingThinkingPipeline()
     pipeline._thought_state = ThoughtState(chunks_seen=5)
-    pipeline._thought_history = [
-        StreamingThought(chunk_index=0, start_time=0.0, end_time=30.0)
-    ]
+    pipeline._thought_history = [StreamingThought(chunk_index=0, start_time=0.0, end_time=30.0)]
     pipeline._last_chunk_results = ["dummy"]
 
     pipeline.reset()
@@ -254,9 +253,7 @@ def test_build_thought_summary(sample_chunk):
     ts = pipeline._thought_state
 
     # First chunk with transcript
-    summary = pipeline._build_thought_summary(
-        sample_chunk, ["Objects: person, laptop"], ts
-    )
+    summary = pipeline._build_thought_summary(sample_chunk, ["Objects: person, laptop"], ts)
     assert len(summary) > 0
     # Should contain something from the transcript or insights
     assert any(p in summary.lower() for p in ["hello", "welcome", "person", "laptop"])
@@ -430,7 +427,6 @@ def test_process_with_thinking():
 
 def test_process_with_thinking_custom_config():
     """process_with_thinking should accept custom kwargs."""
-    from video_analysis.streaming import StreamingPipeline
 
     config = Config()
     pipeline = StreamingThinkingPipeline(config=config)
@@ -453,7 +449,6 @@ def test_final_index():
 
 def test_cleanup():
     """cleanup should delegate to StreamingPipeline."""
-    from video_analysis.streaming import StreamingPipeline
 
     mock_streaming = MagicMock()
 

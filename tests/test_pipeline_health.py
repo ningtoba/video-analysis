@@ -11,18 +11,14 @@ Covers:
 - Data clearance and vacuum
 """
 
-import time
 import threading
 from pathlib import Path
 
 import pytest
 
 from video_analysis.pipeline_health import (
-    PipelineHealthMonitor,
-    PipelineRun,
-    HealthAlert,
     HealthReport,
-    MetricSnapshot,
+    PipelineHealthMonitor,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -370,9 +366,7 @@ class TestThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=worker, args=(tid,)) for tid in range(n_threads)
-        ]
+        threads = [threading.Thread(target=worker, args=(tid,)) for tid in range(n_threads)]
         for t in threads:
             t.start()
         for t in threads:

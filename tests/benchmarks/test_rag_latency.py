@@ -125,9 +125,7 @@ def test_rag_gpu_memory(rag_config: object) -> None:
     with GPUProfiler("VideoRAG init") as prof:
         VideoRAG(rag_config)  # type: ignore[arg-type]
 
-    logger.info(
-        "RAG init GPU — peak=%.0f MiB, elapsed=%.2fs", prof.peak_mib, prof.elapsed
-    )
+    logger.info("RAG init GPU — peak=%.0f MiB, elapsed=%.2fs", prof.peak_mib, prof.elapsed)
     assert prof.elapsed >= 0
 
 
@@ -176,7 +174,5 @@ def test_query_router_gpu_memory(rag_config: object) -> None:
     with GPUProfiler("QueryRouter init") as prof:
         QueryRouter(rag_config)  # type: ignore[arg-type]
 
-    logger.info(
-        "QueryRouter GPU — peak=%.0f MiB, elapsed=%.2fs", prof.peak_mib, prof.elapsed
-    )
+    logger.info("QueryRouter GPU — peak=%.0f MiB, elapsed=%.2fs", prof.peak_mib, prof.elapsed)
     assert prof.elapsed >= 0

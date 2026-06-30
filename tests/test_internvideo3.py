@@ -11,12 +11,10 @@ Covers:
 import logging
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +22,9 @@ logger = logging.getLogger(__name__)
 def test_internvideo3_importable():
     """Test that the InternVideo3 backend module can be imported cleanly."""
     from video_analysis.backends.internvideo3 import (
-        InternVideo3Backend,
         INTERNVIDEO3_MODEL_NAME,
         VLLM_SERVER_ARGS,
+        InternVideo3Backend,
     )
 
     assert InternVideo3Backend is not None
@@ -60,8 +58,8 @@ def test_internvideo3_backend_fp8_instantiation():
 def test_internvideo3_backend_custom_model():
     """Test custom model name."""
     from video_analysis.backends.internvideo3 import (
-        InternVideo3Backend,
         INTERNVIDEO3_BASE_MODEL_NAME,
+        InternVideo3Backend,
     )
 
     backend = InternVideo3Backend(model_name=INTERNVIDEO3_BASE_MODEL_NAME)
@@ -114,10 +112,10 @@ def test_internvideo3_detect_no_server():
 
 def test_video_mllm_backend_type():
     """Test that backend_type Literal accepts internvideo3."""
-    from video_analysis.video_mllm import BackendType
-
     # Verify the Literal accepts internvideo3
     import typing
+
+    from video_analysis.video_mllm import BackendType
 
     args = typing.get_args(BackendType)
     assert "internvideo3" in args

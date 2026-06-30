@@ -10,18 +10,15 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 
 # =========================================================================
 # Telemetry Tests
@@ -129,9 +126,7 @@ class TestTelemetryNoOp:
         from video_analysis.telemetry import pipeline_span
 
         async def test():
-            async with pipeline_span(
-                "retrieval", attributes={"method": "hybrid"}
-            ) as ctx:
+            async with pipeline_span("retrieval", attributes={"method": "hybrid"}) as ctx:
                 ctx.set_attribute("chunks", 5)
                 ctx.set_status_ok()
                 return "done"
@@ -299,6 +294,7 @@ class TestErrorHandlers:
     def test_error_detail_schema(self):
         """ErrorDetail Pydantic model validates correctly."""
         from datetime import datetime, timezone
+
         from video_analysis.error_handlers import ErrorDetail
 
         detail = ErrorDetail(
@@ -386,8 +382,9 @@ class TestErrorHandlers:
 
     def test_validation_error_handler(self):
         """Pydantic ValidationError returns 422 with field errors."""
-        from video_analysis.error_handlers import register_error_handlers
         from pydantic import BaseModel, Field
+
+        from video_analysis.error_handlers import register_error_handlers
 
         # Register handlers before creating routes
         app = FastAPI()
@@ -413,9 +410,10 @@ class TestErrorHandlers:
 
     def test_error_handler_no_authenticate(self):
         """Auth endpoint is not affected by error handlers."""
-        from video_analysis.error_handlers import register_error_handlers
         from fastapi import FastAPI
         from fastapi.responses import Response
+
+        from video_analysis.error_handlers import register_error_handlers
 
         app = FastAPI()
         register_error_handlers(app)
@@ -457,7 +455,6 @@ class TestVideoAnalysisClient:
     def test_client_requires_requests(self):
         """Client raises ImportError if requests not installed."""
         with patch.dict("sys.modules", {"requests": None}):
-            import importlib
             import sys as _sys
 
             # Remove cached client module
@@ -473,15 +470,13 @@ class TestVideoAnalysisClient:
     def test_model_dataclasses(self):
         """Data model dataclasses have correct fields."""
         from video_analysis.client import (
-            HealthInfo,
-            VideoInfo,
-            JobInfo,
-            SearchResult,
-            QueryResult,
             Chapter,
             EvaluationReport,
-            APIError,
-            ConnectionError,
+            HealthInfo,
+            JobInfo,
+            QueryResult,
+            SearchResult,
+            VideoInfo,
         )
 
         health = HealthInfo(
@@ -539,7 +534,8 @@ class TestVideoAnalysisClient:
 
     def test_connection_error(self):
         """ConnectionError is distinct from APIError."""
-        from video_analysis.client import ConnectionError as ClientConnError, APIError
+        from video_analysis.client import APIError
+        from video_analysis.client import ConnectionError as ClientConnError
 
         exc = ClientConnError("Cannot connect")
         assert "Cannot connect" in str(exc)

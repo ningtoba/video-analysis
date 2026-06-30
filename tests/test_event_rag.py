@@ -12,22 +12,21 @@ Covers:
 - EventCausalRAG full integration
 """
 
-import pytest
 import json
-from pathlib import Path
-from dataclasses import dataclass
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+import pytest
 
 from video_analysis.event_rag import (
-    Event,
-    SESGraph,
     CausalPath,
-    RetrievalResult,
-    EventSegmenter,
-    SemanticStore,
     CausalTopologicalStore,
     DualStoreMemory,
+    Event,
     EventCausalRAG,
+    EventSegmenter,
+    RetrievalResult,
+    SemanticStore,
+    SESGraph,
 )
 
 # ---------------------------------------------------------------------------
@@ -40,9 +39,8 @@ def sample_scenes():
     """Build realistic SceneInfo-like data for testing."""
     from video_analysis.models import (
         SceneInfo,
-        FrameInfo,
-        VideoIndex,
         TranscriptSegment,
+        VideoIndex,
     )
 
     scenes = [
@@ -241,7 +239,6 @@ def test_segmenter_temporal_grid_empty():
 
 def test_segmenter_empty_video(sample_scenes):
     """Empty index scenes should produce empty event list."""
-    from video_analysis.models import VideoIndex
 
     index, _, _ = sample_scenes
     index.scenes = []
@@ -263,9 +260,7 @@ def test_segmenter_transcript_coherence(sample_scenes):
     """Transcript-coherence segmentation should group scenes by keyword overlap."""
     index, scenes, transcript_segments = sample_scenes
     segmenter = EventSegmenter()
-    events = segmenter._segment_by_transcript_coherence(
-        "test_vid", scenes, transcript_segments
-    )
+    events = segmenter._segment_by_transcript_coherence("test_vid", scenes, transcript_segments)
     assert len(events) >= 1
     for evt in events:
         assert evt.event_id.startswith("test_vid/")

@@ -1,22 +1,19 @@
 """Tests for the PipelineCache module."""
 
-import json
-import time
+import sys
 import tempfile
 from pathlib import Path
-import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from video_analysis.cache import (
-    PipelineCache,
-    CacheEntry,
     ALL_STAGES,
-    STAGE_CONFIG_KEYS,
-    STAGE_TRANSCRIPTION,
-    STAGE_SCENE_DETECTION,
-    STAGE_CLIP_CLASSIFICATION,
     DEFAULT_TTL_SECONDS,
+    STAGE_CONFIG_KEYS,
+    STAGE_SCENE_DETECTION,
+    STAGE_TRANSCRIPTION,
+    CacheEntry,
+    PipelineCache,
 )
 
 
@@ -128,9 +125,7 @@ def test_contains_expired():
         test_file.write_text("expired test")
         key = cache.make_key(STAGE_TRANSCRIPTION, test_file)
 
-        cache.store(
-            key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[]
-        )
+        cache.store(key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[])
 
         # Should be expired (ttl_seconds=0)
         assert key not in cache
@@ -153,9 +148,7 @@ def test_load_expired():
         test_file.write_text("load expired test")
         key = cache.make_key(STAGE_TRANSCRIPTION, test_file)
 
-        cache.store(
-            key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[]
-        )
+        cache.store(key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[])
         result = cache.load(key)
         assert result is None
 
@@ -206,9 +199,7 @@ def test_invalidate_by_stage():
         key_trans = cache.make_key(STAGE_TRANSCRIPTION, test_file)
         key_scene = cache.make_key(STAGE_SCENE_DETECTION, test_file)
 
-        cache.store(
-            key=key_trans, stage=STAGE_TRANSCRIPTION, video_id="test1", output_files=[]
-        )
+        cache.store(key=key_trans, stage=STAGE_TRANSCRIPTION, video_id="test1", output_files=[])
         cache.store(
             key=key_scene,
             stage=STAGE_SCENE_DETECTION,
@@ -236,9 +227,7 @@ def test_invalidate_by_video():
 
         key = cache.make_key(STAGE_TRANSCRIPTION, test_file)
 
-        cache.store(
-            key=key, stage=STAGE_TRANSCRIPTION, video_id="test1", output_files=[]
-        )
+        cache.store(key=key, stage=STAGE_TRANSCRIPTION, video_id="test1", output_files=[])
         assert key in cache
 
         cache.invalidate(video_id="test1")
@@ -255,9 +244,7 @@ def test_clear():
         test_file.write_text("clear test")
 
         key = cache.make_key(STAGE_TRANSCRIPTION, test_file)
-        cache.store(
-            key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[]
-        )
+        cache.store(key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[])
         assert key in cache
 
         cache.clear()
@@ -282,9 +269,7 @@ def test_stats_with_entries():
         test_file.write_text("stats test")
 
         key = cache.make_key(STAGE_TRANSCRIPTION, test_file)
-        cache.store(
-            key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[]
-        )
+        cache.store(key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[])
         assert key in cache
 
         stats = cache.stats
@@ -302,9 +287,7 @@ def test_index_persistence():
         # First instance
         cache1 = PipelineCache(cache_dir=cache_dir, ttl_seconds=3600)
         key = cache1.make_key(STAGE_TRANSCRIPTION, test_file)
-        cache1.store(
-            key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[]
-        )
+        cache1.store(key=key, stage=STAGE_TRANSCRIPTION, video_id="test", output_files=[])
 
         # Second instance (same cache_dir)
         cache2 = PipelineCache(cache_dir=cache_dir, ttl_seconds=3600)

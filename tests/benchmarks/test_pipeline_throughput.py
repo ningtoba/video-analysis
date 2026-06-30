@@ -199,8 +199,6 @@ def test_pipeline_gpu_memory_footprint(short_video: Path) -> None:
         pipeline = VideoPipeline(cfg)
         pipeline._generate_sprite_sheet(short_video, "bench_short", num_thumbnails=10)
 
-    logger.info(
-        "GPU memory — peak=%.0f MiB, elapsed=%.2fs", prof.peak_mib, prof.elapsed
-    )
+    logger.info("GPU memory — peak=%.0f MiB, elapsed=%.2fs", prof.peak_mib, prof.elapsed)
     assert prof.elapsed >= 0
     shutil.rmtree("/tmp/va_bench_gpu_mem", ignore_errors=True)

@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from video_analysis.federation import (
-    FederatedSearch,
-    FederatedQueryResult,
     FederatedPeerResult,
+    FederatedQueryResult,
+    FederatedSearch,
     create_federated_search,
 )
 from video_analysis.rag import RetrievedChunk
@@ -237,9 +236,7 @@ class TestFederatedDeduplication:
         fs._peers = ["http://test-peer:8000"]
 
         # We need to mock the HTTP call. Let's patch _query_peer.
-        with patch.object(
-            FederatedSearch, "_query_peer", return_value=peer_chunks
-        ) as mock_query:
+        with patch.object(FederatedSearch, "_query_peer", return_value=peer_chunks) as mock_query:
             result = fs.query("test", top_k=10)
 
         assert result.total_chunks == 1

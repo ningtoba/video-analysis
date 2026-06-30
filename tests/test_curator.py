@@ -5,21 +5,21 @@ Tests for the Autonomous Video Curator (v0.48.0).
 import json
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from video_analysis.config import Config
 from video_analysis.curator import (
-    VideoCurator,
-    CuratorObservation,
     CuratorEntity,
     CuratorKnowledge,
+    CuratorObservation,
     CuratorReportChunk,
-    VideoCuratorReport,
     CuriosityStrategy,
+    VideoCurator,
+    VideoCuratorReport,
     run_curation,
 )
-from video_analysis.config import Config
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -199,9 +199,7 @@ class TestVideoCuratorReport:
             title="Test Curation",
             overview="An autonomous analysis of test content.",
             sections=[
-                CuratorReportChunk(
-                    title="Findings", content="Something interesting was found."
-                ),
+                CuratorReportChunk(title="Findings", content="Something interesting was found."),
             ],
             curation_duration_seconds=10.5,
             iterations_completed=5,
@@ -290,9 +288,7 @@ class TestCuriosityStrategy:
     def test_suggest_first_action(self, mock_config, sample_knowledge):
         """With no observations, suggests broad exploration."""
         strategy = CuriosityStrategy(mock_config, curiosity_threshold=0.5)
-        action, params = strategy.suggest_next_action(
-            sample_knowledge, ["analyze_frames"]
-        )
+        action, params = strategy.suggest_next_action(sample_knowledge, ["analyze_frames"])
         assert action == "sample_timeline"
         assert params.get("mode") == "broad"
 
@@ -316,9 +312,7 @@ class TestCuriosityStrategy:
             CuratorObservation("o1", 30.0, "scene", "Test", 0.8, "analyze_frames")
         )
         strategy = CuriosityStrategy(mock_config, curiosity_threshold=0.5)
-        action, params = strategy.suggest_next_action(
-            sample_knowledge, ["analyze_frames"]
-        )
+        action, params = strategy.suggest_next_action(sample_knowledge, ["analyze_frames"])
         assert action == "sample_timestamps"
 
     def test_generate_curiosity_questions(self, mock_config, sample_knowledge):
@@ -348,9 +342,7 @@ class TestCuriosityStrategy:
             )
         )
         knowledge.add_observation(
-            CuratorObservation(
-                "o2", 60.0, "scene", "Jane Doe is speaking.", 0.9, "analyze_frames"
-            )
+            CuratorObservation("o2", 60.0, "scene", "Jane Doe is speaking.", 0.9, "analyze_frames")
         )
         knowledge.add_observation(
             CuratorObservation(
@@ -363,17 +355,13 @@ class TestCuriosityStrategy:
             )
         )
 
-        action, params = strategy.suggest_next_action(
-            knowledge, ["analyze_frames", "search_rag"]
-        )
+        action, params = strategy.suggest_next_action(knowledge, ["analyze_frames", "search_rag"])
         # Should eventually suggest something interesting
 
     def test_default_action_without_gaps(self, mock_config, sample_knowledge):
         """With observations but no obvious gaps, asks default questions."""
         sample_knowledge.add_observation(
-            CuratorObservation(
-                "o1", 30.0, "scene", "Test content.", 0.8, "analyze_frames"
-            )
+            CuratorObservation("o1", 30.0, "scene", "Test content.", 0.8, "analyze_frames")
         )
         sample_knowledge.duration_seconds = 300.0
         strategy = CuriosityStrategy(mock_config, curiosity_threshold=0.5)
@@ -435,9 +423,7 @@ class TestVideoCurator:
         """Saturation returns True when no new entities after many iterations."""
         curator = VideoCurator(config=mock_config, max_iterations=20)
         # Add some entities to start
-        curator.knowledge.entities = {
-            "e1": CuratorEntity("e1", "Obj1", "object", 0, 10, 1, "desc")
-        }
+        curator.knowledge.entities = {"e1": CuratorEntity("e1", "Obj1", "object", 0, 10, 1, "desc")}
         curator._prev_entity_count = 1
         curator._checkpoint_ts = time.time()
 
@@ -451,9 +437,7 @@ class TestVideoCurator:
         mock_config.data_dir = tmp_path
         curator = VideoCurator(video_id="test_save", config=mock_config)
         curator.knowledge.add_observation(
-            CuratorObservation(
-                "obs_save", 30.0, "scene", "Test content.", 0.8, "analyze_frames"
-            )
+            CuratorObservation("obs_save", 30.0, "scene", "Test content.", 0.8, "analyze_frames")
         )
         out_path = curator._save_knowledge_state()
         assert out_path is not None
@@ -518,9 +502,7 @@ class TestVideoCurator:
         """Generate question action populates exploration questions."""
         # Add some observations so generate_curiosity_questions has material
         sample_knowledge.add_observation(
-            CuratorObservation(
-                "o1", 30.0, "scene", "Test observation.", 0.8, "analyze_frames"
-            )
+            CuratorObservation("o1", 30.0, "scene", "Test observation.", 0.8, "analyze_frames")
         )
         sample_knowledge.duration_seconds = 600.0
         curator = VideoCurator(config=mock_config, video_id="test_gq")
