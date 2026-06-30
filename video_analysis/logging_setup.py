@@ -14,7 +14,6 @@ Usage:
 """
 
 import logging as stdlib_logging
-import os
 import sys
 from typing import Any
 
