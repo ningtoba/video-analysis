@@ -410,9 +410,7 @@ def get_ml_classifier(model_name: str = "mobilenet_v3") -> Optional[object]:
                 transforms.Resize(input_size),
                 transforms.CenterCrop(input_size),
                 transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                ),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         )
 
@@ -428,7 +426,7 @@ def get_ml_classifier(model_name: str = "mobilenet_v3") -> Optional[object]:
         }
         logger.info(
             f"ML classifier loaded: {model_name} on {device} "
-            f"(~{ '100 MB' if model_name == 'mobilenet_v3' else '400 MB' } VRAM)"
+            f"(~{'100 MB' if model_name == 'mobilenet_v3' else '400 MB'} VRAM)"
         )
         return _ML_CLASSIFIER
     except Exception as e:
@@ -776,9 +774,8 @@ def classify_frame_with_ml(image_path: Path, classifier: Optional[Dict] = None) 
         return {"label": "", "confidence": 0.0}
 
     try:
-        from PIL import Image
-
         import torch
+        from PIL import Image
 
         model = classifier["model"]
         preprocess = classifier["preprocess"]

@@ -26,72 +26,71 @@ Modules:
 """
 
 from video_analysis import (
-    pipeline,
-    rag,
-    models,
     chat,
     config,
-    scene_graph,
-    query_router,
-    storage,
-    quality,
-    memory,
-    frame_compression,
-    streaming,
-    federation,
-    llm_provider,
-    stream_chat,
     curator,
     event_rag,
+    federation,
+    frame_compression,
+    llm_provider,
+    memory,
+    models,
+    pipeline,
+    quality,
+    query_router,
+    rag,
+    scene_graph,
+    storage,
+    stream_chat,
+    streaming,
     streaming_think,
 )
 
-# face module is optional (requires insightface) — import on demand only
-
-# Workflow module (requires Gradio 6.17+ for gr.Workflow)
-
-# Qwen3-VL backend (requires vLLM or transformers — optional, heavy model)
-
-# api and stream_chat modules are imported on demand
-
-# Re-export streaming module public API at package level
-from video_analysis.streaming import (
-    StreamingPipeline,
-    StreamingChunkResult,
+# Re-export event-causal RAG and streaming thinking (v0.57.0)
+from video_analysis.event_rag import (
+    CausalPath,
+    CausalTopologicalStore,
+    DualStoreMemory,
+    Event,
+    EventCausalRAG,
+    EventSegmenter,
+    RetrievalResult,
+    SemanticStore,
+    SESGraph,
 )  # noqa: E402, F401
 
 # Re-export knowledge graph and pipeline health
 from video_analysis.knowledge_graph import (
-    KnowledgeGraph,
     EntityRecord,
+    KnowledgeGraph,
     RelationshipRecord,
     VideoRecord,
 )  # noqa: E402, F401
-
 from video_analysis.pipeline_health import (
-    PipelineHealthMonitor,
-    PipelineRun,
     HealthAlert,
     HealthReport,
+    PipelineHealthMonitor,
+    PipelineRun,
 )  # noqa: E402, F401
 
-# Re-export event-causal RAG and streaming thinking (v0.57.0)
-from video_analysis.event_rag import (
-    EventCausalRAG,
-    Event,
-    SESGraph,
-    EventSegmenter,
-    DualStoreMemory,
-    SemanticStore,
-    CausalTopologicalStore,
-    RetrievalResult,
-    CausalPath,
+# face module is optional (requires insightface) — import on demand only
+# Workflow module (requires Gradio 6.17+ for gr.Workflow)
+# Qwen3-VL backend (requires vLLM or transformers — optional, heavy model)
+# api and stream_chat modules are imported on demand
+# Re-export streaming module public API at package level
+from video_analysis.streaming import (
+    StreamingChunkResult,
+    StreamingPipeline,
 )  # noqa: E402, F401
-
 from video_analysis.streaming_think import (
     StreamingThinkingPipeline,
     StreamingThought,
     ThoughtState,
 )  # noqa: E402, F401
 
-__version__ = "0.60.0"
+try:
+    from importlib.metadata import version
+
+    __version__ = version("video-analysis")
+except Exception:
+    __version__ = "0.0.0"

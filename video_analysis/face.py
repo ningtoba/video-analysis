@@ -16,9 +16,9 @@ Usage:
 """
 
 import logging
-from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -136,7 +136,6 @@ class FaceRecognizer:
             raise RuntimeError(f"InsightFace not available: {self._import_error}")
 
         try:
-            import insightface
             from insightface.app import FaceAnalysis
 
             self._model = FaceAnalysis(
@@ -178,8 +177,6 @@ class FaceRecognizer:
         self._load_model()
 
         try:
-            from insightface.app import FaceAnalysis
-
             img = self._read_image(frame_path)
             if img is None:
                 logger.warning("Could not read image: %s", frame_path)
@@ -189,9 +186,7 @@ class FaceRecognizer:
             results: List[DetectedFace] = []
 
             for raw in raw_faces:
-                bbox_list = (
-                    raw.bbox.astype(float).tolist() if hasattr(raw, "bbox") else []
-                )
+                bbox_list = raw.bbox.astype(float).tolist() if hasattr(raw, "bbox") else []
                 confidence = float(raw.det_score) if hasattr(raw, "det_score") else 0.0
                 embedding = (
                     raw.embedding.astype(float).tolist()
@@ -218,9 +213,7 @@ class FaceRecognizer:
                     )
                 )
 
-            logger.debug(
-                "Detected %d face(s) in %s", len(results), Path(frame_path).name
-            )
+            logger.debug("Detected %d face(s) in %s", len(results), Path(frame_path).name)
             return results
 
         except Exception as exc:
@@ -353,9 +346,7 @@ class FaceRecognizer:
             result[label] = [source_ids[idx] for idx in indices]
 
         # Sort by cluster size descending
-        sorted_result = dict(
-            sorted(result.items(), key=lambda x: len(x[1]), reverse=True)
-        )
+        sorted_result = dict(sorted(result.items(), key=lambda x: len(x[1]), reverse=True))
         return sorted_result
 
     # ------------------------------------------------------------------

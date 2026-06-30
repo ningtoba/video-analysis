@@ -30,10 +30,10 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Set
+from typing import List, Optional, Set
 
 from video_analysis.config import Config
-from video_analysis.rag import VideoRAG, RetrievedChunk
+from video_analysis.rag import RetrievedChunk, VideoRAG
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class SelfCheckRAG:
     def _get_llm(self):
         """Lazy-load the LLM provider."""
         if self._llm is None:
-            from video_analysis.llm_provider import get_llm_provider, LLMProviderConfig
+            from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
 
             cfg = LLMProviderConfig(
                 provider=os.environ.get("LLM_PROVIDER", "hermes"),
@@ -176,9 +176,7 @@ class SelfCheckRAG:
 
                     # Step 4: Re-retrieve with reformulated query
                     if self.rag is not None:
-                        new_chunks = self._re_retrieve(
-                            current_query, video_id, all_chunks
-                        )
+                        new_chunks = self._re_retrieve(current_query, video_id, all_chunks)
                         if new_chunks:
                             all_chunks = self._merge_chunks(all_chunks, new_chunks)
 
@@ -220,9 +218,7 @@ class SelfCheckRAG:
             lines.append("")
         return "\n".join(lines)
 
-    def _check_evidence(
-        self, query: str, evidence: str, round_num: int
-    ) -> SelfCheckResult:
+    def _check_evidence(self, query: str, evidence: str, round_num: int) -> SelfCheckResult:
         """Ask the LLM to verify evidence against the query.
 
         Returns a SelfCheckResult with the LLM's assessment.
@@ -281,15 +277,9 @@ Respond in this exact JSON format:
             gaps=parsed.get("gaps", []),
         )
 
-    def _reformulate_query(
-        self, original_query: str, gaps: List[str], draft_answer: str
-    ) -> str:
+    def _reformulate_query(self, original_query: str, gaps: List[str], draft_answer: str) -> str:
         """Reformulate the query to address identified gaps."""
-        gaps_text = (
-            "\n".join(f"- {g}" for g in gaps)
-            if gaps
-            else "No specific gaps identified."
-        )
+        gaps_text = "\n".join(f"- {g}" for g in gaps) if gaps else "No specific gaps identified."
         prompt = f"""You are helping a video analysis RAG system improve its retrieval. The system asked about:
 
 ORIGINAL QUERY: {original_query}
@@ -333,21 +323,15 @@ Keep it concise (1-2 sentences). Output ONLY the reformulated query, no explanat
             existing_ids: Set[str] = {c.chunk_id for c in existing_chunks}
 
             if self.config.agentic_retrieval_enabled:
-                new_chunks = self.rag.agentic_retrieve(
-                    reformulated_query, video_id=video_id
-                )
+                new_chunks = self.rag.agentic_retrieve(reformulated_query, video_id=video_id)
             elif self.config.query_routing_enabled or self.config.multi_hop_enabled:
-                new_chunks = self.rag.routed_retrieve(
-                    reformulated_query, video_id=video_id
-                )
+                new_chunks = self.rag.routed_retrieve(reformulated_query, video_id=video_id)
             else:
                 new_chunks = self.rag.retrieve(reformulated_query, video_id=video_id)
 
             # Filter to only genuinely new chunks
             novel = [c for c in new_chunks if c.chunk_id not in existing_ids]
-            logger.info(
-                f"Re-retrieval: {len(new_chunks)} total, " f"{len(novel)} novel chunks"
-            )
+            logger.info(f"Re-retrieval: {len(new_chunks)} total, {len(novel)} novel chunks")
             return novel
 
         except Exception as e:

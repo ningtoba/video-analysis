@@ -13,7 +13,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import AsyncGenerator, Dict, List, Optional
 
 from video_analysis.llm_provider import (
     LLMProvider,
@@ -144,9 +144,7 @@ class StreamChatManager:
         """
         session = self._sessions.get(session_id)
         if session is None:
-            logger.warning(
-                "Unknown session %s — creating ephemeral session", session_id
-            )
+            logger.warning("Unknown session %s — creating ephemeral session", session_id)
             session = StreamSession(session_id=session_id)
             self._sessions[session_id] = session
 

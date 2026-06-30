@@ -32,23 +32,25 @@ import logging
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from video_analysis.config import Config
-from video_analysis.pipeline import VideoPipeline
-from video_analysis.rag import VideoRAG, RetrievedChunk, VideoLibraryInfo
-from video_analysis.chat import VideoChat
-from video_analysis.models import VideoIndex, ChatMessage
 from video_analysis.chapters import ChapterGenerator, ChapteringResult
+from video_analysis.chat import VideoChat
+from video_analysis.config import Config
+from video_analysis.evaluation import EvalReportStore
 from video_analysis.job_queue import (
     Job,
     JobManager,
-    JobStatus as JQStatus,
     get_default_manager,
 )
-from video_analysis.evaluation import EvalReportStore
+from video_analysis.job_queue import (
+    JobStatus as JQStatus,
+)
+from video_analysis.models import ChatMessage, VideoIndex
+from video_analysis.pipeline import VideoPipeline
+from video_analysis.rag import RetrievedChunk, VideoLibraryInfo, VideoRAG
 
 # Lazy singleton instances
 _kg_instance: Any = None
@@ -103,9 +105,7 @@ class ProcessRequest(BaseModel):
         "",
         description="URL of a video to download and process (YouTube, direct link, etc.)",
     )
-    file_path: str = Field(
-        "", description="Local file path, if not uploading via multipart"
-    )
+    file_path: str = Field("", description="Local file path, if not uploading via multipart")
 
 
 class ProcessResponse(BaseModel):
@@ -123,9 +123,7 @@ class ProcessResponse(BaseModel):
 class QueryRequest(BaseModel):
     """Request body for POST /api/videos/{video_id}/query."""
 
-    query: str = Field(
-        ..., min_length=1, description="Natural language question about the video"
-    )
+    query: str = Field(..., min_length=1, description="Natural language question about the video")
     stream: bool = Field(False, description="If true, stream tokens via SSE")
 
 
@@ -133,9 +131,7 @@ class QueryResponse(BaseModel):
     """Response from a query endpoint (non-streaming)."""
 
     answer: str = Field(..., description="The LLM-generated answer")
-    sources: List[Dict[str, Any]] = Field(
-        default_factory=list, description="Source citations"
-    )
+    sources: List[Dict[str, Any]] = Field(default_factory=list, description="Source citations")
 
 
 class SearchResult(BaseModel):
@@ -147,9 +143,7 @@ class SearchResult(BaseModel):
     timestamp: float = Field(0.0, description="Timestamp in seconds")
     scene_id: int = Field(-1, description="Scene index")
     score: float = Field(0.0, description="Relevance score")
-    frame_path: Optional[str] = Field(
-        None, description="Path to associated frame image"
-    )
+    frame_path: Optional[str] = Field(None, description="Path to associated frame image")
     chunk_type: str = Field("scene", description="Type of chunk (scene, frame, etc.)")
 
 
@@ -158,9 +152,7 @@ class SearchResponse(BaseModel):
 
     query: str = Field(..., description="The original search query")
     total_results: int = Field(0, description="Number of results returned")
-    results: List[SearchResult] = Field(
-        default_factory=list, description="Search result chunks"
-    )
+    results: List[SearchResult] = Field(default_factory=list, description="Search result chunks")
 
 
 class TranscriptSegmentSchema(BaseModel):
@@ -198,9 +190,7 @@ class ChaptersResponse(BaseModel):
     """Response from GET /api/videos/{video_id}/chapters."""
 
     video_id: str = Field(..., description="Video identifier")
-    chapters: List[ChapterSchema] = Field(
-        default_factory=list, description="Generated chapters"
-    )
+    chapters: List[ChapterSchema] = Field(default_factory=list, description="Generated chapters")
     method: str = Field("", description="Chaptering method used")
 
 
@@ -210,14 +200,10 @@ class FrameInfoSchema(BaseModel):
     timestamp: float = Field(..., description="Frame timestamp in seconds")
     filepath: str = Field("", description="Path to frame image file")
     description: Optional[str] = Field(None, description="Frame description")
-    objects: List[Dict[str, Any]] = Field(
-        default_factory=list, description="Detected objects"
-    )
+    objects: List[Dict[str, Any]] = Field(default_factory=list, description="Detected objects")
     ocr_text: Optional[str] = Field(None, description="OCR text found in frame")
     action: Optional[str] = Field(None, description="Detected action label")
-    action_confidence: Optional[float] = Field(
-        None, description="Action detection confidence"
-    )
+    action_confidence: Optional[float] = Field(None, description="Action detection confidence")
 
 
 class SceneInfoSchema(BaseModel):
@@ -243,9 +229,7 @@ class VideoDetailResponse(BaseModel):
     num_scenes: int = Field(0, description="Number of scenes")
     num_chunks: int = Field(0, description="Number of indexed chunks")
     has_sprite: bool = Field(False, description="Whether a sprite sheet exists")
-    scenes: List[SceneInfoSchema] = Field(
-        default_factory=list, description="Scene details"
-    )
+    scenes: List[SceneInfoSchema] = Field(default_factory=list, description="Scene details")
     transcript_summary: str = Field("", description="Full transcript text")
     sprite_sheet: Optional[str] = Field(None, description="Path to sprite sheet image")
 
@@ -280,9 +264,7 @@ class KGTimelineItem(BaseModel):
     duration_seconds: float = Field(0.0, description="Duration in seconds")
     entity_count: int = Field(0, description="Number of entities in this video")
     indexed_at: float = Field(0.0, description="Unix timestamp of indexing")
-    top_entities: List[str] = Field(
-        default_factory=list, description="Top entity names"
-    )
+    top_entities: List[str] = Field(default_factory=list, description="Top entity names")
 
 
 class KGEntityResponse(BaseModel):
@@ -292,12 +274,8 @@ class KGEntityResponse(BaseModel):
     name: str = Field("", description="Entity name")
     entity_type: str = Field("", description="Entity type (person/object/action/etc)")
     frequency: int = Field(0, description="Number of times seen")
-    video_ids: List[str] = Field(
-        default_factory=list, description="Videos this entity appears in"
-    )
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Entity metadata"
-    )
+    video_ids: List[str] = Field(default_factory=list, description="Videos this entity appears in")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Entity metadata")
 
 
 class KGRelationshipResponse(BaseModel):
@@ -338,32 +316,20 @@ class HealthRunResponse(BaseModel):
     timestamp: float = Field(0.0, description="Unix timestamp")
     duration_s: float = Field(0.0, description="Duration in seconds")
     success: bool = Field(True, description="Whether the run succeeded")
-    stage_timings: Dict[str, float] = Field(
-        default_factory=dict, description="Per-stage timings"
-    )
+    stage_timings: Dict[str, float] = Field(default_factory=dict, description="Per-stage timings")
     ocr_confidence: Optional[float] = Field(None, description="OCR confidence")
-    detection_confidence: Optional[float] = Field(
-        None, description="Detection confidence"
-    )
-    transcript_confidence: Optional[float] = Field(
-        None, description="Transcript confidence"
-    )
+    detection_confidence: Optional[float] = Field(None, description="Detection confidence")
+    transcript_confidence: Optional[float] = Field(None, description="Transcript confidence")
 
 
 class HealthReportResponse(BaseModel):
     """Full health report for a pipeline."""
 
     run_count: int = Field(0, description="Total runs")
-    runs: List[HealthRunResponse] = Field(
-        default_factory=list, description="Recent runs"
-    )
+    runs: List[HealthRunResponse] = Field(default_factory=list, description="Recent runs")
     health_score: float = Field(0.0, description="Composite health score (0-1)")
-    active_alerts: List[Dict[str, Any]] = Field(
-        default_factory=list, description="Active alerts"
-    )
-    degraded_metrics: List[str] = Field(
-        default_factory=list, description="Degraded metric names"
-    )
+    active_alerts: List[Dict[str, Any]] = Field(default_factory=list, description="Active alerts")
+    degraded_metrics: List[str] = Field(default_factory=list, description="Degraded metric names")
 
 
 # ---------------------------------------------------------------------------
@@ -376,35 +342,23 @@ class JobResponse(BaseModel):
 
     job_id: str = Field(..., description="Unique job identifier")
     job_type: str = Field(..., description="Type of job (e.g. process_video)")
-    status: str = Field(
-        ..., description="Job status: pending/running/completed/failed/cancelled"
-    )
+    status: str = Field(..., description="Job status: pending/running/completed/failed/cancelled")
     progress: str = Field("", description="Human-readable progress message")
-    progress_pct: float = Field(
-        0.0, description="Estimated completion percentage (0-100)"
-    )
+    progress_pct: float = Field(0.0, description="Estimated completion percentage (0-100)")
     created_at: float = Field(..., description="Unix timestamp when job was created")
-    started_at: Optional[float] = Field(
-        None, description="Unix timestamp when processing began"
-    )
-    completed_at: Optional[float] = Field(
-        None, description="Unix timestamp when job finished"
-    )
+    started_at: Optional[float] = Field(None, description="Unix timestamp when processing began")
+    completed_at: Optional[float] = Field(None, description="Unix timestamp when job finished")
     result: Optional[Dict[str, Any]] = Field(
         None, description="Job result (populated on completion)"
     )
-    error: Optional[str] = Field(
-        None, description="Error message (populated on failure)"
-    )
+    error: Optional[str] = Field(None, description="Error message (populated on failure)")
 
 
 class JobListResponse(BaseModel):
     """Response from GET /api/jobs."""
 
     total: int = Field(0, description="Total number of jobs")
-    jobs: List[JobResponse] = Field(
-        default_factory=list, description="Recent job entries"
-    )
+    jobs: List[JobResponse] = Field(default_factory=list, description="Recent job entries")
 
 
 class EnqueueResponse(BaseModel):
@@ -577,9 +531,7 @@ async def _query_event_generator(
             chunks = rag.retrieve(query, video_id=video_id)
             if video_id and chunks:
                 chunks = rag.expand_temporal_context(chunks, video_id)
-            context = (
-                rag.build_context(chunks) if chunks else "No relevant context found."
-            )
+            context = rag.build_context(chunks) if chunks else "No relevant context found."
 
             # Build prompt
             prompt = chat._build_prompt(query, context)
@@ -645,18 +597,12 @@ async def _chat_event_generator(
     def _run_chat() -> None:
         """Run a raw LLM chat in a thread pool."""
         try:
-            from video_analysis.llm_provider import get_llm_provider, LLMProviderConfig
+            from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
 
             cfg = LLMProviderConfig(
-                provider=(
-                    config.llm_provider if hasattr(config, "llm_provider") else "hermes"
-                ),
-                api_base=(
-                    config.openai_api_base if hasattr(config, "openai_api_base") else ""
-                ),
-                api_key=(
-                    config.openai_api_key if hasattr(config, "openai_api_key") else ""
-                ),
+                provider=(config.llm_provider if hasattr(config, "llm_provider") else "hermes"),
+                api_base=(config.openai_api_base if hasattr(config, "openai_api_base") else ""),
+                api_key=(config.openai_api_key if hasattr(config, "openai_api_key") else ""),
                 model=config.openai_model if hasattr(config, "openai_model") else "",
                 max_tokens=config.llm_max_tokens,
                 temperature=config.llm_temperature,
@@ -883,24 +829,16 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
                     None, pipe.download_from_url, url, video_dir
                 )
             except Exception as exc:
-                raise HTTPException(
-                    status_code=400, detail=f"Failed to download URL: {exc}"
-                )
+                raise HTTPException(status_code=400, detail=f"Failed to download URL: {exc}")
             if not video_path:
-                raise HTTPException(
-                    status_code=400, detail="Failed to download video from URL"
-                )
+                raise HTTPException(status_code=400, detail="Failed to download video from URL")
 
         elif file_path:
             video_path = file_path
             if not Path(video_path).exists():
-                raise HTTPException(
-                    status_code=404, detail=f"File not found: {video_path}"
-                )
+                raise HTTPException(status_code=404, detail=f"File not found: {video_path}")
         else:
-            raise HTTPException(
-                status_code=400, detail="Provide a file upload, url, or file_path"
-            )
+            raise HTTPException(status_code=400, detail="Provide a file upload, url, or file_path")
 
         # Enqueue the job
         job = await _job_manager.enqueue(
@@ -968,9 +906,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
                     detail=f"Invalid status '{status}'. Valid: pending, running, completed, failed, cancelled",
                 )
 
-        jobs = await _job_manager.list_jobs(
-            limit=limit, offset=offset, status_filter=status_filter
-        )
+        jobs = await _job_manager.list_jobs(limit=limit, offset=offset, status_filter=status_filter)
         return JobListResponse(
             total=len(jobs),
             jobs=[_job_to_response(j) for j in jobs],
@@ -993,9 +929,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         """
         if body.stream:
             return StreamingResponse(
-                _query_event_generator(
-                    body.query, video_id, _get_rag(), _get_chat(), cfg
-                ),
+                _query_event_generator(body.query, video_id, _get_rag(), _get_chat(), cfg),
                 media_type="text/event-stream",
             )
 
@@ -1122,9 +1056,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         try:
             target_ts = float(timestamp)
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid timestamp: {timestamp}"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid timestamp: {timestamp}")
 
         # Find the closest frame_path
         best_path: Optional[str] = None
@@ -1148,9 +1080,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         try:
             image_bytes = Path(best_path).read_bytes()
         except Exception as exc:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to read frame image: {exc}"
-            )
+            raise HTTPException(status_code=500, detail=f"Failed to read frame image: {exc}")
 
         # Determine media type from extension
         ext = Path(best_path).suffix.lower()
@@ -1177,16 +1107,12 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
 
         # Check existence
         try:
-            info = await loop.run_in_executor(
-                None, rag_instance.get_library_info, video_id
-            )
+            info = await loop.run_in_executor(None, rag_instance.get_library_info, video_id)
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"RAG engine error: {exc}")
 
         if info is None:
-            raise HTTPException(
-                status_code=404, detail=f"Video '{video_id}' not found in index"
-            )
+            raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found in index")
 
         try:
             await loop.run_in_executor(None, rag_instance.delete_video, video_id)
@@ -1236,9 +1162,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
             )
         except Exception as exc:
             logger.error("Chapter generation error for %s: %s", video_id, exc)
-            raise HTTPException(
-                status_code=500, detail=f"Chapter generation failed: {exc}"
-            )
+            raise HTTPException(status_code=500, detail=f"Chapter generation failed: {exc}")
 
         return ChaptersResponse(
             video_id=video_id,
@@ -1279,9 +1203,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         items = []
         for vid in video_ids:
             try:
-                info = await loop.run_in_executor(
-                    None, rag_instance.get_library_info, vid
-                )
+                info = await loop.run_in_executor(None, rag_instance.get_library_info, vid)
                 if info is not None:
                     items.append(
                         {
@@ -1294,9 +1216,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
                         }
                     )
             except Exception:
-                items.append(
-                    {"video_id": vid, "filename": "", "error": "metadata unavailable"}
-                )
+                items.append({"video_id": vid, "filename": "", "error": "metadata unavailable"})
 
         return VideoListResponse(count=len(items), videos=items)
 
@@ -1358,9 +1278,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         summary="SSE streaming chat endpoint for real-time LLM token streaming",
     )
     async def api_sse_chat(
-        query: str = Query(
-            ..., description="The chat message / question to send to the LLM"
-        ),
+        query: str = Query(..., description="The chat message / question to send to the LLM"),
     ):
         """Streaming chat endpoint using Server-Sent Events.
 
@@ -1369,9 +1287,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         ``data: [DONE]``.
         """
         if not query.strip():
-            raise HTTPException(
-                status_code=400, detail="Query parameter 'query' is required"
-            )
+            raise HTTPException(status_code=400, detail="Query parameter 'query' is required")
 
         return StreamingResponse(
             _chat_event_generator(query, cfg),
@@ -1511,17 +1427,13 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
     )
     async def api_kg_entity_relationships(
         entity_id: int,
-        relation_type: Optional[str] = Query(
-            None, description="Filter by relationship type"
-        ),
+        relation_type: Optional[str] = Query(None, description="Filter by relationship type"),
         limit: int = Query(50, description="Max relationships"),
     ):
         kg = _get_kg(cfg)
         entity = kg.get_entity(entity_id)
         if entity is None:
-            raise HTTPException(
-                status_code=404, detail=f"Entity #{entity_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Entity #{entity_id} not found")
         rels = kg.get_relationships(entity_id, relation_type=relation_type, limit=limit)
         results = []
         for r in rels:
@@ -1576,7 +1488,7 @@ def create_api_router(config: Optional[Config] = None) -> APIRouter:
         summary="Get pipeline health report",
     )
     async def api_health_report(
-        limit: int = Query(20, description="Number of recent runs to include")
+        limit: int = Query(20, description="Number of recent runs to include"),
     ):
         h = _get_health(cfg)
         report = h.get_health_report(limit=limit)

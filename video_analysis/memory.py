@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from video_analysis.config import Config
@@ -104,9 +104,7 @@ class ConversationMemory:
     # Public API
     # ------------------------------------------------------------------
 
-    def add_entry(
-        self, question: str, answer: str, video_id: Optional[str] = None
-    ) -> None:
+    def add_entry(self, question: str, answer: str, video_id: Optional[str] = None) -> None:
         """Store a question-answer pair in conversation memory.
 
         Automatically evicts old entries when the max count or TTL is
@@ -133,9 +131,7 @@ class ConversationMemory:
                     video_id=video_id,
                 )
             )
-        logger.debug(
-            "Added conversation memory entry (chroma=%s)", self._collection is not None
-        )
+        logger.debug("Added conversation memory entry (chroma=%s)", self._collection is not None)
 
     def get_relevant(self, question: str, top_k: int = 3) -> List[MemoryEntry]:
         """Retrieve top-*k* relevant past Q&A pairs based on semantic similarity.
@@ -167,9 +163,7 @@ class ConversationMemory:
             return self._get_recent_chroma(count)
 
         # In-memory fallback
-        return sorted(self._fallback_store, key=lambda e: e.timestamp, reverse=True)[
-            :count
-        ]
+        return sorted(self._fallback_store, key=lambda e: e.timestamp, reverse=True)[:count]
 
     def clear_all(self) -> None:
         """Remove all conversation memory entries."""
@@ -218,9 +212,7 @@ class ConversationMemory:
                     collection_name,
                     metadata={"hnsw:space": "cosine"},
                 )
-                logger.info(
-                    "Created conversation memory collection: %s", collection_name
-                )
+                logger.info("Created conversation memory collection: %s", collection_name)
         except Exception as exc:
             logger.warning(
                 "Failed to initialise ChromaDB for conversation memory: %s — "
@@ -251,9 +243,7 @@ class ConversationMemory:
             model = AutoModel.from_pretrained(
                 model_id,
                 trust_remote_code=True,
-                torch_dtype=(
-                    torch.bfloat16 if torch.cuda.is_available() else torch.float32
-                ),
+                torch_dtype=(torch.bfloat16 if torch.cuda.is_available() else torch.float32),
                 device_map="cuda" if torch.cuda.is_available() else "cpu",
             )
             model.set_processor(model_id)
@@ -306,9 +296,7 @@ class ConversationMemory:
 
         if self._embedding_model is None:
             model_name = self.config.text_embedding_model
-            logger.debug(
-                "Loading text embedding model for conversation memory: %s", model_name
-            )
+            logger.debug("Loading text embedding model for conversation memory: %s", model_name)
             self._embedding_model = SentenceTransformer(
                 model_name,
                 device="cuda",
@@ -318,9 +306,7 @@ class ConversationMemory:
         # Apply query prefix (Nomic models need "search_query: ")
         from video_analysis.rag import _apply_embedding_prefix
 
-        prefixed = _apply_embedding_prefix(
-            text, self.config.text_embedding_model, "query"
-        )
+        prefixed = _apply_embedding_prefix(text, self.config.text_embedding_model, "query")
         emb = self._embedding_model.encode(prefixed, normalize_embeddings=True)
         return emb.tolist()
 
@@ -361,9 +347,7 @@ class ConversationMemory:
             if len(remaining["ids"]) > self.max_entries:
                 # Sort by timestamp descending, keep top max_entries
                 indexed = list(zip(remaining["ids"], remaining["metadatas"]))
-                indexed.sort(
-                    key=lambda x: float(x[1].get("timestamp", 0)), reverse=True
-                )
+                indexed.sort(key=lambda x: float(x[1].get("timestamp", 0)), reverse=True)
                 keep_ids = {item[0] for item in indexed[: self.max_entries]}
                 excess = [item[0] for item in indexed[self.max_entries :]]
                 if excess:
@@ -378,9 +362,7 @@ class ConversationMemory:
     def _evict_fallback(self) -> None:
         """Evict old entries from the in-memory fallback store."""
         cutoff = time.time() - self.ttl_seconds
-        self._fallback_store = [
-            e for e in self._fallback_store if e.timestamp >= cutoff
-        ]
+        self._fallback_store = [e for e in self._fallback_store if e.timestamp >= cutoff]
         # Keep newest max_entries
         if len(self._fallback_store) > self.max_entries:
             self._fallback_store.sort(key=lambda e: e.timestamp, reverse=True)
@@ -448,9 +430,7 @@ class ConversationMemory:
         try:
             query_emb = self._get_embedding(question)
         except Exception as exc:
-            logger.warning(
-                "Failed to compute query embedding for conversation memory: %s", exc
-            )
+            logger.warning("Failed to compute query embedding for conversation memory: %s", exc)
             return []
 
         try:
@@ -538,9 +518,7 @@ class ConversationMemory:
             overlap = query_words & entry_words
             if not overlap:
                 continue
-            score = sum(len(w) for w in overlap) / (
-                sum(len(w) for w in query_words) + 1e-9
-            )
+            score = sum(len(w) for w in overlap) / (sum(len(w) for w in query_words) + 1e-9)
             scored.append((score, entry))
 
         scored.sort(key=lambda x: x[0], reverse=True)

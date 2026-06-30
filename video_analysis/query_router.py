@@ -23,13 +23,12 @@ Hermes CLI and OpenAI-compatible backends.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from video_analysis.config import Config
 
@@ -121,9 +120,7 @@ class QueryRouter:
         llm: Optional pre-configured LLMProvider instance.
     """
 
-    def __init__(
-        self, config: Optional[Config] = None, prefer_llm: bool = True, llm=None
-    ):
+    def __init__(self, config: Optional[Config] = None, prefer_llm: bool = True, llm=None):
         self.config = config or Config()
         self.prefer_llm = prefer_llm
         self._llm = llm  # optional LLMProvider instance
@@ -131,7 +128,7 @@ class QueryRouter:
     def _get_llm(self):
         """Lazy-load the LLM provider."""
         if self._llm is None:
-            from video_analysis.llm_provider import get_llm_provider, LLMProviderConfig
+            from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
 
             cfg = LLMProviderConfig(
                 provider=os.environ.get("LLM_PROVIDER", "hermes"),
@@ -191,9 +188,7 @@ JSON response:"""
 
         route_str = parsed.get("route", "text").lower()
         route = (
-            QueryRoute(route_str)
-            if route_str in [r.value for r in QueryRoute]
-            else QueryRoute.TEXT
+            QueryRoute(route_str) if route_str in [r.value for r in QueryRoute] else QueryRoute.TEXT
         )
         confidence = min(float(parsed.get("confidence", 1.0)), 1.0)
         reasoning = parsed.get("reasoning", "")

@@ -180,9 +180,7 @@ class FederatedSearch:
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                peer_tasks = [
-                    self._query_peer(url, query, top_k) for url in self._peers
-                ]
+                peer_tasks = [self._query_peer(url, query, top_k) for url in self._peers]
                 loop_results = loop.run_until_complete(
                     asyncio.gather(*peer_tasks, return_exceptions=True)
                 )

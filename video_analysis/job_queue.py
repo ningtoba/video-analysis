@@ -293,9 +293,7 @@ class JobManager:
         while not self._shutdown_event.is_set() or not self._queue.empty():
             try:
                 # Poll the queue with a timeout so we can check shutdown.
-                job_id = await asyncio.wait_for(
-                    self._queue.get(), timeout=self._poll_interval
-                )
+                job_id = await asyncio.wait_for(self._queue.get(), timeout=self._poll_interval)
             except asyncio.TimeoutError:
                 continue
 

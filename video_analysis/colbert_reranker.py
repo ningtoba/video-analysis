@@ -101,8 +101,7 @@ class ColBERTReranker:
         """
         if not self.available:
             raise ImportError(
-                "ragatouille is not installed. "
-                "Install it with: pip install ragatouille>=1.0.0"
+                "ragatouille is not installed. Install it with: pip install ragatouille>=1.0.0"
             )
 
         self._load()

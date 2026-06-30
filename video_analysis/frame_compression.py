@@ -119,9 +119,7 @@ class DINOv2FrameCompressor:
             RuntimeError: If DINOv2 is not available.
         """
         if not self.available:
-            raise RuntimeError(
-                "DINOv2 is not available. Install transformers >= 4.45.0"
-            )
+            raise RuntimeError("DINOv2 is not available. Install transformers >= 4.45.0")
 
         if len(frames) <= 1:
             return list(range(len(frames)))
@@ -179,9 +177,9 @@ class DINOv2FrameCompressor:
             self._processor = AutoImageProcessor.from_pretrained(
                 self.model_name, trust_remote_code=True
             )
-            self._model = AutoModel.from_pretrained(
-                self.model_name, trust_remote_code=True
-            ).to(self.device)
+            self._model = AutoModel.from_pretrained(self.model_name, trust_remote_code=True).to(
+                self.device
+            )
             self._model.eval()
             logger.info("DINOv2 model loaded")
         except Exception as e:

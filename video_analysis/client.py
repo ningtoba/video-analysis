@@ -239,9 +239,7 @@ class VideoAnalysisClient:
         except self._requests.exceptions.ConnectionError as exc:
             raise ConnectionError(f"Cannot connect to {url}: {exc}") from exc
         except self._requests.exceptions.Timeout as exc:
-            raise ConnectionError(
-                f"Request to {url} timed out after {self.timeout}s"
-            ) from exc
+            raise ConnectionError(f"Request to {url} timed out after {self.timeout}s") from exc
 
         if not resp.ok:
             try:
@@ -557,9 +555,7 @@ class VideoAnalysisClient:
                 f"/api/videos/{video_id}/query",
                 json={"query": question, "stream": True},
             )
-            return QueryResult(
-                answer="Streaming response — use query_stream()", sources=[]
-            )
+            return QueryResult(answer="Streaming response — use query_stream()", sources=[])
 
         data = self._post(
             f"/api/videos/{video_id}/query",

@@ -13,9 +13,9 @@ Usage:
     pl.log_stage_start("transcribe", video_id="abc123")
 """
 
+import logging as stdlib_logging
 import os
 import sys
-import logging as stdlib_logging
 from typing import Any
 
 import structlog
@@ -39,12 +39,16 @@ def _simple_filter_by_level(
         "NOTSET": 0,
     }
     event_level = levels.get(event_dict.get("level", "").upper(), 0)
-    if event_level < _SIMPLE_FILTER_LEVEL:
+    if event_level < _LogConfig.filter_level:
         raise structlog.DropEvent
     return event_dict
 
 
-_SIMPLE_FILTER_LEVEL: int = stdlib_logging.INFO
+class _LogConfig:
+    """Sentinel class holding logging configuration state."""
+
+    filter_level: int = stdlib_logging.INFO
+    initialized: bool = False
 
 
 def _is_tty() -> bool:
@@ -68,6 +72,9 @@ def setup_logging(
         Falls back to the STRUCTURED_LOGGING_FORMAT env var, then "auto".
         "auto" → ConsoleRenderer on TTY, JSONRenderer otherwise.
     """
+    if _LogConfig.initialized:
+        return
+
     log_level = level or os.environ.get("STRUCTURED_LOGGING_LEVEL", "INFO").upper()
     log_format = fmt or os.environ.get("STRUCTURED_LOGGING_FORMAT", "auto").lower()
 
@@ -75,8 +82,7 @@ def setup_logging(
     numeric_level = getattr(stdlib_logging, log_level, stdlib_logging.INFO)
 
     # Set the global filter level for the non-stdlib filter processor
-    global _SIMPLE_FILTER_LEVEL  # noqa: PLW0603
-    _SIMPLE_FILTER_LEVEL = numeric_level
+    _LogConfig.filter_level = numeric_level
 
     # Choose renderer
     if log_format == "console" or (log_format == "auto" and _is_tty()):
@@ -106,8 +112,10 @@ def setup_logging(
         level=numeric_level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
-        force=True,
+        force=False,
     )
+
+    _LogConfig.initialized = True
 
 
 class PipelineLogger:
@@ -159,9 +167,7 @@ class PipelineLogger:
         **kwargs
             Additional key-value pairs to include in the log event.
         """
-        self._logger.info(
-            "stage_end", stage=stage, video_id=video_id, duration=duration, **kwargs
-        )
+        self._logger.info("stage_end", stage=stage, video_id=video_id, duration=duration, **kwargs)
 
     def log_error(
         self,
@@ -183,6 +189,4 @@ class PipelineLogger:
         **kwargs
             Additional key-value pairs to include in the log event.
         """
-        self._logger.error(
-            "stage_error", stage=stage, video_id=video_id, error=error, **kwargs
-        )
+        self._logger.error("stage_error", stage=stage, video_id=video_id, error=error, **kwargs)

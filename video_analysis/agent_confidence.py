@@ -324,14 +324,8 @@ class EvidenceTrustScorer:
                 }
             )
 
-        mean_raw = (
-            statistics.mean(d["raw_confidence"] for d in adjusted) if adjusted else 0.0
-        )
-        mean_adj = (
-            statistics.mean(d["adjusted_confidence"] for d in adjusted)
-            if adjusted
-            else 0.0
-        )
+        mean_raw = statistics.mean(d["raw_confidence"] for d in adjusted) if adjusted else 0.0
+        mean_adj = statistics.mean(d["adjusted_confidence"] for d in adjusted) if adjusted else 0.0
 
         return {
             "adjusted_detections": adjusted,
@@ -365,9 +359,9 @@ class EvidenceTrustScorer:
         overlap_penalty = 1.0
 
         # If metadata has an explicit overlap flag, apply penalty
-        metadata_overlap = segment.get("metadata", {}).get(
+        metadata_overlap = segment.get("metadata", {}).get("speaker_overlap", False) or segment.get(
             "speaker_overlap", False
-        ) or segment.get("speaker_overlap", False)
+        )
         if metadata_overlap:
             overlap_penalty = 0.85
 
@@ -598,9 +592,7 @@ class EvidenceWeighter:
         """
         if not evidences:
             return 0.0
-        return max(
-            max(0.0, min(float(ev.get("confidence", 0.0)), 1.0)) for ev in evidences
-        )
+        return max(max(0.0, min(float(ev.get("confidence", 0.0)), 1.0)) for ev in evidences)
 
     @staticmethod
     def consensus_score(evidences: List[Dict[str, Any]]) -> float:
@@ -688,12 +680,8 @@ class RobustAgentFrame:
 
         # Pull confidence config
         self._enabled: bool = getattr(self._config, "agent_confidence_enabled", False)
-        self._min_trust: float = getattr(
-            self._config, "agent_confidence_min_trust", 0.3
-        )
-        self._weight_mode: str = getattr(
-            self._config, "agent_confidence_weight_mode", "tiered"
-        )
+        self._min_trust: float = getattr(self._config, "agent_confidence_min_trust", 0.3)
+        self._weight_mode: str = getattr(self._config, "agent_confidence_weight_mode", "tiered")
 
         self._quality_scorer = FrameQualityScorer()
         self._trust_scorer = EvidenceTrustScorer()
@@ -768,18 +756,14 @@ class RobustAgentFrame:
 
         # Compute average frame trustworthiness
         avg_trust = (
-            statistics.mean(s["trustworthiness"] for s in frame_scores)
-            if frame_scores
-            else 0.5
+            statistics.mean(s["trustworthiness"] for s in frame_scores) if frame_scores else 0.5
         )
 
         # Convert frames for MLLM
         from PIL import Image
 
         pil_frames = [
-            Image.fromarray(
-                cv2.cvtColor(f, cv2.COLOR_BGR2RGB) if f.shape[2] == 3 else f
-            )
+            Image.fromarray(cv2.cvtColor(f, cv2.COLOR_BGR2RGB) if f.shape[2] == 3 else f)
             for f in frames
         ]
 
@@ -907,8 +891,7 @@ class RobustAgentFrame:
         adj_lines = []
         for d in scored["adjusted_detections"]:
             adj_lines.append(
-                f"{d['label']} ({d['adjusted_confidence']:.2f}) "
-                f"[raw: {d['raw_confidence']:.2f}]"
+                f"{d['label']} ({d['adjusted_confidence']:.2f}) [raw: {d['raw_confidence']:.2f}]"
             )
 
         return AgentToolResult(
@@ -1128,9 +1111,7 @@ class RobustAgentFrame:
                 lines.append(f"   - Success: {te.success}")
                 if te.metadata:
                     meta_preview = dict(
-                        (k, v)
-                        for k, v in te.metadata.items()
-                        if k not in ("confidence_details",)
+                        (k, v) for k, v in te.metadata.items() if k not in ("confidence_details",)
                     )
                     if meta_preview:
                         lines.append(f"   - Metadata: {meta_preview}")
@@ -1199,9 +1180,7 @@ class RobustAgentFrame:
             confidence_details = adj
 
         elif tool_name in ("search_rag", "search_transcript", "temporal_grounding"):
-            num_results = metadata.get("num_results", 0) or metadata.get(
-                "num_matches", 0
-            )
+            num_results = metadata.get("num_results", 0) or metadata.get("num_matches", 0)
             if result.success and num_results > 0:
                 confidence = min(0.5 + 0.1 * num_results, 0.95)
             elif result.success:

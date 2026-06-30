@@ -260,16 +260,13 @@ class PipelineHealthMonitor:
                     acknowledged INTEGER NOT NULL DEFAULT 0
                 )""")
             self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_runs_timestamp "
-                "ON pipeline_runs(timestamp DESC)"
+                "CREATE INDEX IF NOT EXISTS idx_runs_timestamp ON pipeline_runs(timestamp DESC)"
             )
             self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_runs_video "
-                "ON pipeline_runs(video_id)"
+                "CREATE INDEX IF NOT EXISTS idx_runs_video ON pipeline_runs(video_id)"
             )
             self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_alerts_severity "
-                "ON health_alerts(severity)"
+                "CREATE INDEX IF NOT EXISTS idx_alerts_severity ON health_alerts(severity)"
             )
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_alerts_active "
@@ -337,8 +334,7 @@ class PipelineHealthMonitor:
         with self._lock:
             if metric_name == "duration_s":
                 rows = self._conn.execute(
-                    "SELECT duration_s FROM pipeline_runs "
-                    "ORDER BY timestamp DESC LIMIT ?",
+                    "SELECT duration_s FROM pipeline_runs ORDER BY timestamp DESC LIMIT ?",
                     (self._window_size,),
                 ).fetchall()
                 return [r["duration_s"] for r in rows]
@@ -369,8 +365,7 @@ class PipelineHealthMonitor:
             elif metric_name.startswith("stage_"):
                 stage = metric_name[6:]
                 rows = self._conn.execute(
-                    "SELECT stage_timings FROM pipeline_runs "
-                    "ORDER BY timestamp DESC LIMIT ?",
+                    "SELECT stage_timings FROM pipeline_runs ORDER BY timestamp DESC LIMIT ?",
                     (self._window_size,),
                 ).fetchall()
                 values = []
@@ -442,13 +437,9 @@ class PipelineHealthMonitor:
             if latest["ocr_confidence"] is not None:
                 metrics_to_check.append(("ocr_confidence", latest["ocr_confidence"]))
             if latest["detection_confidence"] is not None:
-                metrics_to_check.append(
-                    ("detection_confidence", latest["detection_confidence"])
-                )
+                metrics_to_check.append(("detection_confidence", latest["detection_confidence"]))
             if latest["transcript_confidence"] is not None:
-                metrics_to_check.append(
-                    ("transcript_confidence", latest["transcript_confidence"])
-                )
+                metrics_to_check.append(("transcript_confidence", latest["transcript_confidence"]))
 
             # Stage timings
             timings = json.loads(latest["stage_timings"] or "{}")
@@ -465,9 +456,7 @@ class PipelineHealthMonitor:
             self._expire_old_alerts()
             return new_alerts
 
-    def _create_alert(
-        self, metric_name: str, snapshot: MetricSnapshot
-    ) -> Optional[HealthAlert]:
+    def _create_alert(self, metric_name: str, snapshot: MetricSnapshot) -> Optional[HealthAlert]:
         """Create an alert if no recent duplicate exists for this metric."""
         now = time.time()
         cooldown_start = now - self._alert_cooldown_s
@@ -496,9 +485,7 @@ class PipelineHealthMonitor:
         value_diff = snapshot.value - snapshot.baseline_mean
         direction = "increased" if value_diff > 0 else "decreased"
         pct_change = (
-            abs(value_diff) / snapshot.baseline_mean * 100
-            if snapshot.baseline_mean > 0
-            else 0
+            abs(value_diff) / snapshot.baseline_mean * 100 if snapshot.baseline_mean > 0 else 0
         )
 
         title = f"Anomaly detected: {metric_name}"
@@ -522,8 +509,7 @@ class PipelineHealthMonitor:
                 message,
                 metric_name,
                 snapshot.value,
-                snapshot.baseline_mean
-                + self._z_score_threshold * snapshot.baseline_std,
+                snapshot.baseline_mean + self._z_score_threshold * snapshot.baseline_std,
                 created_at,
                 expires_at,
             ),
@@ -545,9 +531,7 @@ class PipelineHealthMonitor:
 
                 wh = get_webhook_dispatcher()
                 if wh.enabled:
-                    event = (
-                        "health.critical" if severity == "critical" else "health.alert"
-                    )
+                    event = "health.critical" if severity == "critical" else "health.alert"
                     wh.fire(
                         event,
                         {
@@ -574,8 +558,7 @@ class PipelineHealthMonitor:
             message=message,
             metric_name=metric_name,
             value=snapshot.value,
-            threshold=snapshot.baseline_mean
-            + self._z_score_threshold * snapshot.baseline_std,
+            threshold=snapshot.baseline_mean + self._z_score_threshold * snapshot.baseline_std,
             created_at=created_at,
             expires_at=expires_at,
         )
@@ -592,9 +575,7 @@ class PipelineHealthMonitor:
             self._conn.commit()
             return cur.rowcount
 
-    def get_active_alerts(
-        self, min_severity: str = "info", limit: int = 50
-    ) -> List[HealthAlert]:
+    def get_active_alerts(self, min_severity: str = "info", limit: int = 50) -> List[HealthAlert]:
         """Get all active (non-expired, non-acknowledged) alerts."""
         min_order = SEVERITY_ORDER.get(min_severity, 0)
         severities = [s for s, o in SEVERITY_ORDER.items() if o >= min_order]
@@ -613,7 +594,7 @@ class PipelineHealthMonitor:
         """Mark an alert as acknowledged. Returns True if found."""
         with self._lock:
             cur = self._conn.execute(
-                "UPDATE health_alerts SET acknowledged = 1 " "WHERE alert_id = ?",
+                "UPDATE health_alerts SET acknowledged = 1 WHERE alert_id = ?",
                 (alert_id,),
             )
             self._conn.commit()
@@ -623,7 +604,7 @@ class PipelineHealthMonitor:
         """Acknowledge all active alerts. Returns count acknowledged."""
         with self._lock:
             cur = self._conn.execute(
-                "UPDATE health_alerts SET acknowledged = 1 " "WHERE acknowledged = 0"
+                "UPDATE health_alerts SET acknowledged = 1 WHERE acknowledged = 0"
             )
             self._conn.commit()
             return cur.rowcount
@@ -656,18 +637,12 @@ class PipelineHealthMonitor:
             n = len(recent)
             success_rate = sum(r["success"] for r in recent) / n
             duration_values = [r["duration_s"] for r in recent]
-            ocr_values = [
-                r["ocr_confidence"] for r in recent if r["ocr_confidence"] is not None
-            ]
+            ocr_values = [r["ocr_confidence"] for r in recent if r["ocr_confidence"] is not None]
             det_values = [
-                r["detection_confidence"]
-                for r in recent
-                if r["detection_confidence"] is not None
+                r["detection_confidence"] for r in recent if r["detection_confidence"] is not None
             ]
             trans_values = [
-                r["transcript_confidence"]
-                for r in recent
-                if r["transcript_confidence"] is not None
+                r["transcript_confidence"] for r in recent if r["transcript_confidence"] is not None
             ]
 
             # Duration stability: lower CV (coefficient of variation) = better
@@ -687,7 +662,7 @@ class PipelineHealthMonitor:
 
             # Alert severity penalty
             alerts = self._conn.execute(
-                "SELECT severity FROM health_alerts " "WHERE acknowledged = 0"
+                "SELECT severity FROM health_alerts WHERE acknowledged = 0"
             ).fetchall()
             alert_penalty = 0.0
             for a in alerts:
@@ -726,12 +701,12 @@ class PipelineHealthMonitor:
         with self._lock:
             self._expire_old_alerts()
 
-            total = self._conn.execute(
-                "SELECT COUNT(*) AS cnt FROM pipeline_runs"
-            ).fetchone()["cnt"]
+            total = self._conn.execute("SELECT COUNT(*) AS cnt FROM pipeline_runs").fetchone()[
+                "cnt"
+            ]
 
             recent = self._conn.execute(
-                "SELECT * FROM pipeline_runs " "ORDER BY timestamp DESC LIMIT ?",
+                "SELECT * FROM pipeline_runs ORDER BY timestamp DESC LIMIT ?",
                 (recent_count,),
             ).fetchall()
 
@@ -813,11 +788,13 @@ class PipelineHealthMonitor:
         status = (
             "healthy"
             if report.health_score >= 0.8
-            else "degraded" if report.health_score >= 0.5 else "unhealthy"
+            else "degraded"
+            if report.health_score >= 0.5
+            else "unhealthy"
         )
         lines = [
             "## Pipeline Health Summary",
-            f"",
+            "",
             f"- **Health score**: {report.health_score:.2f}/1.0",
             f"- **Status**: {status}",
             f"- **Total runs**: {report.total_runs}",

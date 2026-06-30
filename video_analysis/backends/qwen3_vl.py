@@ -29,7 +29,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Literal, Union
+from typing import Any, Dict, List, Literal, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +164,7 @@ class Qwen3VLBackend:
     def unload(self):
         """Unload the model from GPU memory."""
         import gc
+
         import torch
 
         if self._llm is not None:
@@ -188,8 +189,8 @@ class Qwen3VLBackend:
 
         Sends a lightweight GET to /v1/models to verify connectivity.
         """
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         url = f"{self._vllm_server_url.rstrip('/')}/v1/models"
         try:
@@ -199,8 +200,7 @@ class Qwen3VLBackend:
                 models = data.get("data", [])
                 if not models:
                     logger.warning(
-                        f"vLLM server at {self._vllm_server_url} "
-                        "returned empty model list"
+                        f"vLLM server at {self._vllm_server_url} returned empty model list"
                     )
                     return False
                 logger.info(
@@ -220,8 +220,8 @@ class Qwen3VLBackend:
         temperature: float = 0.3,
     ) -> Optional[str]:
         """Send a chat request to the vLLM server (OpenAI-compatible API)."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         url = f"{self._vllm_server_url.rstrip('/')}/v1/chat/completions"
         body = {
@@ -390,18 +390,13 @@ class Qwen3VLBackend:
             import torch
             from transformers import AutoModelForImageTextToText, AutoProcessor
         except ImportError:
-            logger.warning(
-                "transformers not installed; cannot use transformers backend"
-            )
+            logger.warning("transformers not installed; cannot use transformers backend")
             self._available = False
             return False
 
         try:
             model_id = self.model_name
-            logger.info(
-                f"Loading Qwen3-VL via transformers: {model_id} "
-                f"(FP8={self.use_fp8})"
-            )
+            logger.info(f"Loading Qwen3-VL via transformers: {model_id} (FP8={self.use_fp8})")
 
             dtype = torch.float8_e4m3fn if self.use_fp8 else torch.bfloat16
 
@@ -426,21 +421,15 @@ class Qwen3VLBackend:
 
                     # Load in BF16 first then quantize weights to FP8
                     kwargs["torch_dtype"] = torch.bfloat16
-                    self._model = AutoModelForImageTextToText.from_pretrained(
-                        model_id, **kwargs
-                    )
+                    self._model = AutoModelForImageTextToText.from_pretrained(model_id, **kwargs)
                     # Apply FP8 weight quantization via torchao
                     quantize_(self._model, Int8WeightOnlyConfig())
                     logger.info("Applied torchao Int8 weight quantization")
                 except ImportError:
                     logger.warning("torchao not available; loading with torch_dtype")
-                    self._model = AutoModelForImageTextToText.from_pretrained(
-                        model_id, **kwargs
-                    )
+                    self._model = AutoModelForImageTextToText.from_pretrained(model_id, **kwargs)
             else:
-                self._model = AutoModelForImageTextToText.from_pretrained(
-                    model_id, **kwargs
-                )
+                self._model = AutoModelForImageTextToText.from_pretrained(model_id, **kwargs)
 
             self._model.eval()
             logger.info("Qwen3-VL transformers model loaded successfully")
@@ -514,8 +503,9 @@ class Qwen3VLBackend:
         """
         num_frames = num_frames or self.max_frames
         try:
-            import decord
             import tempfile
+
+            import decord
             from PIL import Image
 
             decord.bridge.set_bridge("torch")
@@ -524,9 +514,7 @@ class Qwen3VLBackend:
             if total == 0:
                 return None
 
-            indices = [
-                int(i * total / num_frames) for i in range(min(num_frames, total))
-            ]
+            indices = [int(i * total / num_frames) for i in range(min(num_frames, total))]
             frames = vr.get_batch(indices)
 
             temp_dir = tempfile.mkdtemp(prefix="qwen3vl_frames_")
@@ -597,9 +585,7 @@ class Qwen3VLBackend:
             if video_path and not frames and frame_paths:
                 self._cleanup_temp_frames(frame_paths)
 
-    def describe_scene(
-        self, frames: List[str], prompt: Optional[str] = None
-    ) -> Optional[str]:
+    def describe_scene(self, frames: List[str], prompt: Optional[str] = None) -> Optional[str]:
         """Describe a scene from its key frames."""
         if not frames:
             return None
@@ -611,9 +597,7 @@ class Qwen3VLBackend:
         )
         return self._generate(prompt, frames=frames, max_new_tokens=256)
 
-    def summarize_video(
-        self, video_path: str, num_frames: Optional[int] = None
-    ) -> Optional[str]:
+    def summarize_video(self, video_path: str, num_frames: Optional[int] = None) -> Optional[str]:
         """Generate a comprehensive summary of a video."""
         path = Path(video_path)
         if not path.exists():

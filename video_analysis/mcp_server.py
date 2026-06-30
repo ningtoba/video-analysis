@@ -36,12 +36,12 @@ from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from video_analysis.config import Config
-from video_analysis.pipeline import VideoPipeline
-from video_analysis.streaming import StreamingPipeline
-from video_analysis.rag import VideoRAG
 from video_analysis.chat import VideoChat
+from video_analysis.config import Config
 from video_analysis.federation import FederatedSearch
+from video_analysis.pipeline import VideoPipeline
+from video_analysis.rag import VideoRAG
+from video_analysis.streaming import StreamingPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -126,14 +126,7 @@ async def process_video(
                 "scenes": len(index.scenes),
                 "transcript_segments": len(index.transcript),
                 "objects_found": (
-                    len(
-                        {
-                            o
-                            for s in index.scenes
-                            for f in s.key_frames
-                            for o in (f.objects or [])
-                        }
-                    )
+                    len({o for s in index.scenes for f in s.key_frames for o in (f.objects or [])})
                 ),
                 "processing_mode": processing_mode,
             },
@@ -250,8 +243,7 @@ async def detect_objects(video_path: str) -> str:
         for frame in scene.key_frames:
             if frame.objects:
                 objects_str = ", ".join(
-                    f"{o.get('label', '?')} ({o.get('confidence', 0):.0%})"
-                    for o in frame.objects
+                    f"{o.get('label', '?')} ({o.get('confidence', 0):.0%})" for o in frame.objects
                 )
                 lines.append(f"  @ {scene.start:.1f}s — {objects_str}")
 
@@ -472,9 +464,7 @@ async def federated_search(
     config = _config
     peers_list: list[str] = []
     if config is not None and config.federation_peers:
-        peers_list = [
-            p.strip() for p in config.federation_peers.split(",") if p.strip()
-        ]
+        peers_list = [p.strip() for p in config.federation_peers.split(",") if p.strip()]
 
     search = FederatedSearch(peers=peers_list, rag=rag)
     result = search.query(
@@ -564,9 +554,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="video-analysis MCP server")
     parser.add_argument("--stdio", action="store_true", help="Use stdio transport")
-    parser.add_argument(
-        "--port", type=int, default=8000, help="HTTP SSE port (default: 8000)"
-    )
+    parser.add_argument("--port", type=int, default=8000, help="HTTP SSE port (default: 8000)")
     args = parser.parse_args()
 
     if args.stdio:

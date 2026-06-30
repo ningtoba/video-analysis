@@ -277,7 +277,7 @@ def metrics_endpoint() -> str:
     """
     _ensure_metrics()
     try:
-        from prometheus_client import generate_latest, REGISTRY
+        from prometheus_client import REGISTRY, generate_latest
 
         return generate_latest(REGISTRY).decode("utf-8")
     except ImportError:

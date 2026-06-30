@@ -37,7 +37,7 @@ All methods gracefully return None when the model is unavailable
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Literal, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +155,9 @@ class VideoMLLM:
                 pass
             # Try SmolVLM2 next (standard API, no trust_remote_code)
             try:
+                import decord  # noqa: F401
                 import torch  # noqa: F401
                 import transformers  # noqa: F401
-                import decord  # noqa: F401
 
                 # Check if the smolvlm2 model path exists
                 model_path = SMOLVLM2_MODEL_PATHS.get(self.model_size)
@@ -170,9 +170,7 @@ class VideoMLLM:
             logger.info("Auto backend: falling back to VideoChat-Flash")
             return "videochat_flash"
         else:
-            logger.warning(
-                f"Unknown backend '{self.backend}', falling back to videochat_flash"
-            )
+            logger.warning(f"Unknown backend '{self.backend}', falling back to videochat_flash")
             return "videochat_flash"
 
     def _load_videochat_flash(self) -> bool:
@@ -222,9 +220,7 @@ class VideoMLLM:
                 self._available = False
                 return False
 
-            logger.info(
-                f"Loading SmolVLM2 model: {model_path} (size={self.model_size})"
-            )
+            logger.info(f"Loading SmolVLM2 model: {model_path} (size={self.model_size})")
 
             # Load processor first (needed for chat template processing)
             self._processor = AutoProcessor.from_pretrained(model_path)
@@ -309,9 +305,7 @@ class VideoMLLM:
                 "1",
                 "yes",
             )
-            thinking_mode = os.environ.get(
-                "INTERNVIDEO3_THINKING", "false"
-            ).lower() in (
+            thinking_mode = os.environ.get("INTERNVIDEO3_THINKING", "false").lower() in (
                 "true",
                 "1",
                 "yes",
@@ -319,7 +313,7 @@ class VideoMLLM:
             vllm_url = os.environ.get("INTERNVIDEO3_VLLM_URL")
 
             logger.info(
-                "Loading InternVideo3 backend " "(model=%s, fp8=%s, thinking=%s)",
+                "Loading InternVideo3 backend (model=%s, fp8=%s, thinking=%s)",
                 self.model_name,
                 use_fp8,
                 thinking_mode,
@@ -358,6 +352,7 @@ class VideoMLLM:
         """
         if self._model is not None:
             import gc
+
             import torch
 
             del self._model
@@ -388,16 +383,15 @@ class VideoMLLM:
         """Ensure model is loaded, dispatching to the right backend."""
         return self.load()
 
-    def _decode_video_frames(
-        self, video_path: str, num_frames: int = 32
-    ) -> Optional[List[str]]:
+    def _decode_video_frames(self, video_path: str, num_frames: int = 32) -> Optional[List[str]]:
         """Decode video frames using decord (for SmolVLM2 backend).
 
         Returns a list of temporary frame file paths, or None on failure.
         """
         try:
-            import decord
             import tempfile
+
+            import decord
             from PIL import Image
 
             decord.bridge.set_bridge("torch")
@@ -408,8 +402,7 @@ class VideoMLLM:
 
             # Sample evenly spaced frame indices
             indices = [
-                int(i * total_frames / num_frames)
-                for i in range(min(num_frames, total_frames))
+                int(i * total_frames / num_frames) for i in range(min(num_frames, total_frames))
             ]
             frames = vr.get_batch(indices)
 
@@ -422,9 +415,7 @@ class VideoMLLM:
                 paths.append(str(fp))
             return paths
         except ImportError:
-            logger.warning(
-                "decord not installed; cannot decode video frames for SmolVLM2"
-            )
+            logger.warning("decord not installed; cannot decode video frames for SmolVLM2")
             return None
         except Exception as e:
             logger.warning(f"Failed to decode video frames with decord: {e}")
@@ -475,9 +466,7 @@ class VideoMLLM:
                 with torch.no_grad():
                     output = self._model.generate(**inputs, max_new_tokens=256)
 
-                description = self._processor.decode(
-                    output[0], skip_special_tokens=True
-                )
+                description = self._processor.decode(output[0], skip_special_tokens=True)
                 return description.strip()
         except Exception as e:
             logger.warning(f"Video MLLM scene description failed: {e}")
@@ -522,9 +511,7 @@ class VideoMLLM:
 
             if self._resolved_backend == "smolvlm2":
                 # Decode frames with decord, then pass to model
-                frame_paths = self._decode_video_frames(
-                    str(video), num_frames=num_frames
-                )
+                frame_paths = self._decode_video_frames(str(video), num_frames=num_frames)
                 if frame_paths is None:
                     return None
                 try:
@@ -540,21 +527,15 @@ class VideoMLLM:
             elif self._resolved_backend == "qwen3_vl":
                 return self._qwen3_vl.summarize_video(str(video), num_frames=num_frames)
             elif self._resolved_backend == "internvideo3":
-                iv3_frame_paths = self._decode_video_frames(
-                    str(video), num_frames=num_frames
-                )
+                iv3_frame_paths = self._decode_video_frames(str(video), num_frames=num_frames)
                 if iv3_frame_paths is None:
                     return None
                 try:
-                    return self._internvideo3.summarize_video(
-                        iv3_frame_paths, max_tokens=512
-                    )
+                    return self._internvideo3.summarize_video(iv3_frame_paths, max_tokens=512)
                 finally:
                     import shutil
 
-                    temp_dir = (
-                        Path(iv3_frame_paths[0]).parent if iv3_frame_paths else None
-                    )
+                    temp_dir = Path(iv3_frame_paths[0]).parent if iv3_frame_paths else None
                     if temp_dir and temp_dir.exists():
                         shutil.rmtree(temp_dir, ignore_errors=True)
             else:
@@ -620,13 +601,9 @@ class VideoMLLM:
                 else:
                     return self._smolvlm2_generate(query, frames=frames)
             elif self._resolved_backend == "qwen3_vl":
-                return self._qwen3_vl.answer(
-                    query, frames=frames, video_path=video_path
-                )
+                return self._qwen3_vl.answer(query, frames=frames, video_path=video_path)
             elif self._resolved_backend == "internvideo3":
-                return self._internvideo3.answer(
-                    query, frame_paths=frames or [], max_tokens=512
-                )
+                return self._internvideo3.answer(query, frame_paths=frames or [], max_tokens=512)
             else:
                 # VideoChat-Flash path
                 if video_path:
@@ -651,9 +628,7 @@ class VideoMLLM:
                 with torch.no_grad():
                     output = self._model.generate(**inputs, max_new_tokens=512)
 
-                answer_text = self._processor.decode(
-                    output[0], skip_special_tokens=True
-                )
+                answer_text = self._processor.decode(output[0], skip_special_tokens=True)
                 return answer_text.strip()
         except Exception as e:
             logger.warning(f"Video MLLM QA failed: {e}")

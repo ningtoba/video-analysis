@@ -51,10 +51,10 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 from video_analysis.config import Config
 
@@ -82,6 +82,8 @@ try:
     from video_analysis.llm_provider import (
         LLMProvider,
         LLMProviderConfig,
+    )
+    from video_analysis.llm_provider import (
         get_llm_provider as _get_llm_provider,
     )
 
@@ -101,8 +103,7 @@ def _get_orchestra_config(config: Config) -> Dict[str, Any]:
     return {
         "enabled": bool(
             getattr(config, "orchestra_enabled", None)
-            or os.environ.get("ORCHESTRA_ENABLED", "false").lower()
-            in ("true", "1", "yes")
+            or os.environ.get("ORCHESTRA_ENABLED", "false").lower() in ("true", "1", "yes")
         ),
         "max_agents": int(
             getattr(config, "orchestra_max_agents", None)
@@ -238,9 +239,7 @@ class HybridTree:
             else:
                 start_t = cluster[0].start_time
                 end_t = cluster[-1].end_time
-                combined_label = (
-                    f"Cluster {i}: {cluster[0].label[:40]}, {cluster[-1].label[:40]}"
-                )
+                combined_label = f"Cluster {i}: {cluster[0].label[:40]}, {cluster[-1].label[:40]}"
                 parent = HybridNode(
                     scene_id=-1,
                     label=combined_label,
@@ -375,9 +374,7 @@ class EvidenceSynthesizer:
 
         if _HAS_CONFIDENCE and EvidenceWeighter is not None:
             try:
-                weight_mode = getattr(
-                    self.config, "agent_confidence_weight_mode", "tiered"
-                )
+                weight_mode = getattr(self.config, "agent_confidence_weight_mode", "tiered")
                 self._weighter = EvidenceWeighter()
                 self._scorer = EvidenceTrustScorer()
             except Exception:
@@ -409,8 +406,7 @@ class EvidenceSynthesizer:
 
         if not successful:
             errors = [
-                f"{agent}: {data.get('error', 'unknown error')}"
-                for agent, data in evidence.items()
+                f"{agent}: {data.get('error', 'unknown error')}" for agent, data in evidence.items()
             ]
             return SynthesisResult(
                 answer=f"All agents failed: {'; '.join(errors)}",
@@ -455,9 +451,7 @@ class EvidenceSynthesizer:
             if text and len(text) > 20:
                 parts.append(f"[{agent}] {text}")
 
-        answer = (
-            "\n\n".join(parts) if parts else "No useful evidence could be synthesized."
-        )
+        answer = "\n\n".join(parts) if parts else "No useful evidence could be synthesized."
 
         return SynthesisResult(
             answer=answer,
@@ -510,9 +504,7 @@ class SpecialistAgent:
                 logger.warning("Could not load AgentTools: %s", exc)
         return self._tools
 
-    def execute(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Execute the agent's specialist tool.
 
         Subclasses must override this.
@@ -540,9 +532,7 @@ class VisualAnalyst(SpecialistAgent):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__("visual_analyst", *args, **kwargs)
 
-    def execute(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         ctx = context or {}
         timestamps = ctx.get("timestamps", [])
         if not timestamps:
@@ -603,9 +593,7 @@ class RAGSearcher(SpecialistAgent):
             q = q.replace(old, new)
         return q.strip() or query
 
-    def execute(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         if self.rag is None:
             return {
                 "success": False,
@@ -646,9 +634,7 @@ class TranscriptAnalyst(SpecialistAgent):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__("transcript_analyst", *args, **kwargs)
 
-    def execute(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         ctx = context or {}
         tools = self._get_tools()
         if tools is None:
@@ -696,9 +682,7 @@ class ObjectDetectorAgent(SpecialistAgent):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__("object_detector", *args, **kwargs)
 
-    def execute(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         ctx = context or {}
         timestamp = ctx.get("timestamp", 30.0)
 
@@ -730,9 +714,7 @@ class OCRAgent(SpecialistAgent):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__("ocr_agent", *args, **kwargs)
 
-    def execute(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         ctx = context or {}
         timestamp = ctx.get("timestamp", 30.0)
 
@@ -768,9 +750,7 @@ class ConfidenceAuditor(SpecialistAgent):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__("confidence_auditor", *args, **kwargs)
 
-    def execute(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         ctx = context or {}
         prior_evidence = ctx.get("evidence", {})
 
@@ -839,9 +819,7 @@ class SummarizerAgent(SpecialistAgent):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__("summarizer", *args, **kwargs)
 
-    def execute(
-        self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def execute(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         ctx = context or {}
         num_frames = ctx.get("num_frames", 16)
 
@@ -1158,7 +1136,7 @@ class OrchestratorResult:
             "",
             self.answer,
             "",
-            f"---",
+            "---",
             f"*Agents used: {self.agents_used} | "
             f"Planning: {self.plan_duration:.1f}s | "
             f"Execution: {self.execution_duration:.1f}s*",
@@ -1383,9 +1361,7 @@ class MultiAgentOrchestrator:
 
             # Check overall confidence-based early stopping
             completed_confidences = [
-                t.confidence
-                for t in route_plan.tasks
-                if t.completed and t.confidence is not None
+                t.confidence for t in route_plan.tasks if t.completed and t.confidence is not None
             ]
             if completed_confidences:
                 avg_conf = sum(completed_confidences) / len(completed_confidences)

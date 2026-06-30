@@ -27,15 +27,15 @@ Design:
 from __future__ import annotations
 
 import abc
+import importlib
 import json
 import logging
 import os
+import pkgutil
 import time
 import uuid
-import importlib
-import pkgutil
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional
 
 from video_analysis.config import Config
@@ -264,9 +264,7 @@ class EvaluationRunner:
                         "passed": passed,
                         "total_tasks": total,
                         "passed_tasks": sum(1 for r in report.results if r.all_passed),
-                        "failed_tasks": sum(
-                            1 for r in report.results if not r.all_passed
-                        ),
+                        "failed_tasks": sum(1 for r in report.results if not r.all_passed),
                     },
                 )
         except Exception as exc:
@@ -278,9 +276,7 @@ class EvaluationRunner:
 # ── Convenience ──────────────────────────────────────────────────────────────
 
 
-def run_evaluation(
-    config: Config, task_names: Optional[List[str]] = None
-) -> EvalReport:
+def run_evaluation(config: Config, task_names: Optional[List[str]] = None) -> EvalReport:
     """Convenience function: create runner and run all tasks."""
     runner = EvaluationRunner(config)
     return runner.run_all(task_names=task_names)
@@ -374,9 +370,7 @@ class EvalReportStore:
                 tname = result.get("task_name", "unknown")
                 if tname not in task_comparison:
                     task_comparison[tname] = {"descriptions": {}, "metrics": {}}
-                task_comparison[tname]["descriptions"][rid] = result.get(
-                    "task_description", ""
-                )
+                task_comparison[tname]["descriptions"][rid] = result.get("task_description", "")
                 for metric in result.get("metrics", []):
                     mname = metric.get("name", "")
                     if mname not in task_comparison[tname]["metrics"]:
@@ -389,9 +383,7 @@ class EvalReportStore:
 
         return {
             "report_ids": list(reports_data.keys()),
-            "reports": {
-                rid: _report_summary_dict(data) for rid, data in reports_data.items()
-            },
+            "reports": {rid: _report_summary_dict(data) for rid, data in reports_data.items()},
             "task_comparison": task_comparison,
             "version_comparison": {
                 rid: data.get("version", "") for rid, data in reports_data.items()
@@ -432,8 +424,7 @@ def _build_summary_from_data(data: Dict[str, Any]) -> str:
     failed = sum(
         1
         for r in results
-        if r.get("status") == "error"
-        or any(m.get("passed") is False for m in r.get("metrics", []))
+        if r.get("status") == "error" or any(m.get("passed") is False for m in r.get("metrics", []))
     )
     skipped = sum(1 for r in results if r.get("status") == "skipped")
     parts = [f"Evaluation: {passed}/{total} passed"]

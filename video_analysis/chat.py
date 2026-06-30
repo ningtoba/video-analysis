@@ -12,16 +12,15 @@ Hermes CLI (default) or any OpenAI-compatible API (vLLM, Ollama, llama.cpp).
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from video_analysis.config import Config
-from video_analysis.rag import VideoRAG, RetrievedChunk
-from video_analysis.models import ChatMessage, ChatSource, format_timestamp
 from video_analysis.memory import ConversationMemory
+from video_analysis.models import ChatMessage
+from video_analysis.rag import RetrievedChunk, VideoRAG
 
 logger = logging.getLogger(__name__)
 
@@ -95,16 +94,12 @@ class VideoChat:
     def _get_llm(self):
         """Lazy-load the LLM provider."""
         if self._llm is None:
-            from video_analysis.llm_provider import get_llm_provider
-
             # Build LLMProviderConfig from our Config
-            from video_analysis.llm_provider import LLMProviderConfig
+            from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
 
             cfg = LLMProviderConfig(
                 provider=(
-                    self.config.llm_provider
-                    if hasattr(self.config, "llm_provider")
-                    else "hermes"
+                    self.config.llm_provider if hasattr(self.config, "llm_provider") else "hermes"
                 ),
                 api_base=(
                     self.config.openai_api_base
@@ -166,9 +161,7 @@ class VideoChat:
             result = self._ask_agent(query, video_id)
             if result is not None:
                 return result
-            logger.info(
-                "Agentic Video Agent returned None — falling through to next backend"
-            )
+            logger.info("Agentic Video Agent returned None — falling through to next backend")
 
         # Try Video MLLM backend next (video-native Q&A with visual context)
         if self.config.video_mllm_enabled and self.config.video_mllm_as_chat_backend:
@@ -287,19 +280,13 @@ class VideoChat:
             return message
 
         except ImportError as exc:
-            logger.debug(
-                "Agentic agent dependencies not available: %s — falling through", exc
-            )
+            logger.debug("Agentic agent dependencies not available: %s — falling through", exc)
             return None
         except Exception as exc:
-            logger.warning(
-                "Agentic agent failed: %s — falling through to next backend", exc
-            )
+            logger.warning("Agentic agent failed: %s — falling through to next backend", exc)
             return None
 
-    def _ask_mllm(
-        self, query: str, video_id: Optional[str], mllm
-    ) -> Optional[ChatMessage]:
+    def _ask_mllm(self, query: str, video_id: Optional[str], mllm) -> Optional[ChatMessage]:
         """Ask using Video MLLM with frame images as visual context."""
         # Collect frame images from the video
         frame_paths = []
@@ -356,10 +343,7 @@ class VideoChat:
         import time as _time
 
         _start = _time.perf_counter()
-        if (
-            self.config.event_causal_rag_enabled
-            and self.config.event_causal_rag_in_chat
-        ):
+        if self.config.event_causal_rag_enabled and self.config.event_causal_rag_in_chat:
             chunks = self.rag.event_retrieve(query, video_id=video_id)
             _method = "event_causal"
         elif self.config.agentic_retrieval_enabled:
@@ -427,9 +411,7 @@ class VideoChat:
             max_tokens=self.config.llm_max_tokens,
         )
         if not answer:
-            answer = (
-                "I encountered an error processing your question. Please try again."
-            )
+            answer = "I encountered an error processing your question. Please try again."
 
         # Extract source citations
         sources = self.rag.get_source_citations(chunks)
@@ -452,9 +434,7 @@ class VideoChat:
 
         return message
 
-    def ask_with_history(
-        self, query: str, video_id: Optional[str] = None
-    ) -> ChatMessage:
+    def ask_with_history(self, query: str, video_id: Optional[str] = None) -> ChatMessage:
         """Ask with conversation history included in context.
 
         When ``video_mllm_as_chat_backend`` is enabled, uses Video MLLM
@@ -475,11 +455,7 @@ class VideoChat:
         if video_id and chunks:
             chunks = self.rag.expand_temporal_context(chunks, video_id)
 
-        context = (
-            self.rag.build_context(chunks)
-            if chunks
-            else "No relevant video context found."
-        )
+        context = self.rag.build_context(chunks) if chunks else "No relevant video context found."
         sources = self.rag.get_source_citations(chunks) if chunks else []
 
         # Build history context
@@ -507,9 +483,7 @@ class VideoChat:
             max_tokens=self.config.llm_max_tokens,
         )
         if not answer:
-            answer = (
-                "I encountered an error processing your question. Please try again."
-            )
+            answer = "I encountered an error processing your question. Please try again."
 
         message = ChatMessage(
             role="assistant",
@@ -570,9 +544,7 @@ class VideoChat:
             parts.append(f"{i}. Q: {mem.question}{vid}\n   A: {mem.answer[:300]}")
         return "\n".join(parts)
 
-    def _build_prompt_with_memory(
-        self, query: str, context: str, memory_context: str
-    ) -> str:
+    def _build_prompt_with_memory(self, query: str, context: str, memory_context: str) -> str:
         """Build a prompt that includes conversation memory context."""
         sys_part = _build_system_prompt(context=context, extra_prefix=memory_context)
         return f"{sys_part}\n\nQuestion: {query}\n\n{_PROMPT_SUFFIX}"

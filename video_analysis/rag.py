@@ -5,18 +5,16 @@ Indexes processed video content into Chroma vector DB and provides
 hybrid retrieval with re-ranking for accurate video Q&A.
 """
 
-import json
 import logging
-from pathlib import Path
-from typing import List, Optional, Set, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional, Set
 
 import numpy as np
-
 from chromadb.errors import NotFoundError as ChromaNotFoundError
 
 from video_analysis.config import Config
-from video_analysis.models import VideoIndex, ChatSource, format_timestamp
+from video_analysis.models import ChatSource, VideoIndex, format_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +35,7 @@ class RetrievedChunk:
     score: float
     frame_path: Optional[str] = None
     metadata: dict = None
-    chunk_type: str = (
-        "scene"  # "scene", "frame", "transcript", "fixed_60s", "sliding_30s"
-    )
+    chunk_type: str = "scene"  # "scene", "frame", "transcript", "fixed_60s", "sliding_30s"
 
 
 @dataclass
@@ -77,27 +73,27 @@ EMBEDDING_PREFIXES = {
 }
 
 # ── Indexing constants ─────────────────────────────────────────────────
-_FIXED_WINDOW_DURATION = 60.0          # seconds, no overlap
-_FIXED_WINDOW_CHUNK_SIZE = 500         # chars per text-splitter chunk
+_FIXED_WINDOW_DURATION = 60.0  # seconds, no overlap
+_FIXED_WINDOW_CHUNK_SIZE = 500  # chars per text-splitter chunk
 _FIXED_WINDOW_CHUNK_OVERLAP = 0
 
-_SLIDING_WINDOW_DURATION = 30.0        # seconds
-_SLIDING_WINDOW_OVERLAP = 15.0         # seconds
-_SLIDING_WINDOW_CHUNK_SIZE = 300       # chars per text-splitter chunk
+_SLIDING_WINDOW_DURATION = 30.0  # seconds
+_SLIDING_WINDOW_OVERLAP = 15.0  # seconds
+_SLIDING_WINDOW_CHUNK_SIZE = 300  # chars per text-splitter chunk
 _SLIDING_WINDOW_CHUNK_OVERLAP = 50
 
 _TRANSCRIPT_CHUNK_SIZE = 500
 _TRANSCRIPT_CHUNK_OVERLAP = 50
 
 _CHROMA_BATCH_SIZE = 100
-_RETRIEVAL_FETCH_MULTIPLIER = 2        # fetch top_k * N before re-ranking
-_MIN_CHUNK_TEXT_LENGTH = 10            # chars — skip chunks shorter than this
+_RETRIEVAL_FETCH_MULTIPLIER = 2  # fetch top_k * N before re-ranking
+_MIN_CHUNK_TEXT_LENGTH = 10  # chars — skip chunks shorter than this
 
 # ── Re-ranking constants ───────────────────────────────────────────────
-_RERANK_TRUNCATION_LENGTH = 512        # chars — max text sent to cross-encoder
+_RERANK_TRUNCATION_LENGTH = 512  # chars — max text sent to cross-encoder
 _DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-_SOURCE_PREVIEW_LENGTH = 200           # chars — source citation preview
-_TEMPORAL_NEIGHBOR_DISCOUNT = 0.8      # score multiplier for neighbor chunks
+_SOURCE_PREVIEW_LENGTH = 200  # chars — source citation preview
+_TEMPORAL_NEIGHBOR_DISCOUNT = 0.8  # score multiplier for neighbor chunks
 
 
 def _apply_embedding_prefix(text: str, model_name: str, prefix_type: str) -> str:
@@ -168,6 +164,7 @@ class VideoRAG:
         """Unload BGE-VL model from GPU memory."""
         if self._bge_vl_model is not None:
             import gc
+
             import torch
 
             del self._bge_vl_model
@@ -200,9 +197,7 @@ class VideoRAG:
             model = AutoModel.from_pretrained(
                 model_id,
                 trust_remote_code=True,
-                torch_dtype=(
-                    torch.bfloat16 if torch.cuda.is_available() else torch.float32
-                ),
+                torch_dtype=(torch.bfloat16 if torch.cuda.is_available() else torch.float32),
                 device_map="cuda" if torch.cuda.is_available() else "cpu",
             )
             model.set_processor(model_id)
@@ -292,9 +287,7 @@ class VideoRAG:
                 trust_remote_code=True,
             )
 
-        prefixed = _apply_embedding_prefix(
-            text, self.config.text_embedding_model, "document"
-        )
+        prefixed = _apply_embedding_prefix(text, self.config.text_embedding_model, "document")
         emb = self._embedding_model.encode(prefixed, normalize_embeddings=True)
         return emb.tolist()
 
@@ -326,11 +319,11 @@ class VideoRAG:
             if self._embedding_model is None:
                 model_name = self.config.text_embedding_model
                 self._embedding_model = SentenceTransformer(
-                    model_name, device="cuda", trust_remote_code=True,
+                    model_name,
+                    device="cuda",
+                    trust_remote_code=True,
                 )
-            prefixed = _apply_embedding_prefix(
-                text, self.config.text_embedding_model, "document"
-            )
+            prefixed = _apply_embedding_prefix(text, self.config.text_embedding_model, "document")
             emb = self._embedding_model.encode(prefixed, normalize_embeddings=True)
             return emb.tolist()
 
@@ -404,9 +397,7 @@ class VideoRAG:
                 trust_remote_code=True,
             )
 
-        prefixed = _apply_embedding_prefix(
-            query, self.config.text_embedding_model, "query"
-        )
+        prefixed = _apply_embedding_prefix(query, self.config.text_embedding_model, "query")
         emb = self._embedding_model.encode(prefixed, normalize_embeddings=True)
         return emb.tolist()
 
@@ -432,13 +423,9 @@ class VideoRAG:
         transcript_by_time: List[tuple[float, float, str]] = []
         for scene in video_index.scenes:
             if scene.transcript:
-                transcript_by_time.append(
-                    (scene.start_time, scene.end_time, scene.transcript)
-                )
+                transcript_by_time.append((scene.start_time, scene.end_time, scene.transcript))
         if video_index.full_transcript:
-            transcript_by_time.append(
-                (0.0, video_index.duration, video_index.full_transcript)
-            )
+            transcript_by_time.append((0.0, video_index.duration, video_index.full_transcript))
 
         # --- Scene chunks (variable length) ---
         for scene in video_index.scenes:
@@ -468,9 +455,7 @@ class VideoRAG:
                     )
                 if frame.action:
                     conf_str = (
-                        f" ({frame.action_confidence:.0%})"
-                        if frame.action_confidence
-                        else ""
+                        f" ({frame.action_confidence:.0%})" if frame.action_confidence else ""
                     )
                     parts.append(
                         f"[Action at {format_timestamp(frame.timestamp)}]: {frame.action}{conf_str}"
@@ -504,9 +489,7 @@ class VideoRAG:
             for frame in scene.key_frames:
                 frame_parts = []
                 if scene.transcript:
-                    frame_parts.append(
-                        f"[Transcript around this time]: {scene.transcript[:500]}"
-                    )
+                    frame_parts.append(f"[Transcript around this time]: {scene.transcript[:500]}")
                 if frame.description:
                     frame_parts.append(f"[Frame]: {frame.description}")
                 if frame.objects:
@@ -516,9 +499,7 @@ class VideoRAG:
                     frame_parts.append(f"[Text]: {frame.ocr_text}")
                 if frame.action:
                     conf_str = (
-                        f" ({frame.action_confidence:.0%})"
-                        if frame.action_confidence
-                        else ""
+                        f" ({frame.action_confidence:.0%})" if frame.action_confidence else ""
                     )
                     frame_parts.append(f"[Action]: {frame.action}{conf_str}")
 
@@ -543,9 +524,7 @@ class VideoRAG:
 
         # --- Fixed-window chunks (60 seconds, no overlap) ---
         if video_index.duration > 0 and transcript_by_time:
-            full_text = video_index.full_transcript or " ".join(
-                t[2] for t in transcript_by_time
-            )
+            full_text = video_index.full_transcript or " ".join(t[2] for t in transcript_by_time)
             if full_text.strip():
                 splitter = RecursiveCharacterTextSplitter(
                     chunk_size=_FIXED_WINDOW_CHUNK_SIZE,
@@ -558,9 +537,7 @@ class VideoRAG:
                     0, max(1, int(video_index.duration / _FIXED_WINDOW_DURATION))
                 ):
                     start_t = window_idx * _FIXED_WINDOW_DURATION
-                    end_t = min(
-                        (window_idx + 1) * _FIXED_WINDOW_DURATION, video_index.duration
-                    )
+                    end_t = min((window_idx + 1) * _FIXED_WINDOW_DURATION, video_index.duration)
 
                     # Estimate which text chunks belong to this time window
                     window_text = ""
@@ -588,9 +565,7 @@ class VideoRAG:
 
         # --- Sliding-window chunks (30 seconds, 15 second overlap) ---
         if video_index.duration > 0 and transcript_by_time:
-            full_text = video_index.full_transcript or " ".join(
-                t[2] for t in transcript_by_time
-            )
+            full_text = video_index.full_transcript or " ".join(t[2] for t in transcript_by_time)
             if full_text.strip():
                 splitter = RecursiveCharacterTextSplitter(
                     chunk_size=_SLIDING_WINDOW_CHUNK_SIZE,
@@ -639,9 +614,7 @@ class VideoRAG:
             transcript_chunks = splitter.split_text(video_index.full_transcript)
             for i, chunk_text in enumerate(transcript_chunks):
                 chunk_id = f"{video_index.video_id}_transcript_{i}"
-                estimated_time = (
-                    i / max(len(transcript_chunks), 1)
-                ) * video_index.duration
+                estimated_time = (i / max(len(transcript_chunks), 1)) * video_index.duration
                 # Skip if very close to an existing sliding-window chunk
                 chunks.append(f"[Transcript]: {chunk_text}")
                 metadatas.append(
@@ -690,8 +663,8 @@ class VideoRAG:
         # Record metrics
         try:
             from video_analysis.metrics import (
-                videos_indexed_total,
                 update_chroma_collection_size,
+                videos_indexed_total,
             )
 
             videos_indexed_total.inc()
@@ -754,9 +727,7 @@ class VideoRAG:
             chunk_time = meta.get("start_time", 0)
 
             # Base score from cosine similarity
-            base_score = 1.0 - (
-                results["distances"][0][i] if results["distances"] else 0
-            )
+            base_score = 1.0 - (results["distances"][0][i] if results["distances"] else 0)
 
             # --- TV-RAG Temporal Decay ---
             # Weight retrieval scores by temporal proximity to query_time
@@ -769,9 +740,7 @@ class VideoRAG:
                 import math
 
                 time_distance = abs(query_time - chunk_time)
-                temporal_weight = math.exp(
-                    -self.config.temporal_decay_rate * time_distance
-                )
+                temporal_weight = math.exp(-self.config.temporal_decay_rate * time_distance)
                 score = base_score * temporal_weight
             else:
                 score = base_score
@@ -813,9 +782,7 @@ class VideoRAG:
 
         return chunks
 
-    def _rerank(
-        self, query: str, chunks: List[RetrievedChunk], top_k: int
-    ) -> List[RetrievedChunk]:
+    def _rerank(self, query: str, chunks: List[RetrievedChunk], top_k: int) -> List[RetrievedChunk]:
         """Re-rank chunks using a cross-encoder model."""
         try:
             from sentence_transformers import CrossEncoder
@@ -851,9 +818,7 @@ class VideoRAG:
             reranker = ColBERTReranker()
 
             if not reranker.available:
-                logger.info(
-                    "ColBERTv2 re-ranking unavailable (ragatouille not installed)"
-                )
+                logger.info("ColBERTv2 re-ranking unavailable (ragatouille not installed)")
                 return chunks[:top_k]
 
             # Extract text from chunks for re-ranking
@@ -875,9 +840,7 @@ class VideoRAG:
             logger.info("ColBERTv2 re-ranking complete")
             return chunks[:top_k]
         except ImportError:
-            logger.info(
-                "ColBERTv2 not available — falling back to cross-encoder results"
-            )
+            logger.info("ColBERTv2 not available — falling back to cross-encoder results")
             return chunks[:top_k]
         except Exception as e:
             logger.error(f"ColBERTv2 re-ranking failed: {e}")
@@ -900,9 +863,7 @@ class VideoRAG:
             reranker = ColBERTAttReranker()
 
             if not reranker.available:
-                logger.info(
-                    "ColBERT-Att re-ranking unavailable (transformers not installed)"
-                )
+                logger.info("ColBERT-Att re-ranking unavailable (transformers not installed)")
                 return chunks[:top_k]
 
             # Extract texts from chunks
@@ -924,9 +885,7 @@ class VideoRAG:
             logger.info("ColBERT-Att re-ranking complete")
             return chunks[:top_k]
         except ImportError:
-            logger.info(
-                "ColBERT-Att not available — falling back to cross-encoder results"
-            )
+            logger.info("ColBERT-Att not available — falling back to cross-encoder results")
             return chunks[:top_k]
         except Exception as e:
             logger.error(f"ColBERT-Att re-ranking failed: {e}")
@@ -979,7 +938,6 @@ class VideoRAG:
             return chunks[:top_k]
 
         # Pre-compute query relevance scores (normalised 0-1)
-        import numpy as np
 
         relevance = np.dot(chunk_vecs, query_vec).tolist()
         # Compute pairwise chunk-chunk similarity matrix
@@ -1014,8 +972,7 @@ class VideoRAG:
         # Build result in MMR order
         result = [chunks[i] for i in selected_indices]
         logger.info(
-            f"MMR diversity re-ranking: {len(chunks)} → {len(result)} chunks "
-            f"(λ={mmr_lambda})"
+            f"MMR diversity re-ranking: {len(chunks)} → {len(result)} chunks (λ={mmr_lambda})"
         )
         return result
 
@@ -1074,7 +1031,8 @@ class VideoRAG:
                                     text=neigh["documents"][0],
                                     timestamp=meta.get("start_time", 0),
                                     scene_id=meta.get("scene_id", -1),
-                                    score=chunk.score * _TEMPORAL_NEIGHBOR_DISCOUNT,  # slightly discounted
+                                    score=chunk.score
+                                    * _TEMPORAL_NEIGHBOR_DISCOUNT,  # slightly discounted
                                     metadata=meta,
                                 )
                             )
@@ -1123,9 +1081,7 @@ class VideoRAG:
         if not hasattr(self, "_event_rag_instance") or self._event_rag_instance is None:
             from video_analysis.event_rag import EventCausalRAG
 
-            self._event_rag_instance = EventCausalRAG(
-                config=self.config, rag_instance=self
-            )
+            self._event_rag_instance = EventCausalRAG(config=self.config, rag_instance=self)
         return self._event_rag_instance
 
     def event_retrieve(
@@ -1234,8 +1190,7 @@ class VideoRAG:
         count = event_rag.index_events(events)
         duration = _time.perf_counter() - t0
         logger.info(
-            f"Event-Causal RAG: segmented {len(events)} events, "
-            f"indexed {count} in {duration:.1f}s"
+            f"Event-Causal RAG: segmented {len(events)} events, indexed {count} in {duration:.1f}s"
         )
         return count
 
@@ -1357,7 +1312,7 @@ class VideoRAG:
         """
         all_chunks: dict = {}
         for i, sub_q in enumerate(sub_queries):
-            logger.info(f"Multi-hop [{i+1}/{len(sub_queries)}]: {sub_q[:80]}")
+            logger.info(f"Multi-hop [{i + 1}/{len(sub_queries)}]: {sub_q[:80]}")
             try:
                 sub_chunks = self.retrieve(
                     query=sub_q,
@@ -1370,12 +1325,10 @@ class VideoRAG:
                     if key not in all_chunks or c.score > all_chunks[key].score:
                         all_chunks[key] = c
             except Exception as e:
-                logger.warning(f"Multi-hop sub-query [{i+1}] failed: {e}")
+                logger.warning(f"Multi-hop sub-query [{i + 1}] failed: {e}")
 
         if not all_chunks:
-            logger.info(
-                "Multi-hop returned no results — falling back to standard retrieval"
-            )
+            logger.info("Multi-hop returned no results — falling back to standard retrieval")
             return self.retrieve(query, video_id=video_id, top_k=top_k)
 
         merged = list(all_chunks.values())
@@ -1453,8 +1406,7 @@ class VideoRAG:
 
         accumulated: Dict[str, RetrievedChunk] = {}
         logger.info(
-            f"Agentic RAG: starting {max_rounds}-round retrieval "
-            f"(min_confidence={min_confidence})"
+            f"Agentic RAG: starting {max_rounds}-round retrieval (min_confidence={min_confidence})"
         )
 
         for round_num in range(1, max_rounds + 1):
@@ -1462,9 +1414,7 @@ class VideoRAG:
 
             if round_num == 1:
                 # Round 1: Standard retrieval
-                logger.info(
-                    f"Agentic RAG round {round_num}/{max_rounds}: standard retrieval"
-                )
+                logger.info(f"Agentic RAG round {round_num}/{max_rounds}: standard retrieval")
                 round_chunks = self.retrieve(
                     query=query,
                     video_id=video_id,
@@ -1474,9 +1424,7 @@ class VideoRAG:
 
             elif round_num == 2 and self.config.multi_hop_enabled:
                 # Round 2: Multi-hop decomposition
-                logger.info(
-                    f"Agentic RAG round {round_num}/{max_rounds}: multi-hop decomposition"
-                )
+                logger.info(f"Agentic RAG round {round_num}/{max_rounds}: multi-hop decomposition")
                 router = self._get_query_router()
                 sub_queries = None
                 if router is not None:
@@ -1504,9 +1452,7 @@ class VideoRAG:
 
             elif round_num == 3 and self.config.scene_graph_enabled:
                 # Round 3: Scene-graph expansion on accumulated results
-                logger.info(
-                    f"Agentic RAG round {round_num}/{max_rounds}: scene-graph expansion"
-                )
+                logger.info(f"Agentic RAG round {round_num}/{max_rounds}: scene-graph expansion")
                 # Use accumulated chunks as seeds for graph expansion
                 if accumulated:
                     seed_chunks = list(accumulated.values())
@@ -1553,9 +1499,7 @@ class VideoRAG:
                         verified.verdict in ("partial", "unsupported")
                         and verified.retrieval_rounds > 1
                     ):
-                        logger.info(
-                            "Self-check triggered re-retrieval — results already merged"
-                        )
+                        logger.info("Self-check triggered re-retrieval — results already merged")
                 else:
                     logger.info("Self-check not available — skipping round 4")
 
@@ -1578,9 +1522,7 @@ class VideoRAG:
                     accumulated[key] = c
 
             # Confidence check: compute avg score of top-3 chunks
-            sorted_chunks = sorted(
-                accumulated.values(), key=lambda x: x.score, reverse=True
-            )
+            sorted_chunks = sorted(accumulated.values(), key=lambda x: x.score, reverse=True)
             top_n = min(3, len(sorted_chunks))
             if top_n > 0:
                 avg_score = sum(sorted_chunks[i].score for i in range(top_n)) / top_n
@@ -1595,9 +1537,7 @@ class VideoRAG:
                     )
                     break
             else:
-                logger.info(
-                    f"Agentic RAG round {round_num}/{max_rounds}: no results yet"
-                )
+                logger.info(f"Agentic RAG round {round_num}/{max_rounds}: no results yet")
 
         # Final deduplication (already done), re-rank against original query
         final_chunks = list(accumulated.values())
@@ -1699,8 +1639,7 @@ class VideoRAG:
                     text=results["documents"][0][i],
                     timestamp=meta.get("start_time", 0),
                     scene_id=meta.get("scene_id", -1),
-                    score=1.0
-                    - (results["distances"][0][i] if results["distances"] else 0),
+                    score=1.0 - (results["distances"][0][i] if results["distances"] else 0),
                     frame_path=meta.get("frame_path"),
                     metadata=meta,
                     chunk_type=meta.get("chunk_type", "scene"),

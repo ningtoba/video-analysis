@@ -3,8 +3,8 @@ Data models for video analysis platform.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
 from datetime import timedelta
+from typing import Any, Dict, List, Optional
 
 
 @dataclass

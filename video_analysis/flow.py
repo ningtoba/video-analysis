@@ -168,9 +168,7 @@ class FFmpegMotionExtractor:
             # Try to extract motion vectors from side data
             mvs = self._extract_mv_from_side_data(fr)
             mv_count = len(mvs)
-            mv_mag_avg = (
-                sum(m["magnitude"] for m in mvs) / mv_count if mv_count > 0 else 0.0
-            )
+            mv_mag_avg = sum(m["magnitude"] for m in mvs) / mv_count if mv_count > 0 else 0.0
             mv_dir_entropy = self._direction_entropy(mvs)
 
             motion_score = min(1.0, mv_mag_avg / 50.0)

@@ -36,7 +36,6 @@ from __future__ import annotations
 import enum
 import json
 import logging
-import os
 import subprocess
 import time
 import uuid
@@ -324,8 +323,7 @@ class StreamingPipeline:
         duration = _ffprobe_duration(video_path_obj)
         if duration is None or duration <= 0:
             raise ValueError(
-                f"Cannot determine duration for {video_path}. "
-                f"File may be empty or corrupt."
+                f"Cannot determine duration for {video_path}. File may be empty or corrupt."
             )
 
         # Compute segment boundaries
@@ -339,9 +337,7 @@ class StreamingPipeline:
                 break
 
             actual_end = min(end, duration)
-            result = self._process_segment(
-                video_path_obj, start, actual_end, chunk_idx, video_id
-            )
+            result = self._process_segment(video_path_obj, start, actual_end, chunk_idx, video_id)
             if result is not None:
                 # Accumulate
                 self._chunk_results.append(result)
@@ -494,24 +490,16 @@ class StreamingPipeline:
         # Resolve settings from config or params
         chunk_duration = chunk_duration or self.config.live_stream_chunk_duration
         auto_reconnect = (
-            self.config.live_stream_auto_reconnect
-            if auto_reconnect is None
-            else auto_reconnect
+            self.config.live_stream_auto_reconnect if auto_reconnect is None else auto_reconnect
         )
         max_retries = (
-            max_retries
-            if max_retries is not None
-            else self.config.live_stream_max_retries
+            max_retries if max_retries is not None else self.config.live_stream_max_retries
         )
         retry_delay = (
-            retry_delay
-            if retry_delay is not None
-            else self.config.live_stream_retry_delay
+            retry_delay if retry_delay is not None else self.config.live_stream_retry_delay
         )
         sliding_window = (
-            sliding_window
-            if sliding_window is not None
-            else self.config.live_stream_sliding_window
+            sliding_window if sliding_window is not None else self.config.live_stream_sliding_window
         )
 
         # Detect stream source type
@@ -548,14 +536,11 @@ class StreamingPipeline:
 
         while True:
             # Capture a segment from the live stream
-            segment_filename = (
-                f"{stream_id}_live_{chunk_idx:04d}_{chunk_duration:.0f}s.mp4"
-            )
+            segment_filename = f"{stream_id}_live_{chunk_idx:04d}_{chunk_duration:.0f}s.mp4"
             segment_path = self._temp_dir / segment_filename
 
             logger.info(
-                f"Capturing live chunk {chunk_idx}: {chunk_duration}s "
-                f"from {stream_url[:60]}..."
+                f"Capturing live chunk {chunk_idx}: {chunk_duration}s from {stream_url[:60]}..."
             )
 
             success = _ffmpeg_capture_segment(
@@ -575,15 +560,11 @@ class StreamingPipeline:
                     time.sleep(retry_delay)
                     continue
                 elif auto_reconnect and retry_count >= max_retries:
-                    logger.error(
-                        f"Stream capture failed after {max_retries} retries. "
-                        "Giving up."
-                    )
+                    logger.error(f"Stream capture failed after {max_retries} retries. Giving up.")
                     break
                 else:
                     logger.warning(
-                        f"Stream capture failed (retries disabled). "
-                        "Stopping live stream analysis."
+                        "Stream capture failed (retries disabled). Stopping live stream analysis."
                     )
                     break
 
@@ -650,9 +631,7 @@ class StreamingPipeline:
                 chunk_idx += 1
 
             except Exception as e:
-                logger.error(
-                    f"Pipeline processing failed for live chunk {chunk_idx}: {e}"
-                )
+                logger.error(f"Pipeline processing failed for live chunk {chunk_idx}: {e}")
                 # Try to clean up regardless
                 try:
                     pipeline = self._get_pipeline()
@@ -708,8 +687,7 @@ class StreamingPipeline:
 
         if pruned > 0:
             logger.debug(
-                f"Pruned {pruned} chunks ({kept_duration:.0f}s kept, "
-                f"window={window_seconds}s)"
+                f"Pruned {pruned} chunks ({kept_duration:.0f}s kept, window={window_seconds}s)"
             )
 
     # ------------------------------------------------------------------
@@ -729,9 +707,7 @@ class StreamingPipeline:
         """
         duration = _ffprobe_duration(video_path)
         if duration is None or duration <= 0:
-            logger.warning(
-                f"Cannot segment video (duration={duration}) — returning empty list"
-            )
+            logger.warning(f"Cannot segment video (duration={duration}) — returning empty list")
             return []
 
         segments: List[Tuple[float, float]] = []
@@ -782,15 +758,11 @@ class StreamingPipeline:
         """
         duration = end_time - start_time
         if duration <= 0:
-            logger.warning(
-                f"Segment {chunk_index}: invalid duration {duration:.2f}s — skipping"
-            )
+            logger.warning(f"Segment {chunk_index}: invalid duration {duration:.2f}s — skipping")
             return None
 
         # Create temp segment file
-        segment_filename = (
-            f"{video_id}_chunk_{chunk_index:04d}_{start_time:.1f}-{end_time:.1f}.mp4"
-        )
+        segment_filename = f"{video_id}_chunk_{chunk_index:04d}_{start_time:.1f}-{end_time:.1f}.mp4"
         segment_path = self._temp_dir / segment_filename
 
         try:
@@ -810,9 +782,7 @@ class StreamingPipeline:
                 "make_zero",
                 str(segment_path),
             ]
-            logger.debug(
-                f"Extracting segment {chunk_index}: [{start_time:.1f}s - {end_time:.1f}s]"
-            )
+            logger.debug(f"Extracting segment {chunk_index}: [{start_time:.1f}s - {end_time:.1f}s]")
             subprocess.run(
                 cmd,
                 capture_output=True,
@@ -822,8 +792,7 @@ class StreamingPipeline:
             )
         except subprocess.CalledProcessError as e:
             logger.error(
-                f"FFmpeg segment extraction failed for chunk {chunk_index}: "
-                f"{e.stderr.strip() or e}"
+                f"FFmpeg segment extraction failed for chunk {chunk_index}: {e.stderr.strip() or e}"
             )
             return None
         except subprocess.TimeoutExpired:
@@ -948,9 +917,7 @@ class StreamingPipeline:
     # Final index assembly
     # ------------------------------------------------------------------
 
-    def _build_final_index(
-        self, video_id: str, video_path: Path, duration: float
-    ) -> VideoIndex:
+    def _build_final_index(self, video_id: str, video_path: Path, duration: float) -> VideoIndex:
         """Build a merged VideoIndex from all accumulated chunk results.
 
         Args:
@@ -984,11 +951,7 @@ class StreamingPipeline:
         return VideoIndex(
             video_id=self._video_id or "unknown",
             filename=f"{self._video_id or 'unknown'}.mp4",
-            duration=(
-                sum(r.duration for r in self._chunk_results)
-                if self._chunk_results
-                else 0.0
-            ),
+            duration=(sum(r.duration for r in self._chunk_results) if self._chunk_results else 0.0),
             filepath="",
             scenes=self._all_scenes,
             transcript=self._all_transcript_segments,

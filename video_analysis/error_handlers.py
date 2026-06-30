@@ -63,9 +63,7 @@ class ErrorDetail(BaseModel):
 class ValidationErrorItem(BaseModel):
     """A single field validation error from Pydantic."""
 
-    loc: List[str] = Field(
-        default_factory=list, description="Location of the error (field path)"
-    )
+    loc: List[str] = Field(default_factory=list, description="Location of the error (field path)")
     msg: str = Field(..., description="Error message")
     type: str = Field(..., description="Error type identifier")
 
@@ -289,9 +287,7 @@ def register_error_handlers(app: FastAPI) -> None:
     # Register exception handlers for well-known exception types.
     app.add_exception_handler(StandardHTTPError, _standard_http_error_handler)
     app.add_exception_handler(HTTPException, _http_exception_handler)
-    app.add_exception_handler(
-        FastAPIRequestValidationError, _request_validation_handler
-    )
+    app.add_exception_handler(FastAPIRequestValidationError, _request_validation_handler)
 
     # Catch-all for any unhandled exception.  Uses middleware instead of
     # add_exception_handler(Exception, ...) because Starlette's
@@ -299,6 +295,4 @@ def register_error_handlers(app: FastAPI) -> None:
     # handler runs, which breaks TestClient and other ASGI consumers.
     app.add_middleware(_CatchAllMiddleware)
 
-    logger.info(
-        "Registered structured error handlers on %s", app.title or "FastAPI app"
-    )
+    logger.info("Registered structured error handlers on %s", app.title or "FastAPI app")

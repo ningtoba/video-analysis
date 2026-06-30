@@ -18,7 +18,7 @@ import logging
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -318,10 +318,7 @@ def select_video_aware_policy(
     """
     if duration >= duration_threshold_long:
         return "conservative"
-    if (
-        duration <= duration_threshold_short
-        and resolution_megapixels >= resolution_threshold_high
-    ):
+    if duration <= duration_threshold_short and resolution_megapixels >= resolution_threshold_high:
         return "performance"
     return "balanced"
 
@@ -365,9 +362,7 @@ class AdaptivePipelineScaler:
         width = int(props.get("width", 0))
         height = int(props.get("height", 0))
         fps = props.get("fps", 0.0)
-        resolution_mp = (
-            (width * height) / 1_000_000.0 if width > 0 and height > 0 else 0.0
-        )
+        resolution_mp = (width * height) / 1_000_000.0 if width > 0 and height > 0 else 0.0
 
         if enabled_stages is None:
             enabled_stages = {
@@ -455,9 +450,7 @@ class AdaptivePipelineScaler:
             # Stage-level pruning — disable the most expensive optional stages
             if enabled_stages.get("xclip", False):
                 result.action_recognition_enabled = False
-                reasoning.append(
-                    "Disabling action recognition (X-CLIP) due to VRAM pressure"
-                )
+                reasoning.append("Disabling action recognition (X-CLIP) due to VRAM pressure")
             if enabled_stages.get("video_mllm", False):
                 result.video_mllm_as_describer = False
                 reasoning.append("Disabling MLLM describer due to VRAM pressure")
@@ -482,8 +475,7 @@ class AdaptivePipelineScaler:
             result.dino_frame_compression_threshold = _LONG_VIDEO_DINO_THRESHOLD
             result.frame_compression_quality = _LONG_VIDEO_JPEG_QUALITY
             reasoning.append(
-                "Aggressive compression for long video: "
-                "DINO threshold=0.95, JPEG quality=75"
+                "Aggressive compression for long video: DINO threshold=0.95, JPEG quality=75"
             )
 
         # For short high-resolution videos, boost quality
@@ -492,9 +484,7 @@ class AdaptivePipelineScaler:
                 result.frame_analysis_size or FRAME_SIZE_TIERS["balanced"],
                 _SHORT_VIDEO_MAX_FRAME_SIZE,
             )
-            reasoning.append(
-                "Short high-resolution video: boosting frame analysis size to 1280"
-            )
+            reasoning.append("Short high-resolution video: boosting frame analysis size to 1280")
 
         logger.info(
             "Adaptive scaling for %s: policy=%s, framerate=%.2f, "

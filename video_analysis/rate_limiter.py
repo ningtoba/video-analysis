@@ -67,9 +67,11 @@ class TokenBucketLimiter:
         self,
         capacity: int = DEFAULT_CAPACITY,
         rate: float = DEFAULT_RATE,
+        max_clients: int = 10000,
     ) -> None:
         self._capacity = capacity
         self._rate = rate
+        self._max_clients = max_clients
         self._buckets: Dict[str, _TokenBucket] = {}
         self._lock = asyncio.Lock()
 
@@ -88,6 +90,10 @@ class TokenBucketLimiter:
             bucket = self._buckets.get(key)
 
             if bucket is None:
+                # Evict LRU bucket if at capacity.
+                if len(self._buckets) >= self._max_clients:
+                    self._evict_lru()
+
                 # First request from this client — create a full bucket.
                 bucket = _TokenBucket(
                     tokens=float(self._capacity),
@@ -102,6 +108,8 @@ class TokenBucketLimiter:
                     bucket.tokens + elapsed * self._rate,
                 )
                 bucket.last_refill = now
+
+            bucket.last_access = now
 
             if bucket.tokens >= tokens:
                 bucket.tokens -= tokens
@@ -127,6 +135,21 @@ class TokenBucketLimiter:
             else:
                 self._buckets.clear()
 
+    def _evict_lru(self) -> None:
+        """Evict the least recently accessed bucket.
+
+        Called under ``self._lock`` when the number of buckets reaches
+        ``self._max_clients`` and a new client arrives.
+        """
+        oldest_key: str | None = None
+        oldest_access = float("inf")
+        for k, b in self._buckets.items():
+            if b.last_access < oldest_access:
+                oldest_access = b.last_access
+                oldest_key = k
+        if oldest_key is not None:
+            del self._buckets[oldest_key]
+
     @property
     def capacity(self) -> int:
         """Maximum bucket size (burst allowance)."""
@@ -149,8 +172,9 @@ class _TokenBucket:
     Not exported — managed exclusively by ``TokenBucketLimiter``.
     """
 
-    __slots__ = ("tokens", "last_refill")
+    __slots__ = ("tokens", "last_refill", "last_access")
 
     def __init__(self, tokens: float, last_refill: float) -> None:
         self.tokens = tokens
         self.last_refill = last_refill
+        self.last_access = last_refill

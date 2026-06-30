@@ -32,9 +32,9 @@ import logging
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 from video_analysis.config import Config
 
@@ -207,23 +207,16 @@ class KnowledgeGraph:
                     metadata TEXT DEFAULT '{}'
                 )""")
             # Indexes for common queries
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)")
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)")
             self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)"
+                "CREATE INDEX IF NOT EXISTS idx_relationships_source ON relationships(source_id)"
             )
             self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)"
+                "CREATE INDEX IF NOT EXISTS idx_relationships_target ON relationships(target_id)"
             )
             self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_relationships_source "
-                "ON relationships(source_id)"
-            )
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_relationships_target "
-                "ON relationships(target_id)"
-            )
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_videos_indexed_at "
-                "ON videos(indexed_at)"
+                "CREATE INDEX IF NOT EXISTS idx_videos_indexed_at ON videos(indexed_at)"
             )
             self._conn.commit()
 
@@ -248,8 +241,7 @@ class KnowledgeGraph:
         meta = metadata or {}
         with self._lock:
             row = self._conn.execute(
-                "SELECT id, frequency, video_ids FROM entities "
-                "WHERE name = ? AND type = ?",
+                "SELECT id, frequency, video_ids FROM entities WHERE name = ? AND type = ?",
                 (name, entity_type),
             ).fetchone()
 
@@ -339,9 +331,7 @@ class KnowledgeGraph:
     def get_entity(self, entity_id: int) -> Optional[EntityRecord]:
         """Get a single entity by ID."""
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM entities WHERE id = ?", (entity_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
             return self._row_to_entity(row) if row else None
 
     def get_top_entities(
@@ -420,9 +410,7 @@ class KnowledgeGraph:
         Returns both incoming and outgoing relationships.
         """
         with self._lock:
-            query = (
-                "SELECT * FROM relationships WHERE " "(source_id = ? OR target_id = ?)"
-            )
+            query = "SELECT * FROM relationships WHERE (source_id = ? OR target_id = ?)"
             params: List[Any] = [entity_id, entity_id]
             if relation_type:
                 query += " AND relation_type = ?"
@@ -450,9 +438,7 @@ class KnowledgeGraph:
     def relationship_count(self) -> int:
         """Total number of relationships in the knowledge graph."""
         with self._lock:
-            row = self._conn.execute(
-                "SELECT COUNT(*) AS cnt FROM relationships"
-            ).fetchone()
+            row = self._conn.execute("SELECT COUNT(*) AS cnt FROM relationships").fetchone()
             return row["cnt"] if row else 0
 
     # ── Video operations ────────────────────────────────────────────────
@@ -514,8 +500,7 @@ class KnowledgeGraph:
         """Get all video IDs mentioning a specific entity."""
         with self._lock:
             row = self._conn.execute(
-                "SELECT video_ids FROM entities WHERE name = ? "
-                "ORDER BY frequency DESC LIMIT 1",
+                "SELECT video_ids FROM entities WHERE name = ? ORDER BY frequency DESC LIMIT 1",
                 (name,),
             ).fetchone()
             if row:
@@ -526,8 +511,7 @@ class KnowledgeGraph:
         """Get all entities associated with a specific video."""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM entities WHERE video_ids LIKE ? "
-                "ORDER BY frequency DESC",
+                "SELECT * FROM entities WHERE video_ids LIKE ? ORDER BY frequency DESC",
                 (f"%{video_id}%",),
             ).fetchall()
             return [self._row_to_entity(r) for r in rows]
@@ -763,16 +747,14 @@ class KnowledgeGraph:
             vid_count = self.video_count()
             # Type breakdown
             type_rows = self._conn.execute(
-                "SELECT type, COUNT(*) AS cnt FROM entities "
-                "GROUP BY type ORDER BY cnt DESC"
+                "SELECT type, COUNT(*) AS cnt FROM entities GROUP BY type ORDER BY cnt DESC"
             ).fetchall()
             type_breakdown = {r["type"]: r["cnt"] for r in type_rows}
             # Storage stats
             db_size = self._db_path.stat().st_size if self._db_path.exists() else 0
             # Last indexed
             last_vid = self._conn.execute(
-                "SELECT video_id, indexed_at FROM videos "
-                "ORDER BY indexed_at DESC LIMIT 1"
+                "SELECT video_id, indexed_at FROM videos ORDER BY indexed_at DESC LIMIT 1"
             ).fetchone()
 
             return {
@@ -796,21 +778,21 @@ class KnowledgeGraph:
         top_rels = self.get_top_relationships(limit=30)
 
         lines = [
-            f"## Video Knowledge Graph Summary",
-            f"",
+            "## Video Knowledge Graph Summary",
+            "",
             f"- **Videos indexed**: {stats['video_count']}",
             f"- **Unique entities**: {stats['entity_count']}",
             f"- **Relationships**: {stats['relationship_count']}",
         ]
 
         if stats["type_breakdown"]:
-            lines.append(f"- **Entity types**:")
+            lines.append("- **Entity types**:")
             for t, c in stats["type_breakdown"].items():
                 lines.append(f"  - {t}: {c}")
 
         if top_entities:
-            lines.append(f"")
-            lines.append(f"### Top entities")
+            lines.append("")
+            lines.append("### Top entities")
             for e in top_entities[:20]:
                 lines.append(
                     f"- **{e.name}** ({e.entity_type}) — seen {e.frequency}× "
@@ -818,16 +800,15 @@ class KnowledgeGraph:
                 )
 
         if top_rels:
-            lines.append(f"")
-            lines.append(f"### Strongest relationships")
+            lines.append("")
+            lines.append("### Strongest relationships")
             for r in top_rels[:15]:
                 src = self.get_entity(r.source_id)
                 tgt = self.get_entity(r.target_id)
                 src_name = src.name if src else f"#{r.source_id}"
                 tgt_name = tgt.name if tgt else f"#{r.target_id}"
                 lines.append(
-                    f"- **{src_name}** → **{tgt_name}** "
-                    f"({r.relation_type}, strength={r.strength})"
+                    f"- **{src_name}** → **{tgt_name}** ({r.relation_type}, strength={r.strength})"
                 )
 
         lines.append("")

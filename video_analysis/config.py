@@ -2,10 +2,10 @@
 Configuration for the video analysis platform.
 """
 
-from pathlib import Path
-from dataclasses import dataclass, field
-from typing import List
 import os
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List
 
 
 @dataclass
@@ -24,8 +24,10 @@ class Config:
     # Qwen3-ASR, Moonshine, and Parakeet are noted as future options but
     # have no pipeline integration code yet.
     asr_backend: str = "faster-whisper"  # "faster-whisper" only (others not yet implemented)
-    whisper_model: str = "large-v3"       # "large-v3", "large-v3-turbo", "large-v2", "medium", "small", "tiny"
-    whisper_device: str = "cuda"          # "cuda" or "cpu"
+    whisper_model: str = (
+        "large-v3"  # "large-v3", "large-v3-turbo", "large-v2", "medium", "small", "tiny"
+    )
+    whisper_device: str = "cuda"  # "cuda" or "cpu"
     whisper_compute_type: str = "int8_float16"  # "int8_float16", "float16", "int8"
 
     # OpenCLIP — scene classification & visual embeddings
@@ -39,24 +41,16 @@ class Config:
 
     # Frame extraction
     frame_rate: float = 0.5  # 1 frame per 2 seconds default
-    scene_threshold: float = (
-        0.3  # PySceneDetect sensitivity (only used for ffmpeg/content mode)
-    )
-    scene_detector: str = (
-        "adaptive"  # "adaptive", "content", "ffmpeg", "histogram", or "hash"
-    )
+    scene_threshold: float = 0.3  # PySceneDetect sensitivity (only used for ffmpeg/content mode)
+    scene_detector: str = "adaptive"  # "adaptive", "content", "ffmpeg", "histogram", or "hash"
 
     # YOLO
     yolo_model: str = "yolo26x.pt"  # Latest YOLO26
     yolo_confidence: float = 0.25
 
     # Entity tracking (ByteTrack via Ultralytics built-in — MIT)
-    entity_tracking_enabled: bool = (
-        True  # overridden by ENTITY_TRACKING_ENABLED env var
-    )
-    entity_tracker_type: str = (
-        "bytetrack.yaml"  # overridden by ENTITY_TRACKER_TYPE env var  # "bytetrack.yaml" or "botsort.yaml"
-    )
+    entity_tracking_enabled: bool = True  # overridden by ENTITY_TRACKING_ENABLED env var
+    entity_tracker_type: str = "bytetrack.yaml"  # overridden by ENTITY_TRACKER_TYPE env var  # "bytetrack.yaml" or "botsort.yaml"
 
     # RAG — Embedding
     # Primary: BGE-VL-base (150M, MIT, multimodal text+image+composed, ~0.8GB VRAM).
@@ -82,9 +76,7 @@ class Config:
     temporal_window: int = 1  # neighbors on each side
     temporal_decay_rate: float = 0.1  # TV-RAG time-decay weighting (0 = disabled)
     colbert_reranker_enabled: bool = False  # optional ColBERTv2 late-interaction
-    colbert_att_reranker_enabled: bool = (
-        False  # ColBERT-Att attention-weighted (arXiv:2603.25248)
-    )
+    colbert_att_reranker_enabled: bool = False  # ColBERT-Att attention-weighted (arXiv:2603.25248)
 
     # MMR (Maximal Marginal Relevance) Diversity Re-Ranking (v0.34.0)
     # Reduces redundancy in retrieved context by balancing relevance and diversity.
@@ -116,7 +108,9 @@ class Config:
     # llm_api_base and llm_api_key appropriately.
     llm_provider: str = "hermes"  # "hermes" (local CLI) or "openai" (OpenAI-compatible API)
     llm_api_key: str = os.environ.get("LLM_API_KEY", "")  # required for OpenAI-compatible
-    llm_api_base: str = ""  # custom base URL (e.g. https://api.deepseek.com/v1, http://localhost:1234/v1)
+    llm_api_base: str = (
+        ""  # custom base URL (e.g. https://api.deepseek.com/v1, http://localhost:1234/v1)
+    )
     llm_model: str = "deepseek-ai/DeepSeek-V4-Flash"  # model name sent to the API
     llm_temperature: float = 0.3
     llm_max_tokens: int = 2048
@@ -155,13 +149,9 @@ class Config:
 
     # Frame sampling
     adaptive_frame_sampling: bool = False  # motion-based adaptive sampling
-    adaptive_frame_sampling_sensitivity: float = (
-        0.3  # lower = more frames near boundaries
-    )
+    adaptive_frame_sampling_sensitivity: float = 0.3  # lower = more frames near boundaries
     clip_frame_dedup: bool = False  # CLIP-similarity frame deduplication
-    clip_frame_dedup_threshold: float = (
-        0.92  # frames above this similarity are deduplicated
-    )
+    clip_frame_dedup_threshold: float = 0.92  # frames above this similarity are deduplicated
 
     # DINOv2 Perceptual Frame Compression (v0.30.0 — LongVU-style)
     # Uses facebook/dinov2-small (21M params, ~85 MB VRAM) to measure
@@ -170,9 +160,7 @@ class Config:
     dino_frame_compression_threshold: float = (
         0.88  # cosine sim threshold [0,1]; lower = more aggressive compression
     )
-    dino_frame_compression_model: str = (
-        "facebook/dinov2-small"  # or "facebook/dinov2-base"
-    )
+    dino_frame_compression_model: str = "facebook/dinov2-small"  # or "facebook/dinov2-base"
 
     # YouTube / URL import
     yt_dlp_enabled: bool = True
@@ -190,17 +178,11 @@ class Config:
     action_categories_count: int = 26  # all DEFAULT_ACTION_CATEGORIES
 
     # Video MLLM (optional VideoChat-Flash 2B / SmolVLM2 — ICLR 2026, MIT, ~5.4 GB VRAM)
-    video_mllm_enabled: bool = (
-        False  # overridden by VIDEO_MLLM_ENABLED env var in __post_init__
-    )
+    video_mllm_enabled: bool = False  # overridden by VIDEO_MLLM_ENABLED env var in __post_init__
     video_mllm_model: str = "OpenGVLab/VideoChat-Flash-Qwen2_5-2B_res448"
-    video_mllm_backend: str = (
-        "auto"  # "auto", "videochat_flash", "smolvlm2", "qwen3_vl"
-    )
+    video_mllm_backend: str = "auto"  # "auto", "videochat_flash", "smolvlm2", "qwen3_vl"
     video_mllm_model_size: str = "2.2B"  # "2.2B", "500M", "256M" (SmolVLM2 only)
-    video_mllm_as_describer: bool = (
-        False  # use MLLM for scene descriptions instead of OpenCLIP
-    )
+    video_mllm_as_describer: bool = False  # use MLLM for scene descriptions instead of OpenCLIP
     video_mllm_as_chat_backend: bool = (
         False  # use MLLM as video-native Q&A backend instead of Hermes CLI
     )
@@ -212,24 +194,18 @@ class Config:
     conversation_memory_max_entries: int = int(
         os.environ.get("CONVERSATION_MEMORY_MAX_ENTRIES", "50")
     )
-    conversation_memory_ttl_days: int = int(
-        os.environ.get("CONVERSATION_MEMORY_TTL_DAYS", "30")
-    )
+    conversation_memory_ttl_days: int = int(os.environ.get("CONVERSATION_MEMORY_TTL_DAYS", "30"))
 
     # Scene Graph (VGent/ViG-RAG inspired — graph-based video retrieval)
     scene_graph_enabled: bool = True  # enable scene-graph retrieval layer
     scene_graph_k_hop: int = 2  # K-hop graph expansion (0 = disabled)
     scene_graph_temporal_window: int = 3  # max scene distance for temporal edges
-    scene_graph_min_shared_entities: int = (
-        1  # min shared objects/actions for entity edge
-    )
+    scene_graph_min_shared_entities: int = 1  # min shared objects/actions for entity edge
     scene_graph_semantic_threshold: float = 0.85  # sim threshold for semantic edges
 
     # Query Routing (text/visual/temporal/multimodal dispatch)
     query_routing_enabled: bool = True  # enable query classification & routing
-    query_routing_prefer_llm: bool = (
-        True  # use LLM for classification (fast, single-turn)
-    )
+    query_routing_prefer_llm: bool = True  # use LLM for classification (fast, single-turn)
 
     # Multi-Hop Query Decomposition
     multi_hop_enabled: bool = True  # enable multi-hop query decomposition
@@ -266,36 +242,22 @@ class Config:
 
     # Streaming Pipeline (v0.32.0)
     streaming_enabled: bool = False  # overridden by STREAMING_ENABLED env var
-    streaming_chunk_duration: float = (
-        30.0  # overridden by STREAMING_CHUNK_DURATION env var
-    )
+    streaming_chunk_duration: float = 30.0  # overridden by STREAMING_CHUNK_DURATION env var
     streaming_overlap: float = 2.0  # overridden by STREAMING_OVERLAP env var
-    streaming_incremental_index: bool = (
-        True  # overridden by STREAMING_INCREMENTAL_INDEX env var
-    )
-    streaming_max_chunks: int = (
-        0  # overridden by STREAMING_MAX_CHUNKS env var (0 = unlimited)
-    )
+    streaming_incremental_index: bool = True  # overridden by STREAMING_INCREMENTAL_INDEX env var
+    streaming_max_chunks: int = 0  # overridden by STREAMING_MAX_CHUNKS env var (0 = unlimited)
 
     # Live Stream Analysis (v0.40.0 — RTMP/RTSP/HLS support)
     live_stream_enabled: bool = False  # overridden by LIVE_STREAM_ENABLED env var
     live_stream_url: str = ""  # overridden by LIVE_STREAM_URL env var
-    live_stream_source: str = (
-        "rtmp"  # overridden by LIVE_STREAM_SOURCE env var: rtmp, rtsp, hls
-    )
-    live_stream_chunk_duration: float = (
-        30.0  # overridden by LIVE_STREAM_CHUNK_DURATION env var
-    )
+    live_stream_source: str = "rtmp"  # overridden by LIVE_STREAM_SOURCE env var: rtmp, rtsp, hls
+    live_stream_chunk_duration: float = 30.0  # overridden by LIVE_STREAM_CHUNK_DURATION env var
     live_stream_sliding_window: int = (
         300  # overridden by LIVE_STREAM_SLIDING_WINDOW env var (seconds)
     )
-    live_stream_auto_reconnect: bool = (
-        True  # overridden by LIVE_STREAM_AUTO_RECONNECT env var
-    )
+    live_stream_auto_reconnect: bool = True  # overridden by LIVE_STREAM_AUTO_RECONNECT env var
     live_stream_max_retries: int = 3  # overridden by LIVE_STREAM_MAX_RETRIES env var
-    live_stream_retry_delay: float = (
-        5.0  # overridden by LIVE_STREAM_RETRY_DELAY env var
-    )
+    live_stream_retry_delay: float = 5.0  # overridden by LIVE_STREAM_RETRY_DELAY env var
 
     # Federated Video Search (v0.33.0 — MCP-based cross-instance query)
     federation_enabled: bool = False  # overridden by FEDERATION_ENABLED env var
@@ -323,9 +285,7 @@ class Config:
 
     # OpenTelemetry Tracing (v0.49.0)
     # Configured via standard OTEL_* env vars (OTEL_SERVICE_NAME, OTEL_EXPORTER_OTLP_ENDPOINT, etc.)
-    telemetry_enabled: bool = bool(
-        os.environ.get("TELEMETRY_ENABLED", "true").lower() == "true"
-    )
+    telemetry_enabled: bool = bool(os.environ.get("TELEMETRY_ENABLED", "true").lower() == "true")
 
     # Robust Agent Confidence (v0.50.0 — Robust-TO inspired per-evidence confidence scoring)
     # When enabled, the agent assesses per-frame trustworthiness (blur, brightness, motion,
@@ -343,18 +303,14 @@ class Config:
     )  # "tiered" (high/medium/low) or "continuous"
 
     # Event-Causal RAG (v0.57.0 — arXiv:2605.06185, arXiv:2604.05418)
-    event_causal_rag_enabled: bool = (
-        False  # overridden by EVENT_CAUSAL_RAG_ENABLED env var
-    )
+    event_causal_rag_enabled: bool = False  # overridden by EVENT_CAUSAL_RAG_ENABLED env var
     # Automatically run event segmentation + indexing during pipeline processing (v0.58.0)
     event_causal_rag_index_on_process: bool = bool(
         os.environ.get("EVENT_CAUSAL_RAG_INDEX_ON_PROCESS", "true").lower() == "true"
     )
     event_segmentation_strategy: str = "auto"  # "auto", "llm", "transcript", "temporal"
     event_causal_top_k: int = 10  # max events to return from bidirectional retrieval
-    event_causal_semantic_weight: float = (
-        0.5  # weight for semantic store vs causal store
-    )
+    event_causal_semantic_weight: float = 0.5  # weight for semantic store vs causal store
     event_max_duration_seconds: float = 300.0  # max event duration in seconds
     # Event-Causal RAG in chat retrieval (v0.58.0)
     event_causal_rag_in_chat: bool = bool(
@@ -362,15 +318,11 @@ class Config:
     )
 
     # Streaming Thinking (v0.57.0 — arXiv:2603.12262 amortized streaming reasoning)
-    streaming_thinking_enabled: bool = (
-        False  # overridden by STREAMING_THINKING_ENABLED env var
-    )
+    streaming_thinking_enabled: bool = False  # overridden by STREAMING_THINKING_ENABLED env var
     streaming_thinking_interval: int = 1  # think on every Nth chunk
 
     # Rate Limiting (v0.49.0)
-    rate_limit_enabled: bool = bool(
-        os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
-    )
+    rate_limit_enabled: bool = bool(os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true")
     rate_limit_capacity: int = int(os.environ.get("RATE_LIMIT_CAPACITY", "100"))
     rate_limit_rate: float = float(
         os.environ.get("RATE_LIMIT_RATE", "1.6667")  # 100/minute
@@ -663,9 +615,7 @@ class Config:
         ocr_ver_env = os.environ.get("OCR_MODEL_VERSION", "").lower()
         if ocr_ver_env in ("pp-ocrv6", "pp-ocrv5"):
             # Preserve the canonical casing: PP-OCRv6 or PP-OCRv5
-            self.ocr_model_version = (
-                "PP-OCRv5" if ocr_ver_env == "pp-ocrv5" else "PP-OCRv6"
-            )
+            self.ocr_model_version = "PP-OCRv5" if ocr_ver_env == "pp-ocrv5" else "PP-OCRv6"
         ocr_tier_env = os.environ.get("OCR_MODEL_TIER", "").lower()
         if ocr_tier_env in ("tiny", "small", "medium"):
             self.ocr_model_tier = ocr_tier_env
@@ -693,9 +643,7 @@ class Config:
         ev_rag_env = os.environ.get("EVENT_CAUSAL_RAG_ENABLED", "").lower()
         if ev_rag_env in ("true", "1", "yes"):
             self.event_causal_rag_enabled = True
-        ev_rag_index_env = os.environ.get(
-            "EVENT_CAUSAL_RAG_INDEX_ON_PROCESS", ""
-        ).lower()
+        ev_rag_index_env = os.environ.get("EVENT_CAUSAL_RAG_INDEX_ON_PROCESS", "").lower()
         if ev_rag_index_env in ("false", "0", "no"):
             self.event_causal_rag_index_on_process = False
         ev_rag_chat_env = os.environ.get("EVENT_CAUSAL_RAG_IN_CHAT", "").lower()

@@ -23,7 +23,7 @@ import logging
 import os
 import subprocess
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -239,15 +239,9 @@ class HermesProvider(LLMProvider):
                 "-m",
                 self._config.hermes_model,
                 "-t",
-                str(
-                    temperature if temperature is not None else self._config.temperature
-                ),
+                str(temperature if temperature is not None else self._config.temperature),
                 "--max-tokens",
-                str(
-                    max_tokens
-                    if max_tokens is not None
-                    else self._config.hermes_max_tokens
-                ),
+                str(max_tokens if max_tokens is not None else self._config.hermes_max_tokens),
             ]
             if system:
                 cmd += ["-s", system]
@@ -318,15 +312,9 @@ class HermesProvider(LLMProvider):
                 "-m",
                 self._config.hermes_model,
                 "-t",
-                str(
-                    temperature if temperature is not None else self._config.temperature
-                ),
+                str(temperature if temperature is not None else self._config.temperature),
                 "--max-tokens",
-                str(
-                    max_tokens
-                    if max_tokens is not None
-                    else self._config.hermes_max_tokens
-                ),
+                str(max_tokens if max_tokens is not None else self._config.hermes_max_tokens),
             ]
             if system:
                 cmd += ["-s", system]
@@ -414,6 +402,7 @@ class HermesProvider(LLMProvider):
             await asyncio.sleep(0)
         if result:
             yield "\n"
+
 
 # ---------------------------------------------------------------------------
 # OpenAI-compatible provider
@@ -563,24 +552,16 @@ class OpenAIProvider(LLMProvider):
         payload = {
             "model": self._config.model,
             "messages": messages,
-            "temperature": (
-                temperature if temperature is not None else self._config.temperature
-            ),
-            "max_tokens": (
-                max_tokens if max_tokens is not None else self._config.max_tokens
-            ),
+            "temperature": (temperature if temperature is not None else self._config.temperature),
+            "max_tokens": (max_tokens if max_tokens is not None else self._config.max_tokens),
             "stream": True,
         }
 
         try:
             async with httpx.AsyncClient(
-                timeout=httpx.Timeout(
-                    timeout if timeout is not None else self._config.timeout
-                )
+                timeout=httpx.Timeout(timeout if timeout is not None else self._config.timeout)
             ) as client:
-                async with client.stream(
-                    "POST", base, json=payload, headers=headers
-                ) as response:
+                async with client.stream("POST", base, json=payload, headers=headers) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
                         line = line.strip()
@@ -641,12 +622,8 @@ class OpenAIProvider(LLMProvider):
         payload: Dict[str, Any] = {
             "model": self._config.model,
             "messages": messages,
-            "temperature": (
-                temperature if temperature is not None else self._config.temperature
-            ),
-            "max_tokens": (
-                max_tokens if max_tokens is not None else self._config.max_tokens
-            ),
+            "temperature": (temperature if temperature is not None else self._config.temperature),
+            "max_tokens": (max_tokens if max_tokens is not None else self._config.max_tokens),
         }
 
         try:
@@ -660,6 +637,7 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             logger.warning("OpenAI API call failed: %s", e)
             return None
+
 
 # ---------------------------------------------------------------------------
 # Factory
@@ -702,9 +680,7 @@ def get_llm_provider(
         else:
             provider = HermesProvider(cfg)
     else:
-        logger.warning(
-            "Unknown provider type %r, falling back to hermes", provider_type
-        )
+        logger.warning("Unknown provider type %r, falling back to hermes", provider_type)
         provider = HermesProvider(cfg)
 
     _PROVIDER_CACHE[cache_key] = provider

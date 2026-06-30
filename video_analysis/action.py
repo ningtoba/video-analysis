@@ -18,7 +18,6 @@ Usage::
 """
 
 import logging
-from pathlib import Path
 from typing import List, Optional, Tuple
 
 import torch
@@ -92,8 +91,7 @@ class ActionRecognizer:
         if self._model is not None:
             return
         try:
-            from transformers import XCLIPProcessor, XCLIPModel
-            import torch
+            from transformers import XCLIPModel, XCLIPProcessor
 
             logger.info(
                 f"Loading X-CLIP action recognizer: {self.model_name} "
@@ -202,7 +200,6 @@ class ActionRecognizer:
         Returns:
             Dict ``{scene_id: [(action, confidence), ...]}``.
         """
-        from video_analysis.models import SceneInfo
 
         self._load()
         scene_results: dict = {}

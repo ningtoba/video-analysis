@@ -38,7 +38,7 @@ import os
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -97,16 +97,12 @@ class InternVideo3Backend:
         self.use_fp8 = use_fp8
         self.thinking_mode = thinking_mode
         self._vllm_server_url = (
-            vllm_server_url
-            or os.environ.get(VLLM_SERVER_URL_ENV)
-            or VLLM_SERVER_DEFAULT
+            vllm_server_url or os.environ.get(VLLM_SERVER_URL_ENV) or VLLM_SERVER_DEFAULT
         )
 
         # Runtime state
         self._available: Optional[bool] = None  # None = unchecked
-        self._mode: Optional[Literal["vllm_server", "vllm_offline", "transformers"]] = (
-            None
-        )
+        self._mode: Optional[Literal["vllm_server", "vllm_offline", "transformers"]] = None
         self._llm = None  # vLLM offline engine
         self._sampling_params = None
         self._model = None  # transformers model
@@ -154,9 +150,7 @@ class InternVideo3Backend:
             return True
 
         self._available = False
-        logger.warning(
-            "InternVideo3: no backend available. Install vLLM or transformers."
-        )
+        logger.warning("InternVideo3: no backend available. Install vLLM or transformers.")
         return False
 
     def unload(self) -> None:
@@ -267,8 +261,8 @@ class InternVideo3Backend:
         except ImportError:
             pass
         try:
-            import transformers  # noqa: F401
             import torch  # noqa: F401
+            import transformers  # noqa: F401
 
             self._mode = "transformers"
             self._available = True
@@ -421,9 +415,7 @@ class InternVideo3Backend:
         try:
             from transformers import AutoModelForImageTextToText, AutoProcessor
         except ImportError:
-            logger.warning(
-                "transformers not installed; cannot use transformers backend"
-            )
+            logger.warning("transformers not installed; cannot use transformers backend")
             return False
 
         try:
@@ -447,9 +439,7 @@ class InternVideo3Backend:
                 except Exception:
                     logger.warning("FP8 quantization not available, using BF16")
 
-            self._model = AutoModelForImageTextToText.from_pretrained(
-                self.model_name, **kwargs
-            )
+            self._model = AutoModelForImageTextToText.from_pretrained(self.model_name, **kwargs)
             self._processor = AutoProcessor.from_pretrained(self.model_name)
 
             # Move to GPU
@@ -480,7 +470,6 @@ class InternVideo3Backend:
             return None
         try:
             import torch
-
             from PIL import Image
 
             images = []

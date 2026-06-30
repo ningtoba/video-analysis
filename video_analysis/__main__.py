@@ -12,15 +12,14 @@ Usage:
 import argparse
 import logging
 import signal
-import sys
 import threading
 from pathlib import Path
 
+from video_analysis.chat import VideoChat
 from video_analysis.config import Config
 from video_analysis.logging_setup import setup_logging as setup_structlog
 from video_analysis.pipeline import VideoPipeline
 from video_analysis.rag import VideoRAG
-from video_analysis.chat import VideoChat
 
 # Streaming pipeline (v0.32.0)
 from video_analysis.streaming import StreamingPipeline
@@ -32,9 +31,7 @@ _shutdown_event = threading.Event()
 def _signal_handler(signum, frame):
     """Handle SIGTERM/SIGINT for graceful shutdown."""
     signal_name = signal.Signals(signum).name
-    print(
-        f"\n[{signal_name}] Shutting down gracefully... (press Ctrl+C again to force)"
-    )
+    print(f"\n[{signal_name}] Shutting down gracefully... (press Ctrl+C again to force)")
     _shutdown_event.set()
 
 
@@ -87,7 +84,7 @@ def cli_mode(args):
         return
 
     rag.index_video(index)
-    print(f"  Indexed: ready for questions")
+    print("  Indexed: ready for questions")
 
     if args.query:
         chat = VideoChat(rag, config)
@@ -104,9 +101,7 @@ def cli_mode(args):
         batch_process(args.batch, config, pipeline, rag)
 
 
-def batch_process(
-    manifest: str, config: Config, pipeline: VideoPipeline, rag: VideoRAG
-):
+def batch_process(manifest: str, config: Config, pipeline: VideoPipeline, rag: VideoRAG):
     """Process multiple videos from a manifest file."""
     manifest_path = Path(manifest)
     if not manifest_path.exists():
@@ -121,17 +116,17 @@ def batch_process(
     print(f"Batch processing {len(urls)} videos...")
 
     for i, url in enumerate(urls):
-        print(f"\n[{i+1}/{len(urls)}] {'URL' if '://' in url else 'File'}: {url}")
+        print(f"\n[{i + 1}/{len(urls)}] {'URL' if '://' in url else 'File'}: {url}")
         try:
             if "://" in url:
                 path = VideoPipeline.download_from_url(url, config.video_dir)
                 if not path:
-                    print(f"  ❌ Download failed, skipping")
+                    print("  ❌ Download failed, skipping")
                     continue
             else:
                 path = Path(url)
                 if not path.exists():
-                    print(f"  ❌ File not found, skipping")
+                    print("  ❌ File not found, skipping")
                     continue
 
             index = pipeline.process(str(path))
@@ -185,9 +180,7 @@ def batch_mode(args):
 
             index = pipeline.process(filepath)
             rag.index_video(index)
-            print(
-                f"  ✅ {index.video_id}: {len(index.scenes)} scenes, {index.duration:.0f}s"
-            )
+            print(f"  ✅ {index.video_id}: {len(index.scenes)} scenes, {index.duration:.0f}s")
             success += 1
         except Exception as e:
             print(f"  ❌ Error: {e}")
@@ -202,9 +195,7 @@ def stream_mode(args):
 
     if args.live_source:
         # Live stream analysis mode (v0.40.0 — RTMP/RTSP/HLS)
-        source_desc = args.live_source[:60] + (
-            "..." if len(args.live_source) > 60 else ""
-        )
+        source_desc = args.live_source[:60] + ("..." if len(args.live_source) > 60 else "")
         print(
             f"📡 Live stream mode: {source_desc} "
             f"(source_type={args.source_type or 'auto'}, "
@@ -230,9 +221,7 @@ def stream_mode(args):
                 print(f"  Reached max_chunks={args.max_chunks}, stopping.")
                 break
     elif args.live:
-        print(
-            f"🌐 Live mode: watching {args.video} (chunk_duration={args.chunk_duration}s)"
-        )
+        print(f"🌐 Live mode: watching {args.video} (chunk_duration={args.chunk_duration}s)")
         for result in pipeline.process_live(
             args.video,
             chunk_duration=args.chunk_duration,
@@ -244,9 +233,7 @@ def stream_mode(args):
                 f"{len(result.scenes)} scenes, {len(result.transcript_segments)} transcript segs"
             )
     else:
-        print(
-            f"📹 Streaming file: {args.video} (chunk_duration={args.chunk_duration}s)"
-        )
+        print(f"📹 Streaming file: {args.video} (chunk_duration={args.chunk_duration}s)")
         for result in pipeline.process_streaming(
             args.video,
             chunk_duration=args.chunk_duration,
@@ -260,7 +247,7 @@ def stream_mode(args):
             )
 
     stats = pipeline.stats
-    print(f"\n✅ Streaming complete:")
+    print("\n✅ Streaming complete:")
     print(f"  Chunks processed: {stats['chunks_processed']}")
     print(f"  Total scenes: {stats['total_scenes']}")
     print(f"  Total transcript segments: {stats['total_transcript_segments']}")
@@ -271,14 +258,10 @@ def main():
     parser = argparse.ArgumentParser(
         description="Video Analysis Platform — analyze videos and chat about their content",
     )
-    parser.add_argument(
-        "--cli", action="store_true", help="Run in CLI mode instead of UI"
-    )
+    parser.add_argument("--cli", action="store_true", help="Run in CLI mode instead of UI")
     parser.add_argument("--video", type=str, help="Video file to process")
     parser.add_argument("--url", type=str, help="YouTube URL to download and process")
-    parser.add_argument(
-        "--batch", type=str, help="Path to file with URLs/paths (one per line)"
-    )
+    parser.add_argument("--batch", type=str, help="Path to file with URLs/paths (one per line)")
     parser.add_argument("--query", type=str, help="Question to ask about the video")
     parser.add_argument("--no-index", action="store_true", help="Skip RAG indexing")
     parser.add_argument("--host", type=str, default=None, help="UI host")
@@ -350,9 +333,7 @@ def main():
 
     if args.stream or args.live or args.live_source:
         if not args.video and not args.live_source:
-            parser.error(
-                "--video is required in streaming mode, or use --live-stream <URL>"
-            )
+            parser.error("--video is required in streaming mode, or use --live-stream <URL>")
         stream_mode(args)
     elif args.batch:
         batch_mode(args)
@@ -363,9 +344,9 @@ def main():
             parser.error("--video is required in CLI mode")
         cli_mode(args)
     else:
-        from ui.server import create_app
-
         import uvicorn
+
+        from ui.server import create_app
 
         config = Config()
         app = create_app(config)

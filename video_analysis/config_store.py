@@ -37,10 +37,16 @@ class ConfigStore:
 
     # Fields derived from data_dir in __post_init__ — never persist these,
     # they are always recomputed from data_dir at startup.
-    _DERIVED_PATH_FIELDS = frozenset({
-        "video_dir", "frames_dir", "audio_dir", "thumbnails_dir",
-        "chroma_path", "clip_export_dir",
-    })
+    _DERIVED_PATH_FIELDS = frozenset(
+        {
+            "video_dir",
+            "frames_dir",
+            "audio_dir",
+            "thumbnails_dir",
+            "chroma_path",
+            "clip_export_dir",
+        }
+    )
 
     def _serializable(self) -> dict[str, Any]:
         """Convert config to a JSON-serializable dict, skipping derived Path fields."""
@@ -83,11 +89,20 @@ class ConfigStore:
                     saved_keys.add(key)
             # Recompute derived paths from data_dir
             self._post_init_and_save()
-            current_keys = {k for k in self._serializable() if not k.startswith('_')}
+            current_keys = {k for k in self._serializable() if not k.startswith("_")}
             new_keys = current_keys - saved_keys
             if new_keys:
-                logger.info("Config upgraded — %d new field(s): %s", len(new_keys), ', '.join(sorted(new_keys)))
-            logger.info("Config loaded from %s (%d saved keys, %d total fields)", self._path, len(saved_keys), len(current_keys))
+                logger.info(
+                    "Config upgraded — %d new field(s): %s",
+                    len(new_keys),
+                    ", ".join(sorted(new_keys)),
+                )
+            logger.info(
+                "Config loaded from %s (%d saved keys, %d total fields)",
+                self._path,
+                len(saved_keys),
+                len(current_keys),
+            )
         except Exception as exc:
             logger.warning("Failed to load config from %s: %s", self._path, exc)
 

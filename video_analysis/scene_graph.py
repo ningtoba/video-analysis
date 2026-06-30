@@ -27,7 +27,7 @@ from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple
 
 from video_analysis.config import Config
-from video_analysis.rag import VideoRAG, RetrievedChunk
+from video_analysis.rag import RetrievedChunk, VideoRAG
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +111,7 @@ class SceneGraph:
             if sid is not None and sid >= 0 and ctype == "scene":
                 key = (vid, sid)
                 scene_nodes[key] = meta
-                scene_documents[key] = (
-                    all_data["documents"][i] if all_data["documents"] else ""
-                )
+                scene_documents[key] = all_data["documents"][i] if all_data["documents"] else ""
 
         if not scene_nodes:
             logger.debug("No scene nodes found in ChromaDB")
@@ -131,9 +129,7 @@ class SceneGraph:
         for vid, scene_ids in video_to_scenes.items():
             scene_ids.sort()
             for i, sid in enumerate(scene_ids):
-                for j in range(
-                    i + 1, min(i + self.temporal_edge_window + 1, len(scene_ids))
-                ):
+                for j in range(i + 1, min(i + self.temporal_edge_window + 1, len(scene_ids))):
                     neighbor = scene_ids[j]
                     self._add_edge((vid, sid), (vid, neighbor))
 

@@ -60,14 +60,12 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from dataclasses import asdict, dataclass, field
+from typing import Dict, List, Optional, Set, Tuple
 
 from video_analysis.config import Config
-from video_analysis.models import VideoIndex, SceneInfo
+from video_analysis.models import SceneInfo, VideoIndex
 
 logger = logging.getLogger(__name__)
 
@@ -246,30 +244,22 @@ class EventSegmenter:
 
         # Try LLM-based segmentation first
         if self._llm is not None:
-            events = self._segment_with_llm(
-                vid, scenes, transcript, transcript_segments
-            )
+            events = self._segment_with_llm(vid, scenes, transcript, transcript_segments)
             if events:
-                logger.info(
-                    f"LLM-based segmentation produced {len(events)} events "
-                    f"for video {vid}"
-                )
+                logger.info(f"LLM-based segmentation produced {len(events)} events for video {vid}")
                 return events
 
         # Fallback: transcript-coherence based segmentation
         events = self._segment_by_transcript_coherence(vid, scenes, transcript_segments)
         if events:
             logger.info(
-                f"Transcript-coherence segmentation produced {len(events)} events "
-                f"for video {vid}"
+                f"Transcript-coherence segmentation produced {len(events)} events for video {vid}"
             )
             return events
 
         # Final fallback: temporal-grid
         events = self._segment_temporal_grid(vid, scenes)
-        logger.info(
-            f"Temporal-grid fallback produced {len(events)} events for video {vid}"
-        )
+        logger.info(f"Temporal-grid fallback produced {len(events)} events for video {vid}")
         return events
 
     def _segment_with_llm(
@@ -359,9 +349,7 @@ class EventSegmenter:
                     text = text.split("```")[1].split("```")[0].strip()
                 raw = json.loads(text)
             raw_events = (
-                raw
-                if isinstance(raw, list)
-                else raw.get("events", raw.get("segments", []))
+                raw if isinstance(raw, list) else raw.get("events", raw.get("segments", []))
             )
 
             events = []
@@ -373,9 +361,7 @@ class EventSegmenter:
 
                 event_scenes = scenes[start_idx : end_idx + 1]
                 evt_start = (
-                    event_scenes[0].start_time
-                    if event_scenes[0].start_time is not None
-                    else 0.0
+                    event_scenes[0].start_time if event_scenes[0].start_time is not None else 0.0
                 )
                 evt_end = (
                     event_scenes[-1].end_time
@@ -443,9 +429,7 @@ class EventSegmenter:
             if scene_id >= 0 and text:
                 # Extract top keywords (simple: words longer than 4 chars)
                 words = {
-                    w.lower().strip(".,!?;:")
-                    for w in text.split()
-                    if len(w) > 4 and w.isalpha()
+                    w.lower().strip(".,!?;:") for w in text.split() if len(w) > 4 and w.isalpha()
                 }
                 scene_keywords[scene_id].update(words)
 
@@ -513,9 +497,7 @@ class EventSegmenter:
 
         for i, scene in enumerate(scenes):
             scene_start = scene.start_time if scene.start_time is not None else 0.0
-            scene_end = (
-                scene.end_time if scene.end_time is not None else scene_start + 5.0
-            )
+            scene_end = scene.end_time if scene.end_time is not None else scene_start + 5.0
 
             if not current_group:
                 current_start_time = scene_start
@@ -526,9 +508,7 @@ class EventSegmenter:
             # Check if we've hit the target duration
             if scene_end - current_start_time >= event_duration:
                 events.append(
-                    self._scenes_to_event(
-                        video_id, current_group, current_indices, len(events)
-                    )
+                    self._scenes_to_event(video_id, current_group, current_indices, len(events))
                 )
                 current_group = []
                 current_indices = []
@@ -536,9 +516,7 @@ class EventSegmenter:
         # Remaining scenes
         if current_group:
             events.append(
-                self._scenes_to_event(
-                    video_id, current_group, current_indices, len(events)
-                )
+                self._scenes_to_event(video_id, current_group, current_indices, len(events))
             )
 
         return events
@@ -833,9 +811,7 @@ class CausalTopologicalStore:
         Returns:
             List of (Event, score, CausalPath) tuples.
         """
-        return self._traverse(
-            from_event_id, self._graph, max_hops, max_results, "forward"
-        )
+        return self._traverse(from_event_id, self._graph, max_hops, max_results, "forward")
 
     def retrieve_backward(
         self,
@@ -850,9 +826,7 @@ class CausalTopologicalStore:
         Returns:
             List of (Event, score, CausalPath) tuples.
         """
-        return self._traverse(
-            from_event_id, self._reverse_graph, max_hops, max_results, "backward"
-        )
+        return self._traverse(from_event_id, self._reverse_graph, max_hops, max_results, "backward")
 
     def _traverse(
         self,
@@ -1050,9 +1024,7 @@ class EventCausalRAG:
     ):
         self.config = config or Config()
         self.segmenter = EventSegmenter(config=self.config, llm_provider=llm_provider)
-        self.semantic_store = SemanticStore(
-            config=self.config, rag_instance=rag_instance
-        )
+        self.semantic_store = SemanticStore(config=self.config, rag_instance=rag_instance)
         self.causal_store = CausalTopologicalStore()
         self.memory = DualStoreMemory(
             semantic_store=self.semantic_store,
@@ -1250,9 +1222,7 @@ class EventCausalRAG:
             if len(path) >= max_hops:
                 continue
             for neighbor, _ in (
-                self._ses_graph.forward_edges.get(current, [])
-                if self._ses_graph
-                else []
+                self._ses_graph.forward_edges.get(current, []) if self._ses_graph else []
             ):
                 if neighbor not in path:
                     queue.append((neighbor, path + [neighbor]))
@@ -1277,9 +1247,7 @@ class EventCausalRAG:
                 {
                     "event_ids": list(self._ses_graph.events.keys()),
                     "states": self._ses_graph.states,
-                    "forward_edges": {
-                        k: list(v) for k, v in self._ses_graph.forward_edges.items()
-                    },
+                    "forward_edges": {k: list(v) for k, v in self._ses_graph.forward_edges.items()},
                 }
                 if self._ses_graph
                 else {}

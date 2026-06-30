@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Coroutine
 from contextlib import asynccontextmanager, contextmanager
 from functools import wraps
 from typing import (
@@ -47,8 +48,10 @@ from typing import (
     Generator,
     Mapping,
     Optional,
+    ParamSpec,
+    Protocol,
     TypeVar,
-    cast,
+    runtime_checkable,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,11 +68,39 @@ _tracer: Any = None
 enabled: bool = True  # will be set to False if import fails
 
 
-# ── No-op span types (used when opentelemetry is not installed) ─────────
+# ── TracingSpan Protocol ────────────────────────────────────────────────
 
 
-class _NoopSpan:
-    """A no-op span that satisfies the TelemetryContext interface.
+@runtime_checkable
+class TracingSpan(Protocol):
+    """Protocol describing the minimal span interface used throughout this module.
+
+    Concrete implementations can be OpenTelemetry span objects or the
+    local ``_NoopSpan`` when OpenTelemetry is not installed.
+    """
+
+    def set_attribute(self, key: str, value: Any) -> None: ...
+
+    def set_attributes(self, attributes: Mapping[str, Any]) -> None: ...
+
+    def add_event(self, name: str, attributes: Optional[Mapping[str, Any]] = None) -> None: ...
+
+    def set_status(self, status: Any) -> None: ...
+
+    def end(self) -> None: ...
+
+    def is_recording(self) -> bool: ...
+
+    def get_span_context(self) -> Any: ...
+
+    def update_name(self, name: str) -> None: ...
+
+
+# ── No-op span (used when opentelemetry is not installed) ──────────────
+
+
+class _NoopSpan(TracingSpan):
+    """A no-op span that satisfies the TracingSpan protocol.
 
     All methods are safe to call — they silently do nothing.
     """
@@ -80,9 +111,7 @@ class _NoopSpan:
     def set_attributes(self, attributes: Mapping[str, Any]) -> None:
         pass
 
-    def add_event(
-        self, name: str, attributes: Optional[Mapping[str, Any]] = None
-    ) -> None:
+    def add_event(self, name: str, attributes: Optional[Mapping[str, Any]] = None) -> None:
         pass
 
     def set_status(self, status: Any) -> None:
@@ -112,11 +141,7 @@ class _NoopTracer:
         def _noop_cm() -> Generator[_NoopSpan, None, None]:
             yield _NoopSpan()
 
-        return _noop_cm()
-
-
-_NOOP_SPAN = _NoopSpan()
-_NOOP_TRACER = _NoopTracer()
+        return _noop_cm()  # type: ignore[return-value]
 
 
 # ── Lazy initialisation ─────────────────────────────────────────────────
@@ -131,12 +156,12 @@ def _ensure_telemetry() -> None:
 
     try:
         from opentelemetry import trace
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.resources import Resource
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
             OTLPSpanExporter,
         )
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError:
         logger.warning(
             "opentelemetry packages not installed — tracing is disabled. "
@@ -148,21 +173,21 @@ def _ensure_telemetry() -> None:
         class _DummyTrace:
             @staticmethod
             def get_current_span() -> _NoopSpan:
-                return _NOOP_SPAN
+                return _NoopSpan()
 
             @staticmethod
             def use_span(span: Any) -> contextmanager:  # type: ignore[type-arg]
                 @contextmanager
                 def _noop_cm() -> Generator[_NoopSpan, None, None]:
-                    yield _NOOP_SPAN
+                    yield _NoopSpan()
 
-                return _noop_cm()
+                return _noop_cm()  # type: ignore[return-value]
 
             def __getattr__(self, name: str) -> Any:
                 return lambda *args, **kwargs: None
 
         trace = _DummyTrace()  # type: ignore[assignment]
-        _tracer = _NOOP_TRACER
+        _tracer = _NoopTracer()
         _initialised = True
         return
 
@@ -284,8 +309,8 @@ class TelemetryContext:
     def __init__(self, name: str, **attributes: Any) -> None:
         self._name = name
         self._initial_attributes = attributes
-        self._span: Any = _NOOP_SPAN
-        self._tracer: Any = _NOOP_TRACER
+        self._span: Any = _NoopSpan()
+        self._tracer: Any = _NoopTracer()
         self._exited = False
 
     def __enter__(self) -> TelemetryContext:
@@ -349,9 +374,7 @@ class TelemetryContext:
         """
         self._span.set_attributes(attributes)
 
-    def add_event(
-        self, name: str, attributes: Optional[Mapping[str, Any]] = None
-    ) -> None:
+    def add_event(self, name: str, attributes: Optional[Mapping[str, Any]] = None) -> None:
         """Record a timed event on the current span.
 
         Args:
@@ -393,7 +416,8 @@ class TelemetryContext:
 # ── Decorator for async pipeline functions ──────────────────────────────
 
 
-F = TypeVar("F", bound=Callable[..., Any])
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def trace_pipeline(
@@ -401,7 +425,10 @@ def trace_pipeline(
     *,
     attributes: Optional[Mapping[str, Any]] = None,
     capture_return: bool = False,
-) -> Callable[[F], F]:
+) -> Callable[
+    [Callable[P, Coroutine[Any, Any, R]]],
+    Callable[P, Coroutine[Any, Any, R]],
+]:
     """Decorator that wraps an async pipeline function in a tracing span.
 
     The span is created with the given stage name and optional attributes.
@@ -425,9 +452,11 @@ def trace_pipeline(
     """
     attributes = dict(attributes) if attributes else {}
 
-    def decorator(func: F) -> F:
+    def decorator(
+        func: Callable[P, Coroutine[Any, Any, R]],
+    ) -> Callable[P, Coroutine[Any, Any, R]]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             tracer = _get_tracer()
             span = tracer.start_span(stage)
             if attributes:
@@ -451,7 +480,7 @@ def trace_pipeline(
             finally:
                 span.end()
 
-        return cast(F, wrapper)
+        return wrapper
 
     return decorator
 
@@ -566,9 +595,7 @@ def parent_span_from_headers(
             span = tracer.start_span(span_name, context=parent_context)
             ctx = TelemetryContext.__new__(TelemetryContext)
             ctx._name = span_name
-            ctx._initial_attributes = (
-                dict(initial_attributes) if initial_attributes else {}
-            )
+            ctx._initial_attributes = dict(initial_attributes) if initial_attributes else {}
             ctx._span = span
             ctx._tracer = tracer
             ctx._exited = False

@@ -33,7 +33,7 @@ Usage:
 """
 
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 
@@ -98,10 +98,7 @@ class ColBERTAttReranker:
             if self.use_fp16 and torch.cuda.is_available():
                 self._model.half()
 
-            logger.info(
-                f"Loaded {type(self._model).__name__}: {self.model_name} "
-                f"on {self.device}"
-            )
+            logger.info(f"Loaded {type(self._model).__name__}: {self.model_name} on {self.device}")
         except Exception as e:
             logger.error(f"Failed to load ColBERT-Att model: {e}")
             self._available = False
@@ -229,9 +226,7 @@ class ColBERTAttReranker:
         Returns a single scalar relevance score.
         """
         # Normalise embeddings to unit vectors for cosine similarity
-        q_norm = query_embs / (
-            np.linalg.norm(query_embs, axis=1, keepdims=True) + 1e-10
-        )
+        q_norm = query_embs / (np.linalg.norm(query_embs, axis=1, keepdims=True) + 1e-10)
         d_norm = doc_embs / (np.linalg.norm(doc_embs, axis=1, keepdims=True) + 1e-10)
 
         # Cosine similarity matrix: (Nq, Nd)
@@ -271,9 +266,7 @@ class ColBERTAttReranker:
             (highest first).
         """
         if not self.available:
-            raise RuntimeError(
-                "ColBERT-Att is unavailable — transformers not installed"
-            )
+            raise RuntimeError("ColBERT-Att is unavailable — transformers not installed")
 
         if not documents:
             return []
@@ -302,9 +295,7 @@ class ColBERTAttReranker:
             if d_embs.shape[0] == 0:
                 continue
 
-            score = self._attention_weighted_maxsim(
-                q_embs, q_weights, d_embs, d_weights
-            )
+            score = self._attention_weighted_maxsim(q_embs, q_weights, d_embs, d_weights)
             scores.append((doc_text, score))
 
         # Sort descending by score

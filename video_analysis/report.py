@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 REPORT_SCHEMA_VERSION = "1.0"
 
 # Display / analysis limits
-_MAX_TOP_ENTITIES: int = 20       # top objects, key phrases
+_MAX_TOP_ENTITIES: int = 20  # top objects, key phrases
 _MAX_TOP_ACTIONS: int = 10
 _MAX_TOP_SCENES: int = 10
 _MAX_TOP_THEMES: int = 8
@@ -323,9 +323,7 @@ class ReportGenerator:
                 ),
                 scene_boundaries=scene_boundaries,
                 mean_scene_duration=(
-                    sum(scene_durations) / len(scene_durations)
-                    if scene_durations
-                    else 0.0
+                    sum(scene_durations) / len(scene_durations) if scene_durations else 0.0
                 ),
                 min_scene_duration=min(scene_durations) if scene_durations else 0.0,
                 max_scene_duration=max(scene_durations) if scene_durations else 0.0,
@@ -410,9 +408,9 @@ class ReportGenerator:
                 for w in set(w.lower().strip(".,!?;:") for w in seg.text.split()):
                     if len(w) > _MIN_WORD_LENGTH_KEY_PHRASE:
                         word_freq[w] = word_freq.get(w, 0) + 1
-            key_phrases_sorted = sorted(
-                word_freq.items(), key=lambda x: x[1], reverse=True
-            )[: _MAX_TOP_ENTITIES]
+            key_phrases_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[
+                :_MAX_TOP_ENTITIES
+            ]
             key_phrases = [k for k, _ in key_phrases_sorted]
 
             transcript_report = TranscriptReport(
@@ -438,9 +436,9 @@ class ReportGenerator:
                     object_freq[label] = object_freq.get(label, 0) + 1
                     total_detections += 1
 
-        top_objects_list = sorted(
-            object_freq.items(), key=lambda x: x[1], reverse=True
-        )[:_MAX_TOP_ENTITIES]
+        top_objects_list = sorted(object_freq.items(), key=lambda x: x[1], reverse=True)[
+            :_MAX_TOP_ENTITIES
+        ]
 
         object_catalog = ObjectCatalog(
             unique_objects=unique_objects,
@@ -526,9 +524,7 @@ class ReportGenerator:
                         }
                     )
 
-        most_frequent_id = (
-            max(face_counter, key=lambda k: face_counter[k]) if face_counter else ""
-        )
+        most_frequent_id = max(face_counter, key=lambda k: face_counter[k]) if face_counter else ""
 
         if total_faces:
             face_summary = FaceSummary(
@@ -739,14 +735,12 @@ class ReportGenerator:
         for s in data["scenes"]:
             if hasattr(s, "key_moments") and s.key_moments:
                 s.key_moments = [
-                    KeyMoment(**km) if isinstance(km, dict) else km
-                    for km in s.key_moments
+                    KeyMoment(**km) if isinstance(km, dict) else km for km in s.key_moments
                 ]
         # Reconstruct chapters
         if "chapters" in data and isinstance(data["chapters"], list):
             data["chapters"] = [
-                ChapterSummary(**c) if isinstance(c, dict) else c
-                for c in data["chapters"]
+                ChapterSummary(**c) if isinstance(c, dict) else c for c in data["chapters"]
             ]
         # Curation
         if "curation" in data and isinstance(data["curation"], dict):
@@ -769,11 +763,11 @@ class ReportGenerator:
             Markdown-formatted summary string.
         """
         lines = [
-            f"# Video Analysis Report",
-            f"",
+            "# Video Analysis Report",
+            "",
             f"**Schema**: v{report.schema_version} | **Generated**: {report.generated_at}",
-            f"",
-            f"## 📹 Video",
+            "",
+            "## 📹 Video",
             f"- **ID**: {report.video.video_id or 'N/A'}",
             f"- **Title**: {report.video.title or 'N/A'}",
             f"- **Duration**: {report.video.duration:.1f}s ({_fmt_duration(report.video.duration)})",
@@ -781,8 +775,8 @@ class ReportGenerator:
             f"- **FPS**: {report.video.fps:.2f}",
             f"- **File size**: {_fmt_size(report.video.file_size)}",
             f"- **Pipeline**: v{report.video.pipeline_version} in {report.video.processing_time_seconds:.1f}s",
-            f"",
-            f"## ⏱ Timeline",
+            "",
+            "## ⏱ Timeline",
             f"- **Scenes**: {report.timeline.num_scenes}",
             f"- **Frames indexed**: {report.timeline.num_frames}",
             f"- **Transcript duration**: {report.timeline.total_transcript_duration:.1f}s",
@@ -790,8 +784,8 @@ class ReportGenerator:
             f"(min: {report.timeline.min_scene_duration:.1f}s, "
             f"max: {report.timeline.max_scene_duration:.1f}s)",
             f"- **Scene boundaries**: {len(report.timeline.scene_boundaries)} detected",
-            f"",
-            f"## 📝 Transcript",
+            "",
+            "## 📝 Transcript",
             f"- **Segments**: {report.transcript.total_segments}",
             f"- **Total words**: {report.transcript.total_words:,}",
             f"- **Speakers**: {report.transcript.speaker_count}",
@@ -806,28 +800,26 @@ class ReportGenerator:
                 )
 
         if report.transcript.silent_periods:
-            lines.append(
-                f"- **Silent periods**: {len(report.transcript.silent_periods)} gaps > 2s"
-            )
+            lines.append(f"- **Silent periods**: {len(report.transcript.silent_periods)} gaps > 2s")
 
         lines.extend(
             [
-                f"",
-                f"## 🎯 Objects",
+                "",
+                "## 🎯 Objects",
                 f"- **Unique objects**: {len(report.objects.unique_objects)}",
                 f"- **Total detections**: {report.objects.total_detections}",
             ]
         )
 
         if report.objects.top_objects:
-            lines.append(f"- **Top objects**:")
+            lines.append("- **Top objects**:")
             for name, count, scenes in report.objects.top_objects[:_MAX_TOP_ENTITIES]:
                 lines.append(f"  - {name}: {count} detections")
 
         lines.extend(
             [
-                f"",
-                f"## 🔍 RAG Index",
+                "",
+                "## 🔍 RAG Index",
                 f"- **Total chunks**: {report.rag_stats.total_chunks}",
             ]
         )
@@ -835,15 +827,13 @@ class ReportGenerator:
             for ct, count in sorted(report.rag_stats.chunk_types.items()):
                 lines.append(f"  - {ct}: {count}")
         lines.append(f"- **Embedding model**: {report.rag_stats.embedding_model}")
-        lines.append(
-            f"- **Scene graph**: {'yes' if report.rag_stats.has_scene_graph else 'no'}"
-        )
+        lines.append(f"- **Scene graph**: {'yes' if report.rag_stats.has_scene_graph else 'no'}")
 
         if report.scenes:
             lines.extend(
                 [
-                    f"",
-                    f"## 🎬 Scene Breakdown",
+                    "",
+                    "## 🎬 Scene Breakdown",
                 ]
             )
             for s in report.scenes[:_MAX_TOP_SCENES]:
@@ -859,10 +849,8 @@ class ReportGenerator:
             if len(report.scenes) > _MAX_TOP_SCENES:
                 lines.append(f"*... and {len(report.scenes) - _MAX_TOP_SCENES} more scenes*")
 
-        lines.append(f"---")
-        lines.append(
-            f"*Report generated by video-analysis v{report.video.pipeline_version}*"
-        )
+        lines.append("---")
+        lines.append(f"*Report generated by video-analysis v{report.video.pipeline_version}*")
 
         return "\n".join(lines)
 
@@ -881,9 +869,7 @@ class ReportGenerator:
         ]
         if report.objects.top_objects:
             top = report.objects.top_objects[:5]
-            lines.append(
-                f"- Key objects: {', '.join(f'{n} ({c}x)' for n, c, _ in top)}"
-            )
+            lines.append(f"- Key objects: {', '.join(f'{n} ({c}x)' for n, c, _ in top)}")
         if report.transcript.speakers:
             sp_summary = ", ".join(f"{s}" for s in report.transcript.speakers.keys())
             lines.append(f"- Speakers: {sp_summary}")
@@ -1054,9 +1040,7 @@ def create_report_router(
     return router
 
 
-def _build_comparison(
-    reports: List[VideoReport], video_ids: List[str]
-) -> Dict[str, Any]:
+def _build_comparison(reports: List[VideoReport], video_ids: List[str]) -> Dict[str, Any]:
     """Build a comparison dict across multiple video reports."""
     comparison: Dict[str, Any] = {
         "video_ids": video_ids,
@@ -1084,9 +1068,7 @@ def _build_comparison(
         comparison["metrics"][label] = vals
 
     # Scene counts
-    comparison["scene_counts"] = {
-        vid: len(r.scenes) for vid, r in zip(video_ids, reports)
-    }
+    comparison["scene_counts"] = {vid: len(r.scenes) for vid, r in zip(video_ids, reports)}
 
     # Common objects
     all_obj_sets = [set(r.objects.unique_objects) for r in reports]

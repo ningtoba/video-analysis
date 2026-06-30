@@ -16,13 +16,13 @@ from PIL import Image
 
 from video_analysis.config import Config
 from video_analysis.models import (
-    VideoIndex,
-    SceneInfo,
     FrameInfo,
+    SceneInfo,
     TranscriptSegment,
+    VideoIndex,
 )
+from video_analysis.quality import screen_frame_quality
 from video_analysis.storage import save_frame_tiered
-from video_analysis.quality import screen_frame_quality, check_video_corruption
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,7 @@ class VideoPipeline:
                 (e.g. ``\"_whisper_model\"``, ``\"_yolo_model\"``).
         """
         import gc
+
         import torch as _torch
 
         model = getattr(self, model_attr, None)
@@ -222,9 +223,7 @@ class VideoPipeline:
             )
             return skipped
         except Exception as e:
-            logger.warning(
-                f"Auto-classification failed ({e}) — falling back to video_full"
-            )
+            logger.warning(f"Auto-classification failed ({e}) — falling back to video_full")
             return set()
 
     def process(self, video_path: str) -> VideoIndex:
@@ -268,16 +267,11 @@ class VideoPipeline:
         # Dynamically adjust per-stage quality/resolution based on video properties
         # and available GPU VRAM.
         scaling_result = None
-        if (
-            self.config.adaptive_scaling_enabled
-            and "scene_detection" not in skipped_stages
-        ):
+        if self.config.adaptive_scaling_enabled and "scene_detection" not in skipped_stages:
             try:
                 from video_analysis.adaptive_scaler import AdaptivePipelineScaler
 
-                scaler = AdaptivePipelineScaler(
-                    default_policy=self.config.adaptive_scaling_policy
-                )
+                scaler = AdaptivePipelineScaler(default_policy=self.config.adaptive_scaling_policy)
                 enabled = {
                     "whisper": True,
                     "yolo": "object_detection" not in skipped_stages,
@@ -308,9 +302,7 @@ class VideoPipeline:
                     logger.info("Scaling reason: %s", reason)
 
             except Exception as exc:
-                logger.warning(
-                    "Adaptive scaling failed (%s) — continuing with defaults", exc
-                )
+                logger.warning("Adaptive scaling failed (%s) — continuing with defaults", exc)
 
         # Step 2: Extract audio
         audio_path = self._extract_audio(video_path, video_id)
@@ -336,15 +328,10 @@ class VideoPipeline:
             logger.info("Key frames extracted")
 
             # Step 4.5: Video quality pre-screening (zero VRAM, CPU-only)
-            if (
-                self.config.quality_screening_enabled
-                and "quality_screening" not in skipped_stages
-            ):
+            if self.config.quality_screening_enabled and "quality_screening" not in skipped_stages:
                 quality_results = self._screen_frame_quality(scenes)
                 poor_count = sum(
-                    1
-                    for r in quality_results
-                    if r.get("is_blurry") or r.get("is_static")
+                    1 for r in quality_results if r.get("is_blurry") or r.get("is_static")
                 )
                 if poor_count:
                     logger.info(
@@ -366,12 +353,8 @@ class VideoPipeline:
 
         # Step 6: Speaker diarization (PyAnnote — CPU)
         if self.config.diarize_enabled:
-            transcript_segments = self._diarize(
-                audio_path, transcript_segments
-            )
-            diarized_count = sum(
-                1 for s in transcript_segments if s.speaker is not None
-            )
+            transcript_segments = self._diarize(audio_path, transcript_segments)
+            diarized_count = sum(1 for s in transcript_segments if s.speaker is not None)
             logger.info(
                 f"Speaker diarization: {diarized_count}/{len(transcript_segments)} segments labeled"
             )
@@ -824,9 +807,7 @@ class VideoPipeline:
 
         return sample_times
 
-    def _dedup_frames_clip(
-        self, frames: List[FrameInfo], video_id: str
-    ) -> List[FrameInfo]:
+    def _dedup_frames_clip(self, frames: List[FrameInfo], video_id: str) -> List[FrameInfo]:
         """Remove near-duplicate frames using CLIP embedding similarity.
 
         Compares each consecutive pair of frames' CLIP embeddings. If the cosine
@@ -884,8 +865,7 @@ class VideoPipeline:
                     last_emb = embeddings[i]
                 else:
                     logger.debug(
-                        f"Dedup frame {frames[i].timestamp:.1f}s "
-                        f"(sim={sim:.3f} >= {threshold})"
+                        f"Dedup frame {frames[i].timestamp:.1f}s (sim={sim:.3f} >= {threshold})"
                     )
 
             del model
@@ -895,8 +875,7 @@ class VideoPipeline:
             dedup_count = len(frames) - len(kept)
             if dedup_count > 0:
                 logger.info(
-                    f"CLIP dedup removed {dedup_count}/{len(frames)} frames "
-                    f"(threshold={threshold})"
+                    f"CLIP dedup removed {dedup_count}/{len(frames)} frames (threshold={threshold})"
                 )
             return kept
 
@@ -904,9 +883,7 @@ class VideoPipeline:
             logger.warning(f"CLIP frame dedup failed: {e}")
             return frames
 
-    def _transcribe(
-        self, audio_path: Path, video_id: str
-    ) -> tuple[List[TranscriptSegment], str]:
+    def _transcribe(self, audio_path: Path, video_id: str) -> tuple[List[TranscriptSegment], str]:
         """Transcribe audio using faster-whisper."""
         try:
             from faster_whisper import WhisperModel
@@ -938,10 +915,7 @@ class VideoPipeline:
                     end=seg.end,
                     text=seg.text.strip(),
                     words=(
-                        [
-                            {"word": w.word, "start": w.start, "end": w.end}
-                            for w in seg.words
-                        ]
+                        [{"word": w.word, "start": w.start, "end": w.end} for w in seg.words]
                         if hasattr(seg, "words") and seg.words
                         else []
                     ),
@@ -1024,9 +998,7 @@ class VideoPipeline:
         if tracking_enabled:
             # Use YOLO's built-in tracking (ByteTrack by default)
             # Track across all frames in temporal order for persistent IDs
-            logger.info(
-                f"Entity tracking enabled (tracker: {self.config.entity_tracker_type})"
-            )
+            logger.info(f"Entity tracking enabled (tracker: {self.config.entity_tracker_type})")
             # Build a temporal frame list: sort all frames across all scenes by timestamp
             temporal_frames = sorted(all_frames, key=lambda f: f.timestamp)
             # We need to run track() on each frame sequentially so ByteTrack
@@ -1117,9 +1089,7 @@ class VideoPipeline:
         try:
             from video_analysis.face import FaceRecognizer
         except ImportError:
-            logger.warning(
-                "video_analysis.face module not available — face recognition skipped"
-            )
+            logger.warning("video_analysis.face module not available — face recognition skipped")
             return
 
         try:
@@ -1212,9 +1182,7 @@ class VideoPipeline:
                 pass
             self._face_recognizer = None
 
-    def _describe_scenes_clip(
-        self, scenes: List[SceneInfo], labels: Optional[List[str]] = None
-    ):
+    def _describe_scenes_clip(self, scenes: List[SceneInfo], labels: Optional[List[str]] = None):
         """
         Run OpenCLIP zero-shot classification on key frames and set frame descriptions.
 
@@ -1302,9 +1270,7 @@ class VideoPipeline:
                             images.append(preprocess(img).unsqueeze(0))
                             valid_indices.append(idx)
                         except Exception as e:
-                            logger.warning(
-                                f"Could not load frame {frame.filepath}: {e}"
-                            )
+                            logger.warning(f"Could not load frame {frame.filepath}: {e}")
 
                     if not images:
                         continue
@@ -1316,9 +1282,7 @@ class VideoPipeline:
                     image_features = F.normalize(image_features, dim=-1)
 
                     # Compute similarity scores (zero-shot classification)
-                    similarity = (100.0 * image_features @ text_features.T).softmax(
-                        dim=-1
-                    )
+                    similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
 
                     # Get top-3 labels per frame
                     top_values, top_indices = similarity.topk(3, dim=-1)
@@ -1428,8 +1392,8 @@ class VideoPipeline:
 
         try:
             from video_analysis.action import (
-                ActionRecognizer,
                 DEFAULT_ACTION_CATEGORIES,
+                ActionRecognizer,
             )
 
             if self._action_recognizer is None:
@@ -1453,13 +1417,9 @@ class VideoPipeline:
             recognizer.unload()
             self._action_recognizer = None
 
-            logger.info(
-                f"Action recognition: {action_count}/{len(all_frames)} frames classified"
-            )
+            logger.info(f"Action recognition: {action_count}/{len(all_frames)} frames classified")
         except ImportError:
-            logger.debug(
-                "transformers not available for action recognition -- skipping"
-            )
+            logger.debug("transformers not available for action recognition -- skipping")
         except Exception as e:
             logger.warning(f"Action recognition failed: {e}")
 
@@ -1572,10 +1532,7 @@ class VideoPipeline:
                 # or when seeking past the last keyframe; that's okay —
                 # we just check if the file was actually created.
                 if result.returncode != 0:
-                    logger.debug(
-                        f"FFmpeg warn for thumb {i} @ {ts:.2f}s: "
-                        f"exit={result.returncode}"
-                    )
+                    logger.debug(f"FFmpeg warn for thumb {i} @ {ts:.2f}s: exit={result.returncode}")
                 if frame_file.exists():
                     frame_files.append(frame_file)
                     col = i % cols
@@ -1678,9 +1635,7 @@ class VideoPipeline:
                             texts.append(f"{text} ({confidence:.0%})")
                     if texts:
                         frame.ocr_text = "; ".join(texts)
-                        logger.debug(
-                            f"OCR on {Path(frame.filepath).name}: {frame.ocr_text[:80]}"
-                        )
+                        logger.debug(f"OCR on {Path(frame.filepath).name}: {frame.ocr_text[:80]}")
             except Exception as e:
                 logger.debug(f"OCR error on {frame.filepath}: {e}")
 
@@ -1706,8 +1661,8 @@ class VideoPipeline:
             List of TranscriptSegment with speaker labels populated.
         """
         try:
-            from pyannote.audio import Pipeline
             import torch
+            from pyannote.audio import Pipeline
         except ImportError:
             logger.warning(
                 "pyannote.audio not installed. Skipping speaker diarization. "
@@ -1722,10 +1677,7 @@ class VideoPipeline:
             logger.warning(f"Audio file not found for diarization: {audio_path}")
             return transcript_segments
 
-        if (
-            not hasattr(self, "_diarization_pipeline")
-            or self._diarization_pipeline is None
-        ):
+        if not hasattr(self, "_diarization_pipeline") or self._diarization_pipeline is None:
             try:
                 logger.info("Loading PyAnnote speaker diarization pipeline...")
                 # Use a local pretrained pipeline from huggingface hub
@@ -1834,7 +1786,6 @@ class VideoPipeline:
                     logger.info(f"Downloaded: {downloaded}")
                     return downloaded
                 # Fallback: try to find any video file in output dir
-                import glob
 
                 candidates = list(output_dir.glob(f"{video_id}.*"))
                 video_exts = {".mp4", ".mkv", ".webm", ".mov", ".avi"}
@@ -1879,8 +1830,7 @@ class VideoPipeline:
 
         duration = end_time - start_time
         logger.info(
-            f"Exporting clip: {start_time:.1f}s → {end_time:.1f}s "
-            f"(duration: {duration:.1f}s)"
+            f"Exporting clip: {start_time:.1f}s → {end_time:.1f}s (duration: {duration:.1f}s)"
         )
 
         subprocess.run(
@@ -1943,9 +1893,7 @@ class VideoPipeline:
             )
 
             if not compressor.available:
-                logger.info(
-                    "DINOv2 frame compression unavailable (transformers not found)"
-                )
+                logger.info("DINOv2 frame compression unavailable (transformers not found)")
                 return frames
 
             kept_indices = compressor.compress(frame_paths)

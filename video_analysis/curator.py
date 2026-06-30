@@ -37,7 +37,7 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -154,9 +154,7 @@ class CuratorKnowledge:
                 ent.related_timestamps.append(obs.timestamp_seconds)
 
         # Extract object mentions
-        object_pattern = re.findall(
-            r"object[s]?:?\s+([a-zA-Z]+(?:,?\s+[a-zA-Z]+)*)", obs.content
-        )
+        object_pattern = re.findall(r"object[s]?:?\s+([a-zA-Z]+(?:,?\s+[a-zA-Z]+)*)", obs.content)
         for obj_text in object_pattern:
             for obj_name in [o.strip() for o in obj_text.split(",") if o.strip()]:
                 key = f"obj_{obj_name.lower()}"
@@ -297,7 +295,7 @@ class VideoCuratorReport:
             lines.append(self.exploration_summary)
             lines.append("")
 
-        lines.append(f"---")
+        lines.append("---")
         lines.append(f"_Generated: {self.generated_at}_")
 
         return "\n".join(lines)
@@ -333,9 +331,7 @@ class CuriosityStrategy:
 
     def __init__(self, config: Config, curiosity_threshold: float = 0.5):
         self.config = config
-        self.curiosity_threshold = (
-            curiosity_threshold  # 0.0 (conservative) - 1.0 (exploratory)
-        )
+        self.curiosity_threshold = curiosity_threshold  # 0.0 (conservative) - 1.0 (exploratory)
 
     def suggest_next_action(
         self,
@@ -476,9 +472,7 @@ class VideoCurator:
         self.config = config or Config()
         self.max_iterations = max_iterations
         self.output_dir = (
-            Path(output_dir)
-            if output_dir
-            else (Path(self.config.data_dir) / "curations")
+            Path(output_dir) if output_dir else (Path(self.config.data_dir) / "curations")
         )
 
         # Resolve video_id
@@ -620,9 +614,7 @@ class VideoCurator:
                 ],
             )
 
-            self.knowledge.record_action(
-                f"Iteration {iteration + 1}: action={action_name}"
-            )
+            self.knowledge.record_action(f"Iteration {iteration + 1}: action={action_name}")
 
             # ACT + OBSERVE + MEMORIZE
             self._execute_action(action_name, action_params, tools)
@@ -658,9 +650,7 @@ class VideoCurator:
                     for o in self.knowledge.observations
                     if o.timestamp_seconds > getattr(self, "_checkpoint_ts", 0)
                 ]
-                meaningful = [
-                    o for o in recent_obs if len(o.content) > 50 and o.confidence > 0.3
-                ]
+                meaningful = [o for o in recent_obs if len(o.content) > 50 and o.confidence > 0.3]
                 if len(meaningful) < 2:
                     return True
         self._prev_entity_count = recent_entity_count
@@ -703,9 +693,7 @@ class VideoCurator:
         # Also sample at scene boundaries if available
         if self.rag:
             try:
-                scene_chunks = self.rag.retrieve(
-                    query="scene boundary transition", top_k=5
-                )
+                scene_chunks = self.rag.retrieve(query="scene boundary transition", top_k=5)
                 for c in scene_chunks:
                     if c.timestamp and 0 < c.timestamp < duration:
                         sample_points.append(c.timestamp)
@@ -713,9 +701,7 @@ class VideoCurator:
                 pass
 
         # Deduplicate and sort
-        sample_points = sorted(
-            set(max(0, min(duration - 1, p)) for p in sample_points)
-        )[:10]
+        sample_points = sorted(set(max(0, min(duration - 1, p)) for p in sample_points))[:10]
 
         self.knowledge.record_action(
             f"Broad sweep: sampling {len(sample_points)} points across {duration:.0f}s video"
@@ -899,9 +885,7 @@ class VideoCurator:
 
             elif action_name == "generate_question":
                 # Generate curiosity questions and log them
-                questions = self.curiosity_strategy.generate_curiosity_questions(
-                    self.knowledge
-                )
+                questions = self.curiosity_strategy.generate_curiosity_questions(self.knowledge)
                 for q in questions:
                     self.knowledge.add_exploration_question(q)
 
@@ -916,11 +900,7 @@ class VideoCurator:
                     for ts in timestamps:
                         try:
                             result = tools.detect_objects(ts)
-                            if (
-                                result
-                                and result.success
-                                and "No objects" not in result.data
-                            ):
+                            if result and result.success and "No objects" not in result.data:
                                 obs = CuratorObservation(
                                     observation_id=f"objects_{len(self.knowledge.observations)}",
                                     timestamp_seconds=ts,
@@ -942,9 +922,7 @@ class VideoCurator:
     # Report generation
     # ------------------------------------------------------------------
 
-    def _generate_report(
-        self, initial_sections: List[CuratorReportChunk]
-    ) -> VideoCuratorReport:
+    def _generate_report(self, initial_sections: List[CuratorReportChunk]) -> VideoCuratorReport:
         """Generate the final curation report from all accumulated knowledge."""
         elapsed = time.time() - self._start_time
 
@@ -957,8 +935,7 @@ class VideoCurator:
         )
         entity_summary = (
             ", ".join(
-                f"{e.name} ({e.entity_type})"
-                for e in list(self.knowledge.entities.values())[:10]
+                f"{e.name} ({e.entity_type})" for e in list(self.knowledge.entities.values())[:10]
             )
             if self.knowledge.entities
             else "none discovered"
@@ -983,17 +960,11 @@ class VideoCurator:
         # Build timeline
         timeline = []
         observed_timestamps = sorted(
-            set(
-                o.timestamp_seconds
-                for o in self.knowledge.observations
-                if o.timestamp_seconds > 0
-            )
+            set(o.timestamp_seconds for o in self.knowledge.observations if o.timestamp_seconds > 0)
         )
         for ts in observed_timestamps:
             obs_at_ts = [
-                o
-                for o in self.knowledge.observations
-                if abs(o.timestamp_seconds - ts) < 1.0
+                o for o in self.knowledge.observations if abs(o.timestamp_seconds - ts) < 1.0
             ]
             descriptions = [o.content[:100] for o in obs_at_ts if len(o.content) > 20]
             if descriptions:
@@ -1043,12 +1014,9 @@ class VideoCurator:
             for ent in sorted(entities, key=lambda e: e.appearances, reverse=True):
                 ts_first = format_timestamp(ent.first_seen)
                 ts_last = format_timestamp(ent.last_seen)
-                desc = (
-                    ent.description[:100].replace("\n", " ") if ent.description else ""
-                )
+                desc = ent.description[:100].replace("\n", " ") if ent.description else ""
                 entity_lines.append(
-                    f"- **{ent.name}** — seen {ent.appearances}× "
-                    f"({ts_first} → {ts_last}) {desc}"
+                    f"- **{ent.name}** — seen {ent.appearances}× ({ts_first} → {ts_last}) {desc}"
                 )
 
             if entity_lines:
@@ -1120,9 +1088,7 @@ class VideoCurator:
         if not self.knowledge.exploration_timeline:
             return
 
-        content = "\n".join(
-            f"- {action}" for action in self.knowledge.exploration_timeline
-        )
+        content = "\n".join(f"- {action}" for action in self.knowledge.exploration_timeline)
         sections.append(
             CuratorReportChunk(
                 title="Exploration Trajectory",
@@ -1143,9 +1109,7 @@ class VideoCurator:
                 "video_id": self.knowledge.video_id,
                 "duration_seconds": self.knowledge.duration_seconds,
                 "observations": [o.to_dict() for o in self.knowledge.observations],
-                "entities": {
-                    k: v.to_dict() for k, v in self.knowledge.entities.items()
-                },
+                "entities": {k: v.to_dict() for k, v in self.knowledge.entities.items()},
                 "exploration_questions": self.knowledge.exploration_questions,
                 "answered_questions": self.knowledge.answered_questions,
                 "knowledge_gaps": self.knowledge.knowledge_gaps,
@@ -1186,12 +1150,8 @@ class VideoCurator:
                 video_id=state.get("video_id", self.video_id),
                 video_path=state.get("video_path", ""),
                 duration_seconds=state.get("duration_seconds", 0.0),
-                observations=[
-                    CuratorObservation(**o) for o in state.get("observations", [])
-                ],
-                entities={
-                    k: CuratorEntity(**v) for k, v in state.get("entities", {}).items()
-                },
+                observations=[CuratorObservation(**o) for o in state.get("observations", [])],
+                entities={k: CuratorEntity(**v) for k, v in state.get("entities", {}).items()},
                 exploration_questions=state.get("exploration_questions", []),
                 answered_questions=state.get("answered_questions", []),
                 knowledge_gaps=state.get("knowledge_gaps", []),

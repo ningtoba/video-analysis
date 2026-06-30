@@ -29,7 +29,6 @@ Usage:
     print(result.evidence)
 """
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -37,7 +36,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from video_analysis.config import Config
-from video_analysis.rag import VideoRAG, RetrievedChunk
+from video_analysis.rag import RetrievedChunk, VideoRAG
 
 logger = logging.getLogger(__name__)
 
@@ -116,9 +115,7 @@ class AgentTools:
         """Lazy-load the Video MLLM for visual reasoning."""
         if self._mllm is None:
             try:
-                from video_analysis.video_mllm import VideoMLLM
-
-                from video_analysis.video_mllm import BackendType, ModelSizeType
+                from video_analysis.video_mllm import BackendType, ModelSizeType, VideoMLLM
 
                 backend_val: BackendType = (
                     self.config.video_mllm_backend
@@ -290,8 +287,7 @@ class AgentTools:
                 ctype = c.chunk_type or "unknown"
                 text_preview = c.text[:300].replace("\n", " ")
                 lines.append(
-                    f"[{i}] {ctype} @ {ts} ({scene}), score={c.score:.3f}\n"
-                    f"    {text_preview}"
+                    f"[{i}] {ctype} @ {ts} ({scene}), score={c.score:.3f}\n    {text_preview}"
                 )
 
             return AgentToolResult(
@@ -505,8 +501,7 @@ class AgentTools:
             transcript_chunks = [
                 c
                 for c in chunks
-                if c.chunk_type in ("transcript", "fixed_60s", "sliding_30s")
-                or c.text.strip()
+                if c.chunk_type in ("transcript", "fixed_60s", "sliding_30s") or c.text.strip()
             ]
 
             if not transcript_chunks:
@@ -603,9 +598,7 @@ class AgentTools:
                 metadata={
                     "event": event_description,
                     "num_matches": len(events),
-                    "timestamps": [
-                        round(c.timestamp, 1) for c in chunks[:8] if c.timestamp
-                    ],
+                    "timestamps": [round(c.timestamp, 1) for c in chunks[:8] if c.timestamp],
                 },
             )
         except Exception as exc:
@@ -700,7 +693,7 @@ class AgentTools:
                     "mllm_available": True,
                 },
             )
-        except Exception as exc:
+        except Exception:
             logger.exception("summarize_video failed")
             # Fallback to RAG-only summary
             return self._summarize_from_rag()
@@ -752,12 +745,10 @@ class AgentTools:
             )
             content_lines = []
             for c in summary_chunks:
-                content_lines.append(
-                    f"  @ {c.timestamp:.1f}s (scene {c.scene_id}): {c.text[:200]}"
-                )
+                content_lines.append(f"  @ {c.timestamp:.1f}s (scene {c.scene_id}): {c.text[:200]}")
 
             lines = [
-                f"## Video Summary (RAG-based)",
+                "## Video Summary (RAG-based)",
                 f"Filename(s): {', '.join(filenames) or 'unknown'}",
                 f"Scenes indexed: {len(scene_ids)}",
                 f"Transcript segments: {num_transcripts}",
@@ -877,8 +868,7 @@ class VideoUnderstandingAgent:
 
         # Classify question and dispatch tools
         if any(
-            w in q_lower
-            for w in ["summarize", "summary", "overview", "what happens", "what's in"]
+            w in q_lower for w in ["summarize", "summary", "overview", "what happens", "what's in"]
         ):
             steps.append("Question type: summarization → invoking summarize_video")
             steps.append("Also searching RAG for comprehensive context.")
@@ -894,12 +884,9 @@ class VideoUnderstandingAgent:
                 answer_parts.append(tx.data)
 
         elif any(
-            w in q_lower
-            for w in ["find", "locate", "when did", "where does", "at what time"]
+            w in q_lower for w in ["find", "locate", "when did", "where does", "at what time"]
         ):
-            steps.append(
-                f"Question type: temporal grounding → searching for '{question}'"
-            )
+            steps.append(f"Question type: temporal grounding → searching for '{question}'")
             tg = self._tools.temporal_grounding(question)
             evidence.append(tg)
             if tg.success:
@@ -912,8 +899,7 @@ class VideoUnderstandingAgent:
                 answer_parts.append(tx.data)
 
         elif any(
-            w in q_lower
-            for w in ["objects", "detect", "what can you see", "what is in", "visible"]
+            w in q_lower for w in ["objects", "detect", "what can you see", "what is in", "visible"]
         ):
             steps.append("Question type: object detection → sampling key frames")
             # Try to extract timestamps from question
@@ -934,8 +920,7 @@ class VideoUnderstandingAgent:
                         answer_parts.append(do.data)
 
         elif any(
-            w in q_lower
-            for w in ["text", "ocr", "read", "caption", "subtitle", "what does it say"]
+            w in q_lower for w in ["text", "ocr", "read", "caption", "subtitle", "what does it say"]
         ):
             steps.append("Question type: OCR/text extraction")
             timestamps = self._extract_timestamps(question) or _DEFAULT_OBJECT_TIMESTAMPS
@@ -992,10 +977,7 @@ class VideoUnderstandingAgent:
                 answer_parts.append(sr.data)
 
             # If the question seems visual, also sample frames
-            if any(
-                w in q_lower
-                for w in ["look", "scene", "see", "show", "appear", "background"]
-            ):
+            if any(w in q_lower for w in ["look", "scene", "see", "show", "appear", "background"]):
                 steps.append("Question appears visual — also sampling frames")
                 timestamps = self._extract_timestamps(question) or _DEFAULT_VISUAL_TIMESTAMPS
                 fa = self._tools.analyze_frames(
@@ -1154,10 +1136,7 @@ class VideoUnderstandingAgent:
 
         # Object detection summary
         obj_result = self._tools.detect_objects(30.0)
-        if (
-            obj_result.success
-            and obj_result.data != "No objects detected in this frame."
-        ):
+        if obj_result.success and obj_result.data != "No objects detected in this frame.":
             sections.append(f"## Key Objects\n{obj_result.data}")
 
         # Transcript highlights

@@ -99,7 +99,7 @@ class GPUProfiler:
             self.end_mib = 0.0
 
         logger.debug(
-            "[GPUProfiler] %s — elapsed=%.2f start=%.0fMiB " "peak=%.0fMiB end=%.0fMiB",
+            "[GPUProfiler] %s — elapsed=%.2f start=%.0fMiB peak=%.0fMiB end=%.0fMiB",
             self.label or "?",
             self.elapsed,
             self.start_mib,

@@ -30,8 +30,7 @@ Usage:
 import logging
 import os
 import re
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from video_analysis.config import Config
@@ -284,8 +283,7 @@ class ChapterGenerator:
         for seg in transcript:
             # Check if we've passed the next scene boundary
             while (
-                boundary_idx < len(scene_times) - 1
-                and seg.start >= scene_times[boundary_idx + 1]
+                boundary_idx < len(scene_times) - 1 and seg.start >= scene_times[boundary_idx + 1]
             ):
                 if current_group:
                     groups.append(current_group)
@@ -301,7 +299,7 @@ class ChapterGenerator:
     def _get_llm(self):
         """Lazy-load the LLM provider."""
         if self._llm is None:
-            from video_analysis.llm_provider import get_llm_provider, LLMProviderConfig
+            from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
 
             cfg = LLMProviderConfig(
                 provider=os.environ.get("LLM_PROVIDER", "hermes"),
@@ -366,9 +364,7 @@ class ChapterGenerator:
         # Fallback: generate a heuristic title
         return self._generate_heuristic_title(chapter_text, chapter_index)
 
-    def _generate_heuristic_title(
-        self, chapter_text: str, chapter_index: int
-    ) -> Tuple[str, str]:
+    def _generate_heuristic_title(self, chapter_text: str, chapter_index: int) -> Tuple[str, str]:
         """Generate a simple heuristic title from the first sentence.
 
         Fallback when LLM is unavailable.
@@ -501,9 +497,7 @@ class ChapterGenerator:
 
         # Strategy 2: Scene boundary segmentation
         if not segment_groups and scene_boundaries:
-            segment_groups = self._segment_by_scene_boundaries(
-                segments, scene_boundaries
-            )
+            segment_groups = self._segment_by_scene_boundaries(segments, scene_boundaries)
             method = "scene_boundaries"
 
         # Strategy 3: Uniform time-based fallback
@@ -541,9 +535,7 @@ class ChapterGenerator:
                 if gen_summary:
                     summary = gen_summary
             else:
-                gen_title, gen_summary = self._generate_heuristic_title(
-                    chapter_text, idx
-                )
+                gen_title, gen_summary = self._generate_heuristic_title(chapter_text, idx)
                 title = gen_title
                 summary = gen_summary
 
@@ -606,11 +598,7 @@ class ChapterGenerator:
             if not group_indices:
                 continue
 
-            group = [
-                segments[idx]
-                for idx in sorted(group_indices)
-                if idx not in seen_segments
-            ]
+            group = [segments[idx] for idx in sorted(group_indices) if idx not in seen_segments]
             for idx in group_indices:
                 seen_segments.add(idx)
 
@@ -669,13 +657,13 @@ class ChapterGenerator:
 
         lines = [
             f"# Chapter Report: {video_filename}",
-            f"",
+            "",
             f"- **Method**: {result.method}",
             f"- **Chapters**: {len(result.chapters)}",
             f"- **Transcript Segments**: {result.num_segments}",
-            f"",
-            f"---",
-            f"",
+            "",
+            "---",
+            "",
         ]
 
         for ch in result.chapters:
@@ -689,14 +677,14 @@ class ChapterGenerator:
             )
 
             lines.append(f"## Chapter {ch.index + 1}: {ch.title}")
-            lines.append(f"")
+            lines.append("")
             lines.append(f"⏱ **{start_ts} → {end_ts}** ({duration_str})")
             if ch.summary:
                 lines.append(f"📝 {ch.summary}")
             lines.append(f"📊 {ch.word_count} words in this chapter")
-            lines.append(f"")
+            lines.append("")
             lines.append(f"> {ch.transcript_preview}")
-            lines.append(f"")
+            lines.append("")
 
         return "\n".join(lines)
 
@@ -716,9 +704,7 @@ class ChapterGenerator:
         if not result.chapters:
             return "No chapters available."
 
-        parts = [
-            f"Video has {len(result.chapters)} chapters (segmented via {result.method}):"
-        ]
+        parts = [f"Video has {len(result.chapters)} chapters (segmented via {result.method}):"]
         for ch in result.chapters:
             start_ts = format_timestamp(ch.start_time)
             parts.append(f'  Ch{ch.index + 1}: "{ch.title}" @ {start_ts}')

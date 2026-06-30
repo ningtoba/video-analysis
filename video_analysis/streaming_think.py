@@ -38,16 +38,14 @@ Usage::
 
 from __future__ import annotations
 
-import json
 import logging
-import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional
 
 from video_analysis.config import Config
 from video_analysis.streaming import (
-    StreamingPipeline,
     StreamingChunkResult,
+    StreamingPipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -354,9 +352,7 @@ class StreamingThinkingPipeline:
 
         # 4. Trend detection — entity appearing more
         if ts.entities:
-            top_entities = sorted(
-                ts.entities.items(), key=lambda x: x[1], reverse=True
-            )[:3]
+            top_entities = sorted(ts.entities.items(), key=lambda x: x[1], reverse=True)[:3]
             if top_entities:
                 insights.append(
                     f"Top entities: {', '.join(f'{e} ({c}x)' for e, c in top_entities)}"
@@ -372,8 +368,7 @@ class StreamingThinkingPipeline:
             thought.causal_prediction = self._predict_next(chunk, ts)
             if thought.causal_prediction:
                 ts.causal_observations.append(
-                    f"Predicted after chunk {chunk.chunk_index}: "
-                    f"{thought.causal_prediction}"
+                    f"Predicted after chunk {chunk.chunk_index}: {thought.causal_prediction}"
                 )
 
         # Causal explanation (backward thinking)
@@ -439,9 +434,7 @@ class StreamingThinkingPipeline:
         if chunk.full_transcript and len(chunk.full_transcript) > 50:
             last_words = chunk.full_transcript.strip().split()[-5:]
             if last_words:
-                predictions.append(
-                    f"Speech may continue about \"{' '.join(last_words)}\""
-                )
+                predictions.append(f'Speech may continue about "{" ".join(last_words)}"')
 
         # Scene trajectory
         if chunk.scenes:
@@ -514,9 +507,7 @@ class StreamingThinkingPipeline:
             f"Video duration seen: {ts.total_duration:.0f}s across {ts.chunks_seen} chunks.",
         ]
         if ts.summary:
-            context_parts.append(
-                f"Transcript history: {ts.summary[-_LLM_CONTEXT_MAX_LEN:]}"
-            )
+            context_parts.append(f"Transcript history: {ts.summary[-_LLM_CONTEXT_MAX_LEN:]}")
         if ts.entities:
             context_parts.append(
                 f"Entities observed: {', '.join(f'{k} ({v}x)' for k, v in sorted(ts.entities.items(), key=lambda x: x[1], reverse=True)[:10])}"
@@ -557,9 +548,7 @@ class StreamingThinkingPipeline:
         query_lower = query.lower()
 
         # Simple keyword matching for entity questions
-        for entity, count in sorted(
-            ts.entities.items(), key=lambda x: x[1], reverse=True
-        ):
+        for entity, count in sorted(ts.entities.items(), key=lambda x: x[1], reverse=True):
             if entity.lower() in query_lower:
                 return (
                     f"Based on {ts.chunks_seen} chunks ({ts.total_duration:.0f}s "
