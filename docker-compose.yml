@@ -26,15 +26,17 @@ services:
       # All configuration via web UI at /settings
       - PYTHONUNBUFFERED=1
 
-    # ── GPU support (optional) ──
-    # Uncomment for NVIDIA GPU acceleration:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    # ── GPU support (NVIDIA) ──
+    # Comment this block out on systems without NVIDIA GPUs, or
+    # install nvidia-container-toolkit first:
+    #   sudo apt install nvidia-container-toolkit && sudo systemctl restart docker
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; r=urllib.request.urlopen('http://localhost:7860/health', timeout=5); exit(0) if r.status==200 else exit(1)\""]
