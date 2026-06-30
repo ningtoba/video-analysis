@@ -30,6 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     gcc \
     g++ \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy application
@@ -42,7 +45,7 @@ COPY scripts/ scripts/
 RUN pip install --no-cache-dir -e .
 
 # Create data directories
-RUN mkdir -p /app/data/videos /app/data/frames /app/data/audio /app/data/thumbnails
+RUN mkdir -p /app/data/videos /app/data/frames /app/data/audio /app/data/thumbnails /app/data/stream_frames
 
 # Expose web UI port
 EXPOSE 7860

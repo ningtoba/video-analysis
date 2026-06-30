@@ -29,6 +29,38 @@
 - **LLM Vision Analysis** — send frames to GPT-4o/Claude/Gemini/DeepSeek/Ollama for scene description, object detection, OCR, people count, and action recognition
 - **YouTube Import** — download via yt-dlp
 - **Auto GPU Detection** — selects optimal Whisper model and compute type based on available VRAM at startup
+### Real-Time Stream Analysis (CCTV / Live)
+
+- **Frame Sampling** — capture frames at configurable FPS from RTSP, webcam, or file sources
+- **Motion Detection** — lightweight CPU-based change detection (frame diff, histogram, or MOG2)
+- **LLM Vision Scheduling** — dual-mode: periodic (every N seconds) AND motion-triggered analysis
+- **Event Timeline** — SQLite-backed persistent log of LLM-analyzed events with timestamps
+- **Circular Buffer** — keeps the last N seconds/months of frames for context
+- **Stream Chat** — ask questions about events in the stream timeline
+
+### Real-Time Stream Analysis
+
+```bash
+# Watch an RTSP camera feed (1 FPS, periodic analysis every 30s)
+docker compose exec video-analysis python -m video_analysis \
+  --watch rtsp://camera:554/stream \
+  --fps 1.0 \
+  --interval 30
+
+# Watch a webcam
+docker compose exec video-analysis python -m video_analysis \
+  --watch 0 --source webcam \
+  --fps 2.0
+
+# Process an uploaded video in streaming mode
+docker compose exec video-analysis python -m video_analysis \
+  --watch /app/data/videos/my_video.mp4 --source file \
+  --fps 5.0 --interval 15 \
+  --motion-threshold 0.01
+```
+
+The stream engine creates an event timeline in `data/stream_events.db`. Events are
+stored with timestamps, LLM descriptions, motion scores, and frame references.
 
 ### LLM Providers (BYO Key)
 
