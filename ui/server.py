@@ -19,6 +19,7 @@ from video_analysis.chat import VideoChat
 from video_analysis.config import Config
 from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
 from video_analysis.stream_manager import StreamManager
+from video_analysis.event_memory import EventMemory
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,13 @@ def create_app(config: Optional[Config] = None) -> FastAPI:
     # Stream manager
     stream_manager = StreamManager()
     app.state.stream_manager = stream_manager
+
+    # Event memory for stream chat RAG
+    event_memory = EventMemory(
+        db_path=str(config.data_dir / "event_memory.db"),
+        retention_days=30,
+    )
+    app.state.event_memory = event_memory
 
     # Chat instance
     chat = VideoChat(config=config)
@@ -209,6 +217,35 @@ def create_app(config: Optional[Config] = None) -> FastAPI:
             ],
         }
 
+    @app.post("/api/stream/chat")
+    async def stream_chat(question: str = Form(...)):
+        """Ask a question about stream events using RAG over event memory."""
+        em: EventMemory = app.state.event_memory
+
+        # Build LLM chat function from current config
+        from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
+        llm_cfg = LLMProviderConfig(
+            provider=config.llm_provider,
+            api_key=config.llm_api_key,
+            api_base=config.llm_api_base,
+            model=config.llm_model,
+            temperature=config.llm_temperature,
+            max_tokens=config.llm_max_tokens,
+        )
+        llm = get_llm_provider(llm_cfg)
+
+        def chat_fn(messages):
+            return llm.chat(messages)
+
+        answer = em.query_natural_language(
+            stream_id="_stream_",
+            question=question,
+            llm_chat_fn=chat_fn,
+        )
+
+        if answer:
+            return {"answer": answer}
+        return {"error": "Failed to get answer"}
     # ── Frames ────────────────────────────────────────────────────
 
     @app.get("/api/videos/{video_id}/frames/{frame_file:path}")

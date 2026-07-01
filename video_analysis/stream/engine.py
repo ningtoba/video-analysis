@@ -24,7 +24,8 @@ from video_analysis.stream.analyzer import LLMAnalyzer
 from video_analysis.stream.motion import MotionDetector
 from video_analysis.stream.sampler import FrameSampler, SampledFrame
 from video_analysis.stream.source import FrameSource, open_source
-from video_analysis.stream.store import EventStore, TimelineEvent
+from video_analysis.event_memory import EventMemory, StoredEvent
+from video_analysis.yolo_detector import YOLODetector
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +54,13 @@ class StreamEngine:
         buffer_seconds: float = 300.0,
         motion_strategy: str = "diff",
         motion_threshold: float = 0.02,
-        periodic_interval: float = 30.0,
+        periodic_interval: float = 300.0,
         cooldown_seconds: float = 15.0,
         db_path: str = "",
         retention_days: int = 30,
         store_frames: bool = True,
         frame_dir: str = "",
-        on_event: Optional[Callable[[TimelineEvent], None]] = None,
+        on_event: Optional[Callable[[StoredEvent], None]] = None,
     ):
         self._source_str = source
         self._source: Optional[FrameSource] = None
@@ -77,7 +78,8 @@ class StreamEngine:
         self._sampler: Optional[FrameSampler] = None
         self._motion: Optional[MotionDetector] = None
         self._llm: Optional[LLMAnalyzer] = None
-        self._store: Optional[EventStore] = None
+        self._yolo: Optional[YOLODetector] = None
+        self._event_memory: Optional[EventMemory] = None
         self._llm_chat_fn = llm_chat_fn
 
         # Config
@@ -116,8 +118,14 @@ class StreamEngine:
             periodic_interval=self._periodic_interval,
         )
 
-        self._store = EventStore(
-            db_path=self._db_path,
+        self._yolo = YOLODetector(
+            model_path="yolo11n.pt",
+            confidence_threshold=0.25,
+            device="cuda" if self._llm_chat_fn else "cpu",
+        )
+
+        self._event_memory = EventMemory(
+            db_path=self._db_path or str(Path(self._frame_dir).parent / "event_memory.db"),
             retention_days=self._retention_days,
         )
 
@@ -150,18 +158,15 @@ class StreamEngine:
                     model_name, device, compute_type = ensure_whisper_model("auto")
                     segments = _transcribe_audio(audio_path, model_name, device, compute_type)
 
-                    if self._store:
+                    if self._event_memory:
                         for seg in segments:
-                            self._store.add_event(
+                            self._event_memory.store(
                                 stream_id=self._stream_id,
                                 timestamp=seg.start,
-                                description=f"[TRANSCRIPT] {seg.text.strip()}",
+                                objects=[],
+                                motion_score=0.0,
                                 triggered_by="transcript",
-                                metadata={
-                                    "event_type": "transcript",
-                                    "text": seg.text.strip(),
-                                    "duration": seg.end - seg.start,
-                                },
+                                description=f"[TRANSCRIPT] {seg.text.strip()}",
                             )
                         logger.info(
                             "Parallel transcription complete: %d segments", len(segments)
@@ -225,6 +230,37 @@ class StreamEngine:
                 # Detect motion
                 motion_score, motion_triggered = self._motion.detect(sf.frame_bgr)
 
+                # Run YOLO detection on every sampled frame
+                if self._yolo and sf is not None:
+                    try:
+                        detections = self._yolo.detect(sf.frame_bgr)
+                        if detections:
+                            # Convert detections to dict for storage
+                            objects = []
+                            labels_seen = {}
+                            for d in detections:
+                                label_key = d.label
+                                if label_key not in labels_seen:
+                                    labels_seen[label_key] = {'label': label_key, 'count': 0, 'max_conf': 0.0}
+                                labels_seen[label_key]['count'] += 1
+                                labels_seen[label_key]['max_conf'] = max(labels_seen[label_key]['max_conf'], d.confidence)
+                                if d.track_id is not None:
+                                    labels_seen[label_key].setdefault('track_ids', []).append(d.track_id)
+                            objects = list(labels_seen.values())
+
+                            # Store in event memory
+                            self._event_memory.store(
+                                stream_id=self._stream_id,
+                                timestamp=sf.timestamp,
+                                objects=objects,
+                                motion_score=motion_score,
+                                triggered_by="detection",
+                                frame_path=frame_path or "",
+                            )
+                            self._event_count += 1
+                    except Exception as e:
+                        logger.warning("YOLO detection failed: %s", e)
+
                 # Check if we should analyze
                 should_analyze = False
                 triggered_by = ""
@@ -252,20 +288,16 @@ class StreamEngine:
                         motion_score=motion_score,
                     )
 
-                    if desc and self._store:
-                        self._store.add_event(
+                    if desc and self._event_memory:
+                        # Store LLM scene description in event memory
+                        self._event_memory.store(
                             stream_id=self._stream_id,
                             timestamp=sf.timestamp,
-                            description=desc,
-                            frame_path=frame_path,
+                            objects=[],
                             motion_score=motion_score,
                             triggered_by=triggered_by,
-                            metadata={
-                                "frame_index": sf.frame_index,
-                                "motion_score": motion_score,
-                                "buffer_size": self._sampler.buffer.count,
-                                "buffer_duration": self._sampler.buffer.duration_seconds,
-                            },
+                            frame_path=frame_path or "",
+                            description=desc,
                         )
                         self._event_count += 1
                         logger.info(
@@ -275,11 +307,11 @@ class StreamEngine:
 
                         # Notify callback
                         if self._on_event:
-                            ev = self._store.get_latest_event(self._stream_id)
-                            if ev:
-                                self._on_event(ev)
-
-            # Sleep logic: real-time mode sleeps to match target FPS;
+                            recent = self._event_memory.query_time_range(
+                                self._stream_id, sf.timestamp - 1, sf.timestamp + 1, limit=1
+                            )
+                            if recent:
+                                self._on_event(recent[0])
             # file mode processes at warp speed (no sleep at all).
             if self._source and self._source.is_realtime:
                 elapsed = time.time() - now
@@ -299,8 +331,8 @@ class StreamEngine:
             self._sampler.close()
         if self._source:
             self._source.close()
-        if self._store:
-            self._store.close()
+        if self._event_memory:
+            self._event_memory.close()
         self._running = False
         elapsed = time.time() - self._start_time
         logger.info(
@@ -329,15 +361,15 @@ class StreamEngine:
             self._thread.join(timeout=5)
         self._cleanup()
 
-    def get_recent_events(self, limit: int = 50) -> List[TimelineEvent]:
-        """Get recent events from the event store."""
-        if self._store:
-            return self._store.get_recent(self._stream_id, limit)
+    def get_recent_events(self, limit: int = 50) -> List[StoredEvent]:
+        """Get recent events from event memory."""
+        if self._event_memory:
+            return self._event_memory.query_time_range(self._stream_id, 0, time.time(), limit=limit)
         return []
 
-    def get_events_in_range(self, start_ts: float, end_ts: float) -> List[TimelineEvent]:
-        if self._store:
-            return self._store.get_range(self._stream_id, start_ts, end_ts)
+    def get_events_in_range(self, start_ts: float, end_ts: float) -> List[StoredEvent]:
+        if self._event_memory:
+            return self._event_memory.query_time_range(self._stream_id, start_ts, end_ts)
         return []
 
     @property

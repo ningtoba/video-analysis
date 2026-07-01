@@ -57,8 +57,10 @@ dependencies = [
   # Progress
   "tqdm>=4.65.0",
   "scikit-learn>=1.0.0",
-]
 
+  # Object detection (YOLO, for real-time stream analysis)
+  "ultralytics>=8.0.0",
+]
 [project.scripts]
 video-analysis = "video_analysis.__main__:main"
 

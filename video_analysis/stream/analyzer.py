@@ -1,10 +1,8 @@
 """
-LLM Vision scheduler — decides WHEN to call LLM and builds the prompts.
+LLM Vision scheduler — decides WHEN to call LLM for occasional scene descriptions.
 
-Dual-mode: periodic (every N seconds) AND event-triggered (on motion).
-Enforces cooldown to prevent runaway API costs.
-Maintains an event chain: each analysis receives the previous descriptions
-so the LLM describes *what changed* rather than re-describing from scratch.
+Object detection is now handled by YOLO in engine.py; this module only handles
+infrequent Vision LLM calls for high-level scene context (every 5 minutes).
 """
 
 from __future__ import annotations
@@ -24,42 +22,8 @@ from video_analysis.stream.sampler import SampledFrame
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COOLDOWN = 15.0
-
-PERIODIC_PROMPT = """You are watching a live video feed. Describe what's happening in this scene.
-
-Focus on:
-1. What is the main subject/scene type (indoor, outdoor, office, street, etc.)
-2. Are there people? How many? What are they doing?
-3. Are there vehicles or animals?
-4. Any visible text or signs
-5. Overall activity level (quiet/busy/chaotic)
-
-Return ONLY valid JSON:
-{
-  "scene_type": "...",
-  "description": "Brief 1-2 sentence scene description",
-  "people_count": 0,
-  "activity_level": "quiet|moderate|busy",
-  "objects": ["visible", "items"],
-  "text_visible": "",
-  "changes_since_last": "describe what changed since previous observation"
-}"""
-
-MOTION_PROMPT = """MOTION DETECTED in the video feed. Examine these frames carefully.
-
-Describe what's happening, focusing on what changed or what caused the motion.
-Return ONLY valid JSON:
-{
-  "scene_type": "...",
-  "description": "Brief description of the current scene",
-  "people_count": 0,
-  "activity_level": "quiet|moderate|busy",
-  "motion_cause": "what likely caused the motion (person walking, vehicle, animal, etc.)",
-  "objects": ["visible", "items"],
-  "text_visible": "",
-  "changes_since_last": "what has changed compared to the previous observation"
-}"""
+DEFAULT_COOLDOWN = 60.0
+PERIODIC_INTERVAL = 300.0
 
 
 def _encode_frame(frame_bgr: np.ndarray, max_size: int = 1024) -> Optional[str]:
@@ -84,36 +48,28 @@ def _encode_frame(frame_bgr: np.ndarray, max_size: int = 1024) -> Optional[str]:
 
 
 class LLMAnalyzer:
-    """Schedules and executes LLM Vision analysis on sampled frames.
+    """Schedules and executes occasional LLM Vision scene descriptions.
 
-    Maintains an event chain: each analysis receives previous descriptions
-    as context so the LLM describes *what changed* rather than re-describing
-    the entire scene every time.
+    Heavy object detection is handled by YOLO in the stream engine; this
+    class only provides optional high-level scene context at reduced frequency.
 
     Args:
         chat_fn: Callable that takes (messages, images, system) and returns text.
         cooldown_seconds: Minimum seconds between LLM calls.
-        periodic_interval: Seconds between periodic analyses.
-        motion_cooldown: Seconds to wait after motion-triggered analysis.
+        periodic_interval: Seconds between periodic scene descriptions.
     """
 
     def __init__(
         self,
         chat_fn: Callable[..., Optional[str]],
         cooldown_seconds: float = DEFAULT_COOLDOWN,
-        periodic_interval: float = 30.0,
-        motion_cooldown: float = 10.0,
+        periodic_interval: float = PERIODIC_INTERVAL,
     ):
         self._chat = chat_fn
         self._cooldown = cooldown_seconds
         self._periodic_interval = periodic_interval
-        self._motion_cooldown = motion_cooldown
         self._last_analysis_time = 0.0
-        self._last_motion_analysis_time = 0.0
         self._last_description = ""
-        # Event chain: keeps recent descriptions for temporal context
-        self._event_chain: list[str] = []
-        self._max_chain_length = 5
         self._analysis_count = 0
 
     def should_analyze_periodic(self, now: float) -> bool:
@@ -121,8 +77,6 @@ class LLMAnalyzer:
 
     def should_analyze_motion(self, now: float, motion_score: float) -> bool:
         if motion_score < 0.1:
-            return False
-        if (now - self._last_motion_analysis_time) < self._motion_cooldown:
             return False
         if (now - self._last_analysis_time) < self._cooldown:
             return False
@@ -134,10 +88,7 @@ class LLMAnalyzer:
         triggered_by: str = "periodic",
         motion_score: float = 0.0,
     ) -> Optional[str]:
-        """Send frames to LLM Vision for analysis.
-
-        Feeds the event chain into the prompt so the LLM describes
-        *what changed* rather than re-describing from scratch.
+        """Send frames to LLM Vision for a scene description.
 
         Args:
             frames: List of frames to analyze (latest first recommended).
@@ -155,24 +106,16 @@ class LLMAnalyzer:
             logger.debug("LLM cooldown active, skipping analysis")
             return None
 
-        # Select base prompt
-        if triggered_by == "motion":
-            prompt = MOTION_PROMPT
-        else:
-            prompt = PERIODIC_PROMPT
-
-        # Inject event chain: tell the LLM what was seen before
-        if self._event_chain:
-            prompt += "\n\n### Previous observations (oldest → newest):\n"
-            for i, prev_desc in enumerate(self._event_chain[-self._max_chain_length:], 1):
-                prompt += f"{i}. {prev_desc[:300]}\n"
-            prompt += (
-                "\nDescribe what HAS CHANGED compared to the previous observations above. "
-                "Focus on: new objects, people entering/leaving, movement, "
-                "or any notable differences. If nothing significant changed, say so briefly."
-            )
-        else:
-            prompt += "\n\n(This is the first observation of this scene — describe it fully.)"
+        prompt = (
+            "Describe the current scene in this video feed briefly:\n"
+            "1. What type of scene (indoor/outdoor/office/street/etc.)\n"
+            "2. Are there people visible? Approximately how many?\n"
+            "3. Any vehicles, animals, or notable objects?\n"
+            "4. Overall activity level (quiet/moderate/busy)\n\n"
+            "Return ONLY valid JSON:\n"
+            '{"scene_type": "...", "description": "...", '
+            '"people_count": 0, "activity_level": "quiet|moderate|busy"}'
+        )
 
         if motion_score > 0:
             prompt += f"\nMotion score: {motion_score:.3f}"
@@ -198,8 +141,6 @@ class LLMAnalyzer:
 
             if response:
                 self._last_analysis_time = now
-                if triggered_by == "motion":
-                    self._last_motion_analysis_time = now
                 self._analysis_count += 1
 
                 # Try to extract description from JSON
@@ -214,17 +155,10 @@ class LLMAnalyzer:
                 except json.JSONDecodeError:
                     desc = response[:500]
 
-                # Store in event chain
                 self._last_description = desc
-                self._event_chain.append(desc)
-                # Trim chain
-                if len(self._event_chain) > self._max_chain_length:
-                    self._event_chain = self._event_chain[-self._max_chain_length:]
-
                 logger.info(
-                    "LLM analysis #%d (%s, chain=%d): %s",
-                    self._analysis_count, triggered_by,
-                    len(self._event_chain), desc[:80],
+                    "LLM analysis #%d (%s): %s",
+                    self._analysis_count, triggered_by, desc[:80],
                 )
                 return desc
 
