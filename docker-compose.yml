@@ -1,11 +1,9 @@
 # ── docker-compose.yml for video-analysis ──
-# Single container: faster-whisper ASR + LLM Vision API for all vision tasks
+# Single container: faster-whisper ASR + LLM Vision API
 #
 # Usage:
 #   docker compose up -d
-#
-# All configuration is now UI-driven via web UI at /settings.
-# No environment variables or .env file are needed for setup.
+#   Then configure at http://localhost:7860/settings
 
 services:
   video-analysis:
@@ -22,13 +20,16 @@ services:
     volumes:
       - ./data:/app/data
 
+    # ── Webcam passthrough (for live stream) ──
+    devices:
+      - /dev/video0:/dev/video0
+
     environment:
-      # All configuration via web UI at /settings
       - PYTHONUNBUFFERED=1
 
     # ── GPU support (NVIDIA) ──
-    # Comment this block out on systems without NVIDIA GPUs, or
-    # install nvidia-container-toolkit first:
+    # Comment this block out on systems without NVIDIA GPUs.
+    # Requires nvidia-container-toolkit:
     #   sudo apt install nvidia-container-toolkit && sudo systemctl restart docker
     deploy:
       resources:
