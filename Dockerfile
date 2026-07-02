@@ -39,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 COPY video_analysis/ video_analysis/
 COPY ui/ ui/
-COPY scripts/ scripts/
+COPY scripts/init.sh /app/scripts/init.sh
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -e .
