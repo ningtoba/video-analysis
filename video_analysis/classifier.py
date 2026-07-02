@@ -384,7 +384,6 @@ def get_ml_classifier(model_name: str = "mobilenet_v3") -> Optional[object]:
 
     try:
         import torch
-        import torch.nn as nn
         import torchvision.models as models
         from torchvision import transforms
     except ImportError:

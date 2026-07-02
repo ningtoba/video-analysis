@@ -12,6 +12,7 @@ from typing import Callable, List, Optional, Tuple
 
 import cv2
 import numpy as np
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,17 +88,17 @@ class CircularFrameBuffer:
                 cv2.normalize(hist, hist)
                 histograms.append(hist.flatten())
 
-            X = np.array(histograms)
+            features = np.array(histograms)
             n = min(n_clusters, len(frames))
             kmeans = KMeans(n_clusters=n, random_state=0, n_init="auto")
-            labels = kmeans.fit_predict(X)
+            labels = kmeans.fit_predict(features)
 
             representatives = []
             for i in range(n):
-                idxs = [j for j, l in enumerate(labels) if l == i]
+                idxs = [j for j, label in enumerate(labels) if label == i]
                 if not idxs:
                     continue
-                best = min(idxs, key=lambda j: np.linalg.norm(X[j] - kmeans.cluster_centers_[i]))
+                best = min(idxs, key=lambda j: np.linalg.norm(features[j] - kmeans.cluster_centers_[i]))
                 representatives.append(frames[best])
 
             representatives.sort(key=lambda f: f.timestamp)

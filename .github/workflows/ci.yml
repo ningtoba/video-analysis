@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+    paths-ignore:
+      - "**.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - ".dockerignore"
+      - ".gitignore"
+  pull_request:
+    branches: [master, main]
+    paths-ignore:
+      - "**.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - ".dockerignore"
+      - ".gitignore"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install ruff==0.15.20
+      - run: ruff check video_analysis/ ui/ scripts/
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libgl1 libglib2.0-0t64 libgomp1
+      - name: Install project with test deps
+        run: pip install -e ".[test]"
+      - name: Run tests (excluding gpu + slow)
+        run: pytest -m "not gpu and not slow" --timeout=60
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-logs
+          path: |
+            *.log
+            tests/*.log
+          retention-days: 3
