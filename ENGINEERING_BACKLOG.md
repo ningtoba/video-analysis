@@ -20,15 +20,40 @@
 
 ## High Priority (P0-P1)
 
-### P1-001: Python CI Workflow (tests exist but never run)
+### P1-001: ✅ Python CI Workflow (DONE)
 
 - **Category:** CI/CD
-- **Impact:** High — tests produce zero signal; bitrot goes undetected
-- **Effort:** Very low (~5 min)
-- **Dependencies:** None
-- **Status:** Ready
-- **Reasoning:** Project has 14 test files (13.8K lines total) covering API, cache, classifier, error handlers, job queue, LLM provider, quality, rate limiter, storage, webhook. There is zero CI — no workflow runs these tests. A basic `ci.yml` that runs `pytest` on push/PR would catch regressions immediately.
-- **Files:** (new) `.github/workflows/ci.yml`
+- **Impact:** High — now runs on every push/PR
+- **Status:** ✅ **Done** — `.github/workflows/ci.yml` with ruff lint + pytest (non-GPU, non-slow)
+- **Completed:** Iteration 1
+
+### P1-003: ✅ classifier.py Dead Code Removal (DONE)
+
+- **Category:** Cleanup / Dead Code
+- **Impact:** Removed 1,173 lines of orphaned code + 505 lines of dead tests
+- **Status:** ✅ **Done** — entire module was not imported by any production code
+- **Completed:** Iteration 3
+
+### P2-001: ✅ rate_limiter.py Removal (DONE)
+
+- **Category:** Dead Code Removal
+- **Impact:** Removed 180 lines never wired to any endpoint + 130 lines of tests
+- **Status:** ✅ **Done**
+- **Completed:** Iteration 3
+
+### P2-003: ✅ Logging Env Var Fallback Fix (DONE)
+
+- **Category:** Bug Fix
+- **Impact:** `STRUCTURED_LOGGING_LEVEL` and `STRUCTURED_LOGGING_FORMAT` env vars now work as documented
+- **Status:** ✅ **Done**
+- **Completed:** Iteration 3
+
+### P2-006: ✅ Lazy CUDA Detection (DONE)
+
+- **Category:** Reliability
+- **Impact:** Health checks no longer crash at startup if NVIDIA driver is flaky
+- **Status:** ✅ **Done**
+- **Completed:** Iteration 3
 
 ### P1-002: Dual UI System — Bootstrap + Alpine.js Fragmentation
 
@@ -208,13 +233,20 @@
 
 | Iteration | Selected Task | Category | Outcome |
 |-----------|--------------|----------|---------|
-| 1         | P1-001: Python CI Workflow | CI/CD | |
-| 2         | P1-003: Classifier dead code | Cleanup | |
-| 3         | P1-006: Stream engine tests | Testing | |
-| 4         | P2-001: Rate limiter cleanup | Dead Code | |
-| 5         | P1-002: Dual UI consolidation | Architecture | |
-| 6         | P2-003: Logging filter_level fix | Bug | |
-| 7         | P2-006: Lazy CUDA detection | Reliability | |
-| 8         | P2-002: CHANGELOG trimming | Maintainability | |
-| 9         | P2-004: CLI help improvements | DX | |
-| 10        | P3-006: CI lint step | DX/CI | |
+| 1         | ✅ P1-001: CI workflow + pyproject deps | CI/CD | Done — `.github/workflows/ci.yml` created |
+| 2         | ✅ Fix 7 broken test files | Testing | Done — all test imports fixed |
+| 2a        | ✅ Fix test quality/storage/llm/api/jobq/basic | Testing | Done — 124 tests passing |
+| 3         | ✅ P1-003: Remove classifier.py | Cleanup | Done — 1,173+505 lines removed |
+| 3a        | ✅ P2-001: Remove rate_limiter.py | Cleanup | Done — 180+130 lines removed |
+| 3b        | ✅ P2-003: Fix logging env var fallback | Bug | Done — env vars now work |
+| 3c        | ✅ P2-006: Lazy CUDA detection | Reliability | Done — per-request health checks |
+| 3d        | ✅ Remove orphaned page templates | Cleanup | Done — 12 Bootstrap files removed |
+| —         | **Backlog** | | |
+| —         | P1-002: Dual UI consolidation | Architecture | Unify Bootstrap pages → Alpine.js shell |
+| —         | P1-006: Stream engine tests | Testing | 0 coverage for 8 stream files |
+| —         | P1-004: Stale SQLite DB cleanup | Cleanup | knowledge_graph.db, pipeline_health.db |
+| —         | P1-005: .env secrets check | Security | Verify .env not tracked |
+| —         | P2-002: CHANGELOG trimming | Maint | 193KB file |
+| —         | P2-004: CLI help improvements | DX | --watch --source type missing |
+| —         | P2-005: Dockerfile COPY scripts/ | Build | Minor |
+| —         | P3-004 through P3-007 | Various | Lower priority |
