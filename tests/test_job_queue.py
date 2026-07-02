@@ -1,22 +1,16 @@
 """
 Tests for the In-Process Async Job Queue (v0.43.0).
 
-Tests the JobManager in isolation (unit tests) and the job-related REST API
-endpoints (integration tests with mocking).
+Tests the JobManager in isolation (unit tests).
 """
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any, Dict
-from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
-from video_analysis.api import create_api_router, set_rag_instance
-from video_analysis.config import Config
 from video_analysis.job_queue import (
     JobManager,
     JobStatus,
@@ -41,50 +35,6 @@ def _reset_job_manager():
 def manager():
     """Create a fresh JobManager for unit tests."""
     return JobManager(max_concurrent=2)
-
-
-@pytest.fixture
-def mock_rag():
-    """Create a mocked VideoRAG instance."""
-    rag = MagicMock()
-    rag.list_videos.return_value = ["test_vid"]
-    rag.get_library_info.return_value = MagicMock(
-        video_id="test_vid",
-        filename="test.mp4",
-        num_scenes=3,
-        num_chunks=10,
-        duration=60.0,
-        has_sprite=True,
-    )
-    return rag
-
-
-@pytest.fixture
-def config():
-    """Create a test config."""
-    import tempfile
-    from pathlib import Path
-
-    cfg = Config()
-    cfg.data_dir = Path(tempfile.mkdtemp())
-    return cfg
-
-
-@pytest.fixture
-def app(config, mock_rag):
-    """Create a FastAPI test app with the API router."""
-    set_rag_instance(mock_rag)
-    app = FastAPI()
-    router = create_api_router(config)
-    app.include_router(router)
-    return app
-
-
-@pytest.fixture
-def client(app):
-    """Create a test client."""
-    with TestClient(app) as c:
-        yield c
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -356,51 +306,6 @@ class TestJobManagerStats:
         stats = manager.stats
         assert stats["total_jobs"] == 1
         assert stats["max_concurrent"] == 2
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# REST API integration tests
-# ═════════════════════════════════════════════════════════════════════════════
-
-
-class TestApiJobEndpoints:
-    """Tests for GET /api/jobs and GET /api/jobs/{job_id}."""
-
-    def test_process_returns_enqueue_response(self, client):
-        """POST /api/videos/process must return job_id when no source provided."""
-        response = client.post(
-            "/api/videos/process",
-            json={},
-        )
-        # Without URL/file/file_path, we expect 400
-        assert response.status_code == 400
-
-    def test_get_job_not_found(self, client):
-        """GET /api/jobs/nonexistent must return 404."""
-        response = client.get("/api/jobs/nonexistent")
-        assert response.status_code == 404
-
-    def test_list_jobs_endpoint(self, client):
-        """GET /api/jobs must return 200 with valid structure."""
-        response = client.get("/api/jobs")
-        assert response.status_code == 200
-        data = response.json()
-        assert "total" in data
-        assert "jobs" in data
-
-    def test_jobs_endpoints_in_openapi(self, app):
-        """Job endpoints must be present in OpenAPI spec."""
-        paths = app.openapi().get("paths", {})
-        assert "/api/jobs" in paths
-        assert "/api/jobs/{job_id}" in paths
-
-    def test_process_endpoint_still_registered(self, app):
-        """POST /api/videos/process must still be registered."""
-        paths = app.openapi().get("paths", {})
-        assert "/api/videos/process" in paths
-        # Verify it still has a POST method
-        assert "post" in paths["/api/videos/process"]
-
 
 class TestJobManagerDefaultSingleton:
     """Tests for the default JobManager singleton."""

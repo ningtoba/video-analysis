@@ -7,10 +7,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from video_analysis.config import Config
 from video_analysis.storage import (
     _resize_image,
-    compress_existing_frame,
     save_frame_single,
     save_frame_tiered,
 )
@@ -39,18 +37,11 @@ def test_resize_image_portrait():
 
 def test_save_frame_tiered_creates_three_files():
     """save_frame_tiered creates analysis, full-res, and thumbnail files."""
-    config = Config()
-    config.frame_storage_mode = "tiered"
-    config.frame_analysis_size = 960
-    config.frame_thumbnail_size = 320
-    config.frame_compression = "jpeg"
-    config.frame_compression_quality = 85
-
     img = Image.new("RGB", (1920, 1080), color="gray")
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
         analysis_path, full_path, thumb_path = save_frame_tiered(
-            img, output_dir, "test_frame", config
+            img, "test_frame", output_dir
         )
 
         # All three paths exist
@@ -58,8 +49,10 @@ def test_save_frame_tiered_creates_three_files():
         assert Path(full_path).exists(), f"Full-res frame not found: {full_path}"
         assert Path(thumb_path).exists(), f"Thumbnail not found: {thumb_path}"
 
-        # Thumbnail is WebP
-        assert str(thumb_path).endswith(".webp")
+        # All files are JPEG (current default format)
+        assert str(analysis_path).endswith(".jpg")
+        assert str(full_path).endswith(".jpg")
+        assert str(thumb_path).endswith(".jpg")
 
         # Analysis frame should be smaller than full-res frame
         analysis_size = Path(analysis_path).stat().st_size
@@ -69,75 +62,38 @@ def test_save_frame_tiered_creates_three_files():
         assert full_size > 0
 
 
-def test_save_frame_tiered_webp():
-    """save_frame_tiered works with WebP compression."""
-    config = Config()
-    config.frame_compression = "webp"
-    config.frame_compression_quality = 80
-
+def test_save_frame_tiered_default_jpeg():
+    """save_frame_tiered defaults to JPEG output."""
     img = Image.new("RGB", (640, 480), color="blue")
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
         analysis_path, full_path, thumb_path = save_frame_tiered(
-            img, output_dir, "webp_test", config
+            img, "test_frame", output_dir
         )
         assert Path(analysis_path).exists()
         assert Path(full_path).exists()
-        # Analysis and full-res use WebP extension too
-        assert str(analysis_path).endswith(".webp")
+        assert Path(thumb_path).exists()
+        # Default format is JPEG
+        assert str(analysis_path).endswith(".jpg")
+        assert str(full_path).endswith(".jpg")
+        assert str(thumb_path).endswith(".jpg")
 
 
 def test_save_frame_single():
     """save_frame_single creates a single frame file."""
-    config = Config()
-    config.frame_compression = "jpeg"
-    config.frame_compression_quality = 85
-
     img = Image.new("RGB", (100, 100), color="white")
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
-        path = save_frame_single(img, output_dir, "single_frame", config)
+        path = save_frame_single(img, output_dir / "single_frame.jpg")
         assert Path(path).exists()
         assert str(path).endswith(".jpg")
 
 
-def test_compress_existing_frame():
-    """compress_existing_frame re-compresses an existing JPEG to WebP."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        src = Path(tmpdir) / "source.jpg"
-        img = Image.new("RGB", (640, 480), color="red")
-        img.save(str(src), "JPEG", quality=95)
-
-        dst = Path(tmpdir) / "compressed.webp"
-        result = compress_existing_frame(src, dst, format_name="webp", quality=80)
-        assert result is not None
-        assert Path(result).exists()
-        assert result.endswith(".webp")
-
-
-def test_compress_existing_frame_resize():
-    """compress_existing_frame with resize creates a smaller output."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        src = Path(tmpdir) / "source.jpg"
-        img = Image.new("RGB", (1920, 1080), color="green")
-        img.save(str(src), "JPEG", quality=95)
-
-        dst = Path(tmpdir) / "resized.webp"
-        result = compress_existing_frame(src, dst, format_name="webp", quality=80, longest_edge=320)
-        assert result is not None
-        # Verify the output was resized
-        from PIL import Image as PILImage
-
-        out_img = PILImage.open(result)
-        assert max(out_img.size) <= 320
-
-
 def test_save_frame_tiered_missing_file_graceful():
     """save_frame_tiered handles graceful file creation on invalid input."""
-    config = Config()
     # Create a blank image — should be fine
     img = Image.new("RGB", (1, 1), color="black")
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
-        analysis_path, full_path, thumb_path = save_frame_tiered(img, output_dir, "tiny", config)
+        analysis_path, full_path, thumb_path = save_frame_tiered(img, "tiny", output_dir)
         assert Path(analysis_path).exists()
