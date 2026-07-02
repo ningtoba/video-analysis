@@ -20,11 +20,11 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+from video_analysis.event_memory import EventMemory, StoredEvent
 from video_analysis.stream.analyzer import LLMAnalyzer
 from video_analysis.stream.motion import MotionDetector
 from video_analysis.stream.sampler import FrameSampler, SampledFrame
 from video_analysis.stream.source import FrameSource, open_source
-from video_analysis.event_memory import EventMemory, StoredEvent
 from video_analysis.yolo_detector import YOLODetector
 
 logger = logging.getLogger(__name__)

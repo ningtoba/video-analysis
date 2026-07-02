@@ -8,7 +8,6 @@ OCR, and analysis is done by the configured LLM Vision API (GPT-4o, Claude, Gemi
 from __future__ import annotations
 
 import base64
-import io
 import json
 import logging
 import subprocess
@@ -17,8 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from video_analysis.config import Config
-from video_analysis.models import FrameInfo, SceneInfo, TranscriptSegment, VideoAnalysis
 from video_analysis.model_manager import ensure_whisper_model
+from video_analysis.models import FrameInfo, SceneInfo, TranscriptSegment, VideoAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -225,8 +224,9 @@ def _get_duration(video_path: Path) -> float:
 def _encode_frame(frame_path: str, max_size: int = 1024) -> Optional[str]:
     """Read and resize a frame, return base64 JPEG."""
     try:
-        from PIL import Image
         import io
+
+        from PIL import Image
 
         img = Image.open(frame_path)
         # Resize if needed

@@ -12,7 +12,7 @@ import logging
 from typing import List, Optional
 
 from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
-from video_analysis.stream.store import EventStore, TimelineEvent
+from video_analysis.stream.store import EventStore
 
 logger = logging.getLogger(__name__)
 

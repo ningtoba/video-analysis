@@ -9,19 +9,17 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
-import uuid
-import time
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from video_analysis.chat import VideoChat
-from video_analysis.config import Config, load_settings, save_settings
+from video_analysis.config import Config, load_settings
+from video_analysis.model_manager import WHISPER_MODELS, download_whisper_model
 from video_analysis.pipeline import VideoPipeline
-from video_analysis.model_manager import WHISPER_MODELS, download_whisper_model
-from video_analysis.model_manager import WHISPER_MODELS, download_whisper_model
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +203,6 @@ def create_router(config: Config) -> APIRouter:
         if not analysis_dict:
             raise HTTPException(404, f"Video {video_id} not found")
 
-        from video_analysis.models import VideoAnalysis
         analysis = _dict_to_analysis(analysis_dict)
 
         answer = chat.ask(req.question, analysis)
@@ -323,7 +320,7 @@ def _analysis_to_dict(analysis) -> dict:
 
 def _dict_to_analysis(d: dict):
     """Convert a dict back to a VideoAnalysis (or dict-like object)."""
-    from video_analysis.models import VideoAnalysis, TranscriptSegment, SceneInfo, FrameInfo
+    from video_analysis.models import FrameInfo, SceneInfo, TranscriptSegment, VideoAnalysis
     analysis = VideoAnalysis(
         video_id=d.get("video_id", ""),
         filename=d.get("filename", ""),
@@ -449,9 +446,9 @@ def add_model_endpoints(router: APIRouter, config: Config):
     @router.get("/models")
     async def list_models():
         """List all known Whisper models with download status and sizes."""
-        from video_analysis.model_manager import WHISPER_MODELS
-
         import faster_whisper  # noqa: F401
+
+        from video_analysis.model_manager import WHISPER_MODELS
 
         cache_path = Path.home() / ".cache" / "faster_whisper"
 
@@ -478,7 +475,7 @@ def add_model_endpoints(router: APIRouter, config: Config):
     async def download_model(body: dict):
         """Start downloading a Whisper model in the background."""
         model_name = body.get("model_name", "")
-        from video_analysis.model_manager import WHISPER_MODELS, download_whisper_model
+        from video_analysis.model_manager import WHISPER_MODELS
 
         if model_name not in WHISPER_MODELS:
             raise HTTPException(400, f"Unknown model: {model_name}")

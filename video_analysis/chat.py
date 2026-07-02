@@ -7,7 +7,6 @@ with transcript + frame descriptions as context. No vector DB needed.
 
 from __future__ import annotations
 
-
 import logging
 from typing import List, Optional
 

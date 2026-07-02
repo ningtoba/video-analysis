@@ -17,9 +17,9 @@ from fastapi.templating import Jinja2Templates
 from video_analysis.api import create_router
 from video_analysis.chat import VideoChat
 from video_analysis.config import Config
+from video_analysis.event_memory import EventMemory
 from video_analysis.llm_provider import LLMProviderConfig, get_llm_provider
 from video_analysis.stream_manager import StreamManager
-from video_analysis.event_memory import EventMemory
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ def create_app(config: Optional[Config] = None) -> FastAPI:
 
     @app.post("/api/chat")
     async def chat_endpoint(question: str = Form(...), video_id: str = Form(...)):
-        from video_analysis.api import _load_analyses, _dict_to_analysis
+        from video_analysis.api import _dict_to_analysis, _load_analyses
         analyses: dict = {}
         _load_analyses(config.data_dir / "analyses", analyses)
         analysis_dict = analyses.get(video_id)

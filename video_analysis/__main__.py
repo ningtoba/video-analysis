@@ -222,6 +222,7 @@ def main():
     else:
         # Start web UI
         import uvicorn
+
         from ui.server import create_app
 
         config = Config()
