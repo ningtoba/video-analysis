@@ -1,138 +1,120 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Models - Video Analysis</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="/static/css/dark-theme.css">
     <style>
-        body { padding-top: 0; background: #0f1117; }
-        .navbar { background: #1a1d23 !important; border-bottom: 1px solid #2a2d35; }
-        .navbar .nav-link { color: #8b8fa3 !important; }
-        .navbar .nav-link:hover, .navbar .nav-link.active { color: #0dcaf0 !important; }
-        .card { background: #1a1d23; border-color: #2a2d35; }
-        .form-control, .form-select { background: #0f1117; border-color: #2a2d35; color: #e0e0e0; }
-        .form-control:focus, .form-select:focus { background: #0f1117; border-color: #0dcaf0; color: #e0e0e0; box-shadow: 0 0 0 0.2rem rgba(13,202,240,0.15); }
-        .btn-primary { background: #0dcaf0; border-color: #0dcaf0; color: #000; font-weight: 600; }
-        .btn-primary:hover { background: #0bb7d9; border-color: #0bb7d9; color: #000; }
-        .btn-outline-secondary { border-color: #2a2d35; color: #8b8fa3; }
-        .btn-outline-secondary:hover { background: #2a2d35; color: #e0e0e0; }
-        .btn-success { background: #198754; border-color: #198754; }
-        .text-muted { color: #6c7293 !important; }
-        .badge-downloaded { background: #198754; }
-        .badge-not-downloaded { background: #6c7293; }
+        .badge-downloaded { background: var(--success); }
+        .badge-not-downloaded { background: var(--text-muted); }
         .model-progress { transition: all 0.3s; }
-        .progress { background: #0f1117; height: 8px; }
-        .progress-bar { background: #0dcaf0; }
         .status-toast { position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 250px; }
-        .table { color: #e0e0e0; }
-        .table > :not(caption) > * > * { border-bottom-color: #2a2d35; }
-        .table > thead { border-bottom: 2px solid #2a2d35; }
-        .table > thead > tr > th { color: #8b8fa3; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .models-table { width: 100%; border-collapse: collapse; }
+        .models-table th { text-align: left; padding: var(--space-sm); border-bottom: 2px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+        .models-table td { padding: var(--space-sm); border-bottom: 1px solid var(--border); color: var(--text); font-size: var(--text-sm); }
+        .models-table tbody tr:hover { background: var(--surface-hover); }
+        .progress-track { height: 8px; background: var(--bg); border-radius: var(--radius-full); overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; border-radius: var(--radius-full); }
+        .download-label { display: flex; justify-content: space-between; margin-bottom: var(--space-xs); }
     </style>
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark mb-4 px-3">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">&#x1f3a5; Video Analysis</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">Home</a>
-                <a class="nav-link" href="/settings">Settings</a>
-                <a class="nav-link" href="/stream">Live Stream</a>
-                <a class="nav-link active" href="/models">Models</a>
-            </div>
+    <header class="container">
+        <div class="flex items-center justify-between" style="padding:var(--space-md) 0;">
+            <a href="/" style="text-decoration:none;display:flex;align-items:center;gap:var(--space-sm);">
+                <span style="font-size:var(--text-lg);font-weight:700;color:var(--text);">&#x1f3a5; Video Analysis</span>
+            </a>
+            <nav class="flex gap-sm">
+                <a class="tab-btn" href="/">Home</a>
+                <a class="tab-btn" href="/settings">Settings</a>
+                <a class="tab-btn" href="/stream">Live Stream</a>
+                <a class="tab-btn active" href="/models" aria-current="page">Models</a>
+            </nav>
         </div>
-    </nav>
+    </header>
 
-    <div class="container">
-        <div class="row g-4">
+    <div class="container" style="padding-top:var(--space-md);">
+        <div class="flex gap-md" style="flex-wrap:wrap;">
             <!-- Current Model + Download -->
-            <div class="col-lg-5">
+            <div style="flex:5 1 300px;min-width:280px;">
                 <!-- Current Model -->
-                <div class="card border-secondary mb-3">
-                    <div class="card-body">
-                        <h5 class="card-title">&#x1f916; Current Model</h5>
-                        <div id="current-model-display">
-                            <div class="text-muted small">Loading...</div>
-                        </div>
+                <div class="card">
+                    <h5 style="margin:0 0 var(--space-sm);font-size:var(--text-lg);color:var(--text);">&#x1f916; Current Model</h5>
+                    <div id="current-model-display">
+                        <div class="text-muted text-sm">Loading...</div>
                     </div>
                 </div>
 
                 <!-- Download Model -->
-                <div class="card border-secondary">
-                    <div class="card-body">
-                        <h5 class="card-title">&#x2b07;&#xfe0f; Download Model</h5>
-                        <p class="text-muted small mb-3">Pre-download a Whisper model so it's ready when needed. Downloaded models are cached in <code>~/.cache/faster_whisper/</code>.</p>
-                        <form id="download-form">
-                            <div class="mb-2">
-                                <select class="form-select form-select-sm" id="model-select">
-                                    <option value="">Select a model...</option>
-                                    <option value="tiny">Tiny (39M params, fastest, 200MB VRAM)</option>
-                                    <option value="base">Base (74M params, 300MB VRAM)</option>
-                                    <option value="small">Small (244M params, 460MB VRAM)</option>
-                                    <option value="medium">Medium (769M params, 1GB VRAM)</option>
-                                    <option value="large-v3-turbo">Large V3 Turbo (809M params, 1.5GB VRAM, 6x faster)</option>
-                                    <option value="large-v3">Large V3 (1.55B params, 2.2GB VRAM, best accuracy)</option>
-                                    <option value="distil-large-v3">Distil Large V3 (756M params, 1.1GB VRAM)</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm w-100" id="download-btn">
-                                <span id="download-btn-text">Download</span>
-                                <span id="download-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
-                            </button>
-                        </form>
-                        <div id="download-progress" class="mt-2 small model-progress" style="display:none;">
-                            <div class="d-flex justify-content-between mb-1">
-                                <span id="download-status-text">Starting download...</span>
-                            </div>
-                            <div class="progress">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated" id="download-progress-bar" style="width: 0%"></div>
-                            </div>
+                <div class="card" style="margin-top:var(--space-md);">
+                    <h5 style="margin:0 0 var(--space-sm);font-size:var(--text-lg);color:var(--text);">&#x2b07;&#xfe0f; Download Model</h5>
+                    <p class="text-muted text-sm mb-sm">Pre-download a Whisper model so it's ready when needed. Downloaded models are cached in <code>~/.cache/faster_whisper/</code>.</p>
+                    <form id="download-form">
+                        <div class="mb-sm">
+                            <select id="model-select">
+                                <option value="">Select a model...</option>
+                                <option value="tiny">Tiny (39M params, fastest, 200MB VRAM)</option>
+                                <option value="base">Base (74M params, 300MB VRAM)</option>
+                                <option value="small">Small (244M params, 460MB VRAM)</option>
+                                <option value="medium">Medium (769M params, 1GB VRAM)</option>
+                                <option value="large-v3-turbo">Large V3 Turbo (809M params, 1.5GB VRAM, 6x faster)</option>
+                                <option value="large-v3">Large V3 (1.55B params, 2.2GB VRAM, best accuracy)</option>
+                                <option value="distil-large-v3">Distil Large V3 (756M params, 1.1GB VRAM)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm w-full" id="download-btn">
+                            <span id="download-btn-text">Download</span>
+                            <span id="download-spinner" class="spinner hidden" role="status"></span>
+                        </button>
+                    </form>
+                    <div id="download-progress" class="mt-sm text-sm model-progress" style="display:none;">
+                        <div class="download-label">
+                            <span id="download-status-text">Starting download...</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="download-progress-bar" style="width: 0%"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Model List -->
-            <div class="col-lg-7">
-                <div class="card border-secondary">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h5 class="card-title mb-0">&#x1f4ca; Available Models</h5>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="loadModels()" title="Refresh">&#x21bb;</button>
-                        </div>
-                        <p class="text-muted small mb-3">All supported Whisper models. Download status is shown — models ready on disk can be used immediately for transcription.</p>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover" id="models-table">
-                                <thead>
-                                    <tr>
-                                        <th>Model</th>
-                                        <th>Params</th>
-                                        <th>VRAM</th>
-                                        <th>Speed</th>
-                                        <th>WER (%)</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="models-tbody">
-                                    <tr><td colspan="6" class="text-muted text-center small py-3">Loading...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div id="cache-info" class="text-muted small mt-2"></div>
+            <div style="flex:7 1 400px;min-width:300px;">
+                <div class="card">
+                    <div class="flex items-center justify-between mb-sm">
+                        <h5 style="margin:0;font-size:var(--text-lg);color:var(--text);">&#x1f4ca; Available Models</h5>
+                        <button class="btn btn-sm btn-secondary" onclick="loadModels()" title="Refresh">&#x21bb;</button>
                     </div>
+                    <p class="text-muted text-sm mb-sm">All supported Whisper models. Download status is shown — models ready on disk can be used immediately for transcription.</p>
+                    <div class="overflow-auto">
+                        <table class="models-table" id="models-table">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Params</th>
+                                    <th>VRAM</th>
+                                    <th>Speed</th>
+                                    <th>WER (%)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="models-tbody">
+                                <tr><td colspan="6" class="text-muted text-center text-sm" style="padding:var(--space-md);">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="cache-info" class="text-muted text-sm mt-sm"></div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Status toast -->
-    <div class="status-toast" id="status-toast" style="display:none;">
-        <div class="card border-success" id="status-toast-card">
-            <div class="card-body py-2 px-3" id="status-toast-body">
-                <small id="status-toast-message"></small>
-            </div>
+    <div class="toast-container" id="status-toast" style="display:none;">
+        <div class="toast" id="status-toast-card">
+            <span id="status-toast-message"></span>
         </div>
     </div>
 
@@ -146,14 +128,14 @@
             renderCurrentModel(data);
         } catch (e) {
             document.getElementById('models-tbody').innerHTML =
-                '<tr><td colspan="6" class="text-danger text-center small py-3">Failed to load models: ' + e.message + '</td></tr>';
+                '<tr><td colspan="6" class="text-muted text-center text-sm" style="padding:var(--space-md);">Failed to load models: ' + e.message + '</td></tr>';
         }
     }
 
     function renderModelList(data) {
         const tbody = document.getElementById('models-tbody');
         if (!data.models || data.models.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center small py-3">No models available</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center text-sm" style="padding:var(--space-md);">No models available</td></tr>';
             return;
         }
 
@@ -164,14 +146,14 @@
                 ? '<span class="badge badge-downloaded">Downloaded</span>'
                 : '<span class="badge badge-not-downloaded">Not on disk</span>';
             const nameDisplay = isCurrent
-                ? `<strong>${m.name}</strong> <span class="badge bg-info text-dark" style="font-size:0.65rem;">ACTIVE</span>`
+                ? `<strong>${m.name}</strong> <span class="badge info" style="font-size:0.65rem;">ACTIVE</span>`
                 : m.name;
             return `<tr>
-                <td class="small">${nameDisplay}</td>
-                <td class="small">${m.params}</td>
-                <td class="small">${m.vram_mb} MB</td>
-                <td class="small">${'★'.repeat(Math.min(m.speed, 5))}${m.speed}x</td>
-                <td class="small">${m.wer}</td>
+                <td class="text-sm">${nameDisplay}</td>
+                <td class="text-sm">${m.params}</td>
+                <td class="text-sm">${m.vram_mb} MB</td>
+                <td class="text-sm">${'★'.repeat(Math.min(m.speed, 5))}${m.speed}x</td>
+                <td class="text-sm">${m.wer}</td>
                 <td>${statusBadge}</td>
             </tr>`;
         }).join('');
@@ -186,19 +168,19 @@
         const downloaded = modelInfo ? modelInfo.downloaded : false;
 
         display.innerHTML = `
-            <div class="d-flex align-items-center mb-2">
-                <span class="badge bg-info text-dark me-2" style="font-size:0.8rem;">ACTIVE</span>
+            <div class="flex items-center mb-sm" style="gap:var(--space-sm);">
+                <span class="badge info" style="font-size:0.8rem;">ACTIVE</span>
                 <strong style="font-size:1.1rem;">${current}</strong>
             </div>
             ${modelInfo ? `
-                <div class="small text-muted mb-1">Parameters: ${modelInfo.params} &middot; VRAM: ${modelInfo.vram_mb}MB &middot; Speed: ${modelInfo.speed}x &middot; WER: ${modelInfo.wer}%</div>
-                <div class="small">
+                <div class="text-muted text-sm mb-sm">Parameters: ${modelInfo.params} &middot; VRAM: ${modelInfo.vram_mb}MB &middot; Speed: ${modelInfo.speed}x &middot; WER: ${modelInfo.wer}%</div>
+                <div class="text-sm">
                     Status: ${downloaded
-                        ? '<span class="text-success">&#x2705; Downloaded and ready</span>'
-                        : '<span class="text-warning">&#x26a0;&#xfe0f; Not downloaded yet (will auto-download on first use)</span>'}
+                        ? '<span style="color:var(--success);">&#x2705; Downloaded and ready</span>'
+                        : '<span style="color:var(--warning);">&#x26a0;&#xfe0f; Not downloaded yet (will auto-download on first use)</span>'}
                 </div>
             ` : `
-                <div class="small text-muted">Set your preferred model in <a href="/settings" class="text-info">Settings</a></div>
+                <div class="text-muted text-sm">Set your preferred model in <a href="/settings" style="color:var(--info);">Settings</a></div>
             `}
         `;
     }
@@ -219,11 +201,11 @@
         const progressBar = document.getElementById('download-progress-bar');
 
         btn.disabled = true;
-        spinner.classList.remove('d-none');
+        spinner.classList.remove('hidden');
         btnText.textContent = 'Starting...';
         progress.style.display = 'block';
         statusText.textContent = 'Requesting download of ' + modelName + '...';
-        statusText.className = '';
+        statusText.style.color = '';
         progressBar.style.width = '10%';
 
         try {
@@ -257,7 +239,7 @@
                         }
                         progressBar.style.width = '100%';
                         statusText.textContent = 'Download complete!';
-                        statusText.className = 'text-success';
+                        statusText.style.color = 'var(--success)';
                         showStatus('Model ' + modelName + ' downloaded successfully!', 'success');
                         loadModels();
                         setTimeout(() => { progress.style.display = 'none'; }, 3000);
@@ -271,19 +253,19 @@
 
             if (attempts >= maxAttempts) {
                 statusText.textContent = 'Download still in progress (check Models page later)';
-                statusText.className = 'text-warning';
+                statusText.style.color = 'var(--warning)';
                 showStatus('Download started but is taking long. Check Models page later.', 'warning');
                 loadModels();
             }
         } catch (e) {
             progressBar.style.width = '0%';
             statusText.textContent = 'Error: ' + e.message;
-            statusText.className = 'text-danger';
+            statusText.style.color = 'var(--error)';
             showStatus('Download failed: ' + e.message, 'danger');
         }
 
         btn.disabled = false;
-        spinner.classList.add('d-none');
+        spinner.classList.add('hidden');
         btnText.textContent = 'Download';
     });
 
@@ -291,10 +273,9 @@
     function showStatus(message, type) {
         const toast = document.getElementById('status-toast');
         const card = document.getElementById('status-toast-card');
-        const body = document.getElementById('status-toast-body');
         const msg = document.getElementById('status-toast-message');
-        card.className = 'card border-' + type;
-        body.className = 'card-body py-2 px-3 text-' + type;
+        const typeMap = { 'danger': 'error', 'success': 'success', 'warning': 'warning', 'info': 'info' };
+        card.className = 'toast' + (typeMap[type] ? ' ' + typeMap[type] : '');
         msg.textContent = message;
         toast.style.display = 'block';
         setTimeout(() => { toast.style.display = 'none'; }, 4000);

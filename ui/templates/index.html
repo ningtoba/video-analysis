@@ -4,29 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Analysis</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="/static/css/dark-theme.css">
     <style>
-        body { padding-top: 0; background: #0f1117; }
-        .navbar { background: #1a1d23 !important; border-bottom: 1px solid #2a2d35; }
-        .navbar .nav-link { color: #8b8fa3 !important; }
-        .navbar .nav-link:hover, .navbar .nav-link.active { color: #0dcaf0 !important; }
-        .card { background: #1a1d23; border-color: #2a2d35; }
-        .video-card { cursor: pointer; transition: transform 0.1s; }
-        .video-card:hover { transform: translateY(-2px); background: #22252b; }
-        .video-card.selected { background: #0dcaf0 !important; color: #000; }
-        #chat-box { height: 400px; overflow-y: auto; background: #12141a; border-radius: 8px; padding: 16px; }
-        .msg-user { color: #0dcaf0; }
-        .msg-assistant { color: #adb5bd; }
+        .video-card { cursor: pointer; transition: transform 0.1s; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-xs); }
+        .video-card:hover { transform: translateY(-2px); background: var(--surface-hover); }
+        .video-card.selected { background: var(--primary) !important; color: #000; }
+        #chat-box { height: 400px; overflow-y: auto; background: var(--surface); border-radius: 8px; padding: 16px; }
+        .msg-user { color: var(--accent); }
+        .msg-assistant { color: var(--text-secondary); }
         .loading { opacity: 0.6; pointer-events: none; }
         pre { white-space: pre-wrap; }
-        .list-group-item { background: transparent; border-color: #2a2d35; }
-        .form-control, .form-select { background: #0f1117; border-color: #2a2d35; color: #e0e0e0; }
-        .form-control:focus, .form-select:focus { background: #0f1117; border-color: #0dcaf0; color: #e0e0e0; box-shadow: 0 0 0 0.2rem rgba(13,202,240,0.15); }
-        .form-control::placeholder { color: #6c7293; }
         .btn-primary { background: #0dcaf0; border-color: #0dcaf0; color: #000; font-weight: 600; }
         .btn-primary:hover { background: #0bb7d9; border-color: #0bb7d9; color: #000; }
         .btn-outline-info { border-color: #0dcaf0; color: #0dcaf0; }
         .btn-outline-info:hover { background: #0dcaf0; color: #000; }
+        .text-info { color: var(--info); }
+        .text-success { color: var(--success); }
+        .text-danger { color: var(--error); }
         .badge-processing { background: #ffc107; color: #000; }
         .badge-complete { background: #198754; }
         .badge-error { background: #dc3545; }
@@ -35,73 +29,75 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark mb-4 px-3">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/">&#x1f3a5; Video Analysis</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link active" href="/">Home</a>
-                <a class="nav-link" href="/settings">Settings</a>
-                <a class="nav-link" href="/stream">Live Stream</a>
-                <a class="nav-link" href="/models">Models</a>
-            </div>
-            <span class="badge bg-secondary ms-3" id="status-badge">Starting...</span>
+    <header class="container">
+        <div class="flex items-center justify-between flex-wrap gap-sm" style="padding:var(--space-md) 0;">
+            <a href="/" style="text-decoration:none;display:flex;align-items:center;gap:var(--space-sm);font-weight:700;color:var(--text);font-size:var(--text-lg);">
+                &#x1f3a5; Video Analysis
+            </a>
+            <nav class="flex gap-sm">
+                <a class="tab-btn active" href="/">Home</a>
+                <a class="tab-btn" href="/settings">Settings</a>
+                <a class="tab-btn" href="/stream">Live Stream</a>
+                <a class="tab-btn" href="/models">Models</a>
+            </nav>
+            <span class="badge ready" id="status-badge">Starting...</span>
         </div>
-    </nav>
+    </header>
 
-    <div class="container">
-        <div class="row g-3">
+    <main class="container app-main">
+        <div class="flex gap-md" style="flex-wrap: wrap;">
             <!-- Left column: Upload + Library -->
-            <div class="col-md-4">
+            <div style="flex: 0 0 32%; min-width: 280px;">
                 <!-- Upload card -->
-                <div class="card border-secondary mb-3">
-                    <div class="card-body">
+                <div class="card mb-md">
+                    <div>
                         <h5 class="card-title">Upload Video</h5>
                         <form id="upload-form">
-                            <div class="mb-2">
-                                <input type="file" class="form-control form-control-sm" id="video-file" accept="video/*">
+                            <div class="mb-sm">
+                                <input type="file" id="video-file" accept="video/*">
                             </div>
-                            <div class="text-muted small mb-1">Or paste a YouTube URL:</div>
-                            <div class="mb-2">
-                                <input type="url" class="form-control form-control-sm" id="youtube-url" placeholder="https://youtube.com/watch?v=...">
+                            <div class="text-muted text-sm mb-sm">Or paste a YouTube URL:</div>
+                            <div class="mb-sm">
+                                <input type="url" id="youtube-url" placeholder="https://youtube.com/watch?v=...">
                             </div>
-                            <button type="submit" class="btn btn-primary btn-sm w-100" id="upload-btn">
+                            <button type="submit" class="btn btn-primary btn-sm w-full" id="upload-btn">
                                 <span id="upload-btn-text">Process</span>
-                                <span id="upload-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                <span id="upload-spinner" class="spinner hidden" role="status"></span>
                             </button>
                         </form>
-                        <div id="upload-progress" class="mt-2 small" style="display:none;"></div>
+                        <div id="upload-progress" class="mt-sm text-sm" style="display:none;"></div>
                     </div>
                 </div>
 
                 <!-- Library card -->
-                <div class="card border-secondary">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="card">
+                    <div>
+                        <div class="flex items-center justify-between mb-sm">
                             <h5 class="card-title mb-0">Video Library</h5>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="loadVideos()" title="Refresh">&#x21bb;</button>
+                            <button class="btn btn-sm btn-secondary" onclick="loadVideos()" title="Refresh">&#x21bb;</button>
                         </div>
-                        <div id="video-list" class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
-                            <div class="text-muted small py-2">No videos yet</div>
+                        <div id="video-list" style="max-height: 500px; overflow-y: auto;">
+                            <div class="text-muted text-sm" style="padding: 0.5rem 0;">No videos yet</div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Right column: Video details + Chat -->
-            <div class="col-md-8">
-                <div class="card border-secondary">
-                    <div class="card-body">
+            <div style="flex: 1; min-width: 300px;">
+                <div class="card">
+                    <div>
                         <h5 class="card-title" id="video-title">Select a video</h5>
-                        <div id="video-info" class="small text-muted mb-2"></div>
-                        <div id="video-summary" class="mb-3 small"></div>
+                        <div id="video-info" class="text-sm text-muted mb-sm"></div>
+                        <div id="video-summary" class="mb-md text-sm"></div>
 
-                        <h6 class="mt-3">Chat about this video</h6>
+                        <h6 class="mt-md">Chat about this video</h6>
                         <div id="chat-box">
-                            <div class="text-muted small">Process a video to start asking questions.</div>
+                            <div class="text-muted text-sm">Process a video to start asking questions.</div>
                         </div>
-                        <form id="chat-form" class="mt-2">
-                            <div class="input-group">
-                                <input type="text" class="form-control form-control-sm" id="chat-input" placeholder="Ask about the video..." disabled>
+                        <form id="chat-form" class="mt-sm">
+                            <div class="flex gap-sm">
+                                <input type="text" class="flex-1" id="chat-input" placeholder="Ask about the video..." disabled>
                                 <button class="btn btn-sm btn-outline-info" type="submit" disabled>Ask</button>
                             </div>
                         </form>
@@ -109,7 +105,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
     <script>
     let currentVideoId = null;
@@ -118,10 +114,10 @@
     // ── Health check ──────────────────────────────────────────────────
     fetch('/api/health').then(r => r.json()).then(d => {
         document.getElementById('status-badge').textContent = d.status === 'ok' ? 'Online' : 'Error';
-        document.getElementById('status-badge').className = 'badge bg-success ms-3';
+        document.getElementById('status-badge').className = 'badge success';
     }).catch(() => {
         document.getElementById('status-badge').textContent = 'Offline';
-        document.getElementById('status-badge').className = 'badge bg-danger ms-3';
+        document.getElementById('status-badge').className = 'badge error';
     });
 
     // ── Load settings on startup ──────────────────────────────────────
@@ -142,25 +138,25 @@
             const videos = await res.json();
             const list = document.getElementById('video-list');
             if (videos.length === 0) {
-                list.innerHTML = '<div class="text-muted small py-2">No videos yet</div>';
+                list.innerHTML = '<div class="text-muted text-sm" style="padding:0.5rem 0;">No videos yet</div>';
                 return;
             }
             list.innerHTML = videos.map(v => {
                 const isSelected = v.video_id === currentVideoId;
-                const statusClass = v.has_analysis ? 'bg-success' : 'bg-warning text-dark';
+                const statusClass = v.has_analysis ? 'success' : 'warning';
                 const statusText = v.has_analysis ? 'Done' : 'Proc.';
                 return `
-                    <button class="list-group-item list-group-item-action video-card${isSelected ? ' selected' : ''}"
-                            onclick="selectVideo('${v.video_id}')">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-truncate me-2">${v.filename}</small>
-                            <span class="badge ${statusClass} flex-shrink-0">${statusText}</span>
+                    <div class="video-card${isSelected ? ' selected' : ''}"
+                         onclick="selectVideo('${v.video_id}')">
+                        <div class="flex items-center justify-between" style="margin-bottom:0.25rem;">
+                            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:0.5rem;">${v.filename}</span>
+                            <span class="badge ${statusClass}" style="flex-shrink:0;">${statusText}</span>
                         </div>
-                        <div class="d-flex justify-content-between">
-                            <small class="text-muted">${v.duration.toFixed(0)}s</small>
-                            <small class="text-muted">${v.num_frames} frames</small>
+                        <div class="flex items-center justify-between">
+                            <span class="text-muted text-sm">${v.duration.toFixed(0)}s</span>
+                            <span class="text-muted text-sm">${v.num_frames} frames</span>
                         </div>
-                    </button>
+                    </div>
                 `;
             }).join('');
         } catch(e) {
@@ -188,7 +184,7 @@
             document.getElementById('video-summary').innerHTML = v.llm_summary
                 ? `<strong>Summary:</strong><br>${v.llm_summary.replace(/\n/g, '<br>')}`
                 : '';
-            document.getElementById('chat-box').innerHTML = '<div class="text-muted small">Ask a question about this video.</div>';
+            document.getElementById('chat-box').innerHTML = '<div class="text-muted text-sm">Ask a question about this video.</div>';
 
             // Highlight selected
             document.querySelectorAll('.video-card').forEach(el => el.classList.remove('selected'));
@@ -215,11 +211,11 @@
 
         // Disable button and show spinner
         btn.disabled = true;
-        spinner.classList.remove('d-none');
+        spinner.classList.remove('hidden');
         if (url) {
             // YouTube URL mode — first import, then process
             progress.style.display = 'block';
-            progress.className = 'mt-2 small text-info';
+            progress.className = 'mt-sm text-sm text-info';
             progress.textContent = 'Downloading video from URL...';
 
             try {
@@ -246,16 +242,16 @@
                 });
                 const result = await processRes.json();
                 if (result.status === 'complete') {
-                    progress.className = 'mt-2 small text-success';
+                    progress.className = 'mt-sm text-sm text-success';
                     progress.textContent = 'Complete!';
                     loadVideos();
                     selectVideo(result.video_id);
                 } else {
-                    progress.className = 'mt-2 small text-danger';
+                    progress.className = 'mt-sm text-sm text-danger';
                     progress.textContent = result.error || 'Processing failed';
                 }
             } catch(e) {
-                progress.className = 'mt-2 small text-danger';
+                progress.className = 'mt-sm text-sm text-danger';
                 progress.textContent = 'Error: ' + e.message;
             }
         } else if (file) {
@@ -264,7 +260,7 @@
             formData.append('file', file);
 
             progress.style.display = 'block';
-            progress.className = 'mt-2 small text-info';
+            progress.className = 'mt-sm text-sm text-info';
             progress.textContent = 'Uploading...';
 
             try {
@@ -284,22 +280,22 @@
                 const result = await processRes.json();
 
                 if (result.status === 'complete') {
-                    progress.className = 'mt-2 small text-success';
+                    progress.className = 'mt-sm text-sm text-success';
                     progress.textContent = 'Complete!';
                 } else {
-                    progress.className = 'mt-2 small text-danger';
+                    progress.className = 'mt-sm text-sm text-danger';
                     progress.textContent = result.error || 'Processing failed';
                 }
                 loadVideos();
                 if (result.video_id) selectVideo(result.video_id);
             } catch(e) {
-                progress.className = 'mt-2 small text-danger';
+                progress.className = 'mt-sm text-sm text-danger';
                 progress.textContent = 'Error: ' + e.message;
             }
         }
 
         btn.disabled = false;
-        spinner.classList.add('d-none');
+        spinner.classList.add('hidden');
     });
 
     // ── Chat form ─────────────────────────────────────────────────────
@@ -333,7 +329,7 @@
         } catch(e) {
             const thinking = chatBox.querySelector('.msg-assistant:last-child');
             if (thinking) thinking.remove();
-            chatBox.innerHTML += `<div class="msg-assistant text-danger">Error: ${e.message}</div>`;
+            chatBox.innerHTML += `<div class="msg-assistant" style="color:var(--error);">Error: ${e.message}</div>`;
             chatBox.scrollTop = chatBox.scrollHeight;
         }
     });
