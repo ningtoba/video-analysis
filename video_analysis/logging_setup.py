@@ -74,8 +74,9 @@ def setup_logging(
     if _LogConfig.initialized:
         return
 
-    log_level = (level or "INFO").upper()
-    log_format = (fmt or "auto").lower()
+    import os
+    log_level = (level or os.environ.get("STRUCTURED_LOGGING_LEVEL") or "INFO").upper()
+    log_format = (fmt or os.environ.get("STRUCTURED_LOGGING_FORMAT") or "auto").lower()
 
     # Map string level to numeric logging constant
     numeric_level = getattr(stdlib_logging, log_level, stdlib_logging.INFO)
